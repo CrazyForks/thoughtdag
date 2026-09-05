@@ -82,6 +82,8 @@ export const zh: Record<keyof typeof en, string> = {
   'common.cancel': '取消',
   'common.close': '关闭',
   'common.confirm': '确认',
+  'whatsNew.title': '这次更新了什么 · v{v}',
+  'whatsNew.ok': '知道了',
   'common.delete': '删除',
   'common.send': '发送',
   'common.go': '提问',

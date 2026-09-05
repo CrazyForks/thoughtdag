@@ -82,6 +82,8 @@ export const en = {
   'common.cancel': 'Cancel',
   'common.close': 'Close',
   'common.confirm': 'Confirm',
+  'whatsNew.title': 'What changed · v{v}',
+  'whatsNew.ok': 'Got it',
   'common.delete': 'Delete',
   'common.send': 'Send',
   'common.go': 'Go',

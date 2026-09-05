@@ -72,6 +72,7 @@ import ModelPicker from './components/ui/ModelPicker';
 import RoleTemplateChips from './components/ui/RoleTemplateChips';
 import SearchToggles from './components/ui/SearchToggles';
 import Tutorial from './components/Tutorial';
+import WhatsNewDialog from './components/ui/WhatsNewDialog';
 import { useT, t as ti, fmt, useI18n } from './i18n';
 import { isViewerMode, buildViewerLink } from './lib/viewer';
 import { useModels } from './lib/use-models';
@@ -188,6 +189,7 @@ export default function App() {
       <BackupDialog />
       <ConfirmDialog />
       <Tutorial />
+      <WhatsNewDialog />
     </>
   );
 }
