@@ -31,12 +31,12 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     version: '0.4.5',
     announce: true,
     lead: {
-      zh: '这一版把散在各个 Agent 里的对话接成一张地图，并且能从画布里查、也能在 DeepSeek Harness 里用。',
-      en: 'This release joins the conversations scattered across your agents into one map, lets you query them, and runs inside DeepSeek Harness.',
+      zh: '🎉 这是 ThoughtDAG 到目前为止最大的一次升级：散在各个 Agent 里的对话接成了一张地图，能从画布里查，还能直接在 DeepSeek Harness 里用。四件新东西，都值得试一试。',
+      en: '🎉 The biggest ThoughtDAG release so far: the conversations scattered across your agents become one map, you can query them, and it all runs inside DeepSeek Harness. Four new things, each worth a try.',
     },
     items: [
       {
-        title: { zh: '跨 Agent 的对话地图', en: 'Session Atlas across agents' },
+        title: { zh: '跨 Agent 的对话地图，终于连成一张', en: 'Session Atlas: all your agents, one map' },
         body: {
           zh: 'Claude Code、Codex 和 DeepSeek Harness 的本地会话按项目文件夹聚在一起，点开就是一张图，随对话实时生长。',
           en: 'Local Claude Code, Codex and DeepSeek Harness sessions, grouped by project; open one as a graph and it follows the conversation live.',
@@ -44,7 +44,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
         link: { label: { zh: '怎么用', en: 'How it works' }, href: `${DOCS}/zh/guides/session-atlas` },
       },
       {
-        title: { zh: '命令行 why：找到塑造一个文件的对话', en: 'thoughtdag why: the conversations that shaped a file' },
+        title: { zh: '命令行 why：一条命令找回塑造文件的那些对话', en: 'thoughtdag why: one command finds the conversations that shaped a file' },
         body: {
           zh: 'npx thoughtdag why <文件> 列出哪些轮次读过、改过它，当时问了什么、改了什么；find 按原话搜，MCP 让 Agent 自己来查。',
           en: 'npx thoughtdag why <file> lists the turns that read or changed it, what was asked and what changed; find searches verbatim; MCP lets your agent ask.',
@@ -52,7 +52,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
         link: { label: { zh: '命令与 MCP', en: 'CLI and MCP' }, href: `${DOCS}/zh/guides/why-layer` },
       },
       {
-        title: { zh: 'DeepSeek Harness 插件', en: 'DeepSeek Harness plugin' },
+        title: { zh: 'DeepSeek Harness 插件上线', en: 'DeepSeek Harness plugin is live' },
         body: {
           zh: 'dsh plugin --profile web add dsh-thoughtdag，Harness 的网页里多一个"思维图"视图：在画布上提问、让 Harness 的 Agent 带工具作答，why 也成了它的原生工具。',
           en: 'dsh plugin --profile web add dsh-thoughtdag adds a canvas view to the Harness web UI: ask from the canvas, let its agent answer with tools, and why becomes a native tool there.',
@@ -60,10 +60,10 @@ export const WHATS_NEW: WhatsNewEntry[] = [
         link: { label: { zh: '插件说明', en: 'Plugin README' }, href: 'https://github.com/chenxiachan/thoughtdag/tree/main/dsh#readme' },
       },
       {
-        title: { zh: '文档上线', en: 'Documentation is live' },
+        title: { zh: '文档站上线', en: 'The docs site is live' },
         body: {
-          zh: '概念、任务指南、命令字典和隐私说明各有一页，中英文对照。',
-          en: 'Concepts, task guides, the command dictionary and the privacy notes, each on its own page, in both languages.',
+          zh: '概念、任务指南、命令字典和隐私说明各有一页，中英文对照。感谢一路同行，欢迎来 Discussions 说说你怎么用它。',
+          en: 'Concepts, task guides, the command dictionary and the privacy notes, each on its own page, in both languages. Thank you for coming this far with us; tell us how you use it in Discussions.',
         },
         link: { label: { zh: '打开文档', en: 'Open the docs' }, href: `${DOCS}/zh/` },
       },

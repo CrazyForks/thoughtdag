@@ -54,7 +54,7 @@ export default function WhatsNewDialog() {
   return (
     <div className="fixed inset-0 z-[100] bg-black/25 flex items-center justify-center animate-fade-in p-6" onClick={close}>
       <div
-        className="bg-card border border-line rounded-2xl shadow-xl w-[520px] max-w-full max-h-[85vh] overflow-y-auto"
+        className="bg-card border border-line rounded-2xl shadow-xl w-[680px] max-w-full max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-labelledby="whats-new-title"
