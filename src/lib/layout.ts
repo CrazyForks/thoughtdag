@@ -131,21 +131,16 @@ export function autoLayout(allNodes: ThoughtNode[], allEdges: ThoughtEdge[]): Th
       .map((e) => allNodes.find((n) => n.id === e.source))
       .filter((m): m is ThoughtNode => !!m);
     if (mats.length === 0) continue;
-    // Two different questions, so two different materials answer them. The
-    // chain must start below the LOWEST material, or it collides with the one
-    // that hangs furthest down — that is a vertical question. But it should
-    // start in the MIDDLE of them horizontally, which the lowest material
-    // cannot answer: read a row of papers and the lowest is whichever card
-    // happens to hang furthest down, telling us nothing about left or right.
-    // Taking x from it parked the synthesis under one arbitrary document with
-    // the rest of its reading reaching across the canvas.
+    // The chain starts below the LOWEST material, or it collides with the one
+    // that hangs furthest down; it takes that same card's x, so the chain
+    // hangs from one document and reads as a line rather than floating at the
+    // centroid of a row of papers (tried once, #20).
     const lowest = mats.reduce((a, b) =>
       a.position.y + nodeHeight(a) > b.position.y + nodeHeight(b) ? a : b);
-    const midX = mats.reduce((t, m) => t + m.position.x, 0) / mats.length;
     const k = perMaterialCount.get(lowest.id) ?? 0;
     perMaterialCount.set(lowest.id, k + 1);
     materialAnchors.set(root.id, {
-      x: midX - 60 + k * (LAYOUT_COL_WIDTH + LAYOUT_H_GAP),
+      x: lowest.position.x - 60 + k * (LAYOUT_COL_WIDTH + LAYOUT_H_GAP),
       y: lowest.position.y + nodeHeight(lowest) + LAYOUT_V_GAP,
     });
   }
@@ -279,40 +274,21 @@ export function autoLayout(allNodes: ThoughtNode[], allEdges: ThoughtEdge[]): Th
   }
 
   // ── Which parent owns a merge ──
-  // A node with several parents used to inherit the column of whichever parent
-  // the walk reached first, so the synthesis landed under one arbitrary source
-  // while the rest of its reading reached across the canvas.
-  //
-  // The middle parent should own it instead — but "middle" means middle COLUMN,
-  // and columns are what this pass is computing. So compute them once with
-  // nobody claiming anything, read the answer off that provisional run, and
-  // lay out again. Deriving the claimant from a node's position in the input
-  // array instead would be cheaper and wrong: the same graph handed over in a
-  // different order would lay out differently, which is the very instability
-  // this is meant to remove.
-  const provisional = assignAllColumns(new Map());
+  // A conversation has a main line. A node with several parents sits under
+  // the parent it was CONTINUED from — the source of the first structural
+  // edge that reached it, which is the order a person wires things: the
+  // follow-up is asked from one node, the other sources are connected after.
+  // Centring the node among its parents (tried once, #20) reads well as a
+  // picture and badly as a conversation: the main line vanishes into the
+  // middle. Edge order is stable under any permutation of the node array, so
+  // the same graph lays out the same way however it arrives. Only a parent the
+  // node continues from may own it; one that explored it out stands beside it.
   const claimant = new Map<string, string>();
   for (const [child, ps] of structuralParents) {
     if (ps.length < 2) continue;
-    const known = ps.filter((p) => provisional.nodeColumn.has(p));
-    // Only a parent this node CONTINUES from can own its column; one that
-    // explored it out is meant to stand beside it, and handing it the claim
-    // would drag the node out of the chain it actually continues. Explore
-    // parents are candidates only when there is no plain one.
-    const continued = known.filter((p) => !exploreEdges.has(edgeKey(p, child)));
-    const pool = continued.length ? continued : known;
-    if (!pool.length) continue;
-    // Rank by where a column SITS, never by its id. A chain grown from
-    // material is pinned to the document it came from and gets its id handed
-    // out in traversal order, so the ids carry no left-to-right meaning at
-    // all; only colX knows where the parent really is.
-    const ranked = [...pool].sort(
-      (a, b) =>
-        provisional.colX(provisional.nodeColumn.get(a)!) -
-          provisional.colX(provisional.nodeColumn.get(b)!) ||
-        (a < b ? -1 : a > b ? 1 : 0)
-    );
-    claimant.set(child, ranked[Math.floor((ranked.length - 1) / 2)]);
+    const continued = ps.filter((p) => !exploreEdges.has(edgeKey(p, child)));
+    const pool = continued.length ? continued : ps;
+    claimant.set(child, pool[0]);
   }
   const { nodeColumn, colX } = assignAllColumns(claimant);
 

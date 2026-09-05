@@ -75,13 +75,13 @@ function violations(laid, edges) {
 
 console.log('layout invariants\n');
 
-test('a merge is claimed by the parent in the median column, not the first', () => {
+test('a merge sits under the parent it was continued from: the first edge in, not the median', () => {
   const nodes = ['root', 'p1', 'p2', 'p3', 'merge'].map((i) => th(i));
   const edges = [ed('root', 'p1'), ed('root', 'p2'), ed('root', 'p3'),
-                 ed('p1', 'merge'), ed('p2', 'merge'), ed('p3', 'merge')];
+                 ed('p3', 'merge'), ed('p1', 'merge'), ed('p2', 'merge')];
   const laid = autoLayout(nodes, edges);
-  assert(xOf(laid, 'merge') === xOf(laid, 'p2'),
-    `merge at ${xOf(laid, 'merge')}, median parent p2 at ${xOf(laid, 'p2')}`);
+  assert(xOf(laid, 'merge') === xOf(laid, 'p3'),
+    `merge at ${xOf(laid, 'merge')}, first parent p3 at ${xOf(laid, 'p3')}`);
 });
 
 test('the same graph in a different node order lays out the same way', () => {
@@ -112,21 +112,22 @@ test('a merge continued from one parent and explored from another keeps the plai
     `merge at ${xOf(laid, 'merge')}, plain parent at ${xOf(laid, 'plain')}`);
 });
 
-test('material-anchored parents rank by where they sit, not by traversal order', () => {
+test('a merge of material-anchored chains follows its first parent, wherever that chain sits', () => {
   const nodes = [file('mLeft', 0), file('mMid', 1000), file('mRight', 2000),
                  th('qRight'), th('qLeft'), th('qMid'), th('merge')];
   const edges = [ed('mRight', 'qRight'), ed('mLeft', 'qLeft'), ed('mMid', 'qMid'),
                  ed('qRight', 'merge'), ed('qLeft', 'merge'), ed('qMid', 'merge')];
   const laid = autoLayout(nodes, edges);
-  assert(xOf(laid, 'merge') === xOf(laid, 'qMid'),
-    `merge at ${xOf(laid, 'merge')}, geometric median parent qMid at ${xOf(laid, 'qMid')}`);
+  assert(xOf(laid, 'merge') === xOf(laid, 'qRight'),
+    `merge at ${xOf(laid, 'merge')}, first parent qRight at ${xOf(laid, 'qRight')}`);
 });
 
-test('a chain reading several documents starts among them', () => {
+test('a chain reading several documents hangs from the lowest of them', () => {
   const nodes = [file('f0', 0), file('f1', 900), file('f2', 1800), file('f3', 2700), file('f4', 3600), th('synth')];
+  nodes[3].position.y = 400; // f3 hangs lowest
   const edges = ['f0', 'f1', 'f2', 'f3', 'f4'].map((f) => ed(f, 'synth'));
   const x = xOf(autoLayout(nodes, edges), 'synth');
-  assert(x > 900 && x < 2700, `synthesis at ${x}, outside the span of the documents it reads`);
+  assert(Math.abs(x - (2700 - 60)) < 1, `synthesis at ${x}, not under the lowest document f3`);
 });
 
 test('the benchmark canvases keep the arrow order', () => {
