@@ -86,7 +86,7 @@ export default function WhatsNewDialog() {
             </li>
           ))}
         </ol>
-        <div className="px-6 py-4 border-t border-line flex justify-end">
+        <div className="sticky bottom-0 bg-card px-6 py-4 border-t border-line flex justify-end">
           <button
             ref={okRef}
             onClick={close}
