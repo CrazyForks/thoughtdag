@@ -20,7 +20,17 @@ function decide(): WhatsNewEntry | null {
   if (!appVersion) return null;
   let seen: string | null = null;
   try { seen = localStorage.getItem(SEEN_KEY); } catch { /* storage unavailable: never nag */ }
-  if (seen === null) { try { localStorage.setItem(SEEN_KEY, appVersion); } catch { /* ignore */ } return null; }
+  if (seen === null) {
+    // no record: either a fresh install, or an install that predates this
+    // dialog (0.4.5 is its first release). Marks an earlier version leaves —
+    // a finished tutorial, a backup — tell the two apart: with any of them
+    // this is an upgrade and the notes show; without, the version is
+    // recorded silently and nothing pops on a first launch.
+    let prior = false;
+    try { prior = !!(localStorage.getItem('thoughtdag.tutorialDone') || localStorage.getItem('thoughtdag.lastBackupAt')); } catch { /* ignore */ }
+    if (!prior) { try { localStorage.setItem(SEEN_KEY, appVersion); } catch { /* ignore */ } return null; }
+    return entry;
+  }
   if (seen === appVersion) return null;
   return entry;
 }
