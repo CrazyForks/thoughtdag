@@ -1,11 +1,12 @@
-// What a release changed, in the user's words — shown once, in the app, after
-// an update, and only for releases that ask for it. Most releases don't:
-// the dialog is for the few where a person opening the app should learn
-// that a new door exists. Content lives here, not in a network call: the
-// app is local-first and this must work offline.
-//
-// `announce: false` (or an absent entry) means the update passes silently.
-// Links open in the system browser through the shell's window-open handler.
+// What a release changed, in the user's words. Two readers: the dialog that
+// opens once after an update, and the release history behind the ⋯ menu.
+// Every release gets an entry here, so the history is complete; `announce`
+// decides only whether the entry also pops up on the first launch after the
+// update. Most releases pass silently: the dialog is for the few where a
+// person opening the app should learn that a new door exists. Content lives
+// here, not in a network call: the app is local-first and this must work
+// offline. Links open in the system browser through the shell's window-open
+// handler. Newest first.
 
 import type { Lang } from './i18n';
 
@@ -18,6 +19,9 @@ export interface WhatsNewItem {
 
 export interface WhatsNewEntry {
   version: string;
+  /** release day, YYYY-MM-DD */
+  date: string;
+  /** pop up on the first launch after updating to this version */
   announce: boolean;
   /** one line under the version: what this release is about */
   lead: Record<Lang, string>;
@@ -28,7 +32,34 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.4.6',
+    date: '2026-09-06',
+    announce: true,
+    lead: {
+      zh: '🎉 Pi 的会话进了对话地图，「⋯」菜单里多了更新历史，随时能回看每一版改了什么。',
+      en: '🎉 Pi sessions join the Session Atlas, and the ⋯ menu gains a release history, so what every version changed is one click away.',
+    },
+    items: [
+      {
+        title: { zh: 'Pi 的会话也在地图上了', en: 'Pi sessions are on the map' },
+        body: {
+          zh: '本地 Pi 会话按项目聚在一起，打开就是一张图。Pi 里的每次分叉在图上就是一条支线，不再压成一条直线。命令行 why 和 MCP 也同步认识 Pi 留下的文件足迹。',
+          en: 'Local Pi sessions group by project and open as a graph. Every fork you made in Pi shows up as a branch instead of being flattened into one line. The why command and MCP index Pi\'s file footprints too.',
+        },
+        link: { label: { zh: '怎么用', en: 'How it works' }, href: `${DOCS}/zh/guides/session-atlas` },
+      },
+      {
+        title: { zh: '更新历史，随时补看', en: 'Release history, whenever you like' },
+        body: {
+          zh: '右上「⋯」菜单，「如何使用」下面。每个版本改了什么都在这里，从新到旧，当前版本有标记。',
+          en: 'In the ⋯ menu, under How it works: what each release changed, newest first, with the version you are running marked.',
+        },
+      },
+    ],
+  },
+  {
     version: '0.4.5',
+    date: '2026-09-06',
     announce: true,
     lead: {
       zh: '🎉 这是 ThoughtDAG 到目前为止最大的一次升级：散在各个 Agent 里的对话接成了一张地图，能从画布里查，还能直接在 DeepSeek Harness 里用。四件新东西，都值得试一试。',
@@ -69,11 +100,67 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       },
     ],
   },
+  {
+    version: '0.4.4',
+    date: '2026-09-04',
+    announce: false,
+    lead: {
+      zh: 'DeepSeek Harness 成为对话地图的内置来源：它的 zstd 日志由桌面壳逐帧解码，每条消息一个节点，工具调用与结果配对成附件。',
+      en: 'DeepSeek Harness becomes a built-in Atlas source: the shell decodes its zstd logs frame by frame, one node per message, tool calls paired with their results as attachments.',
+    },
+    items: [],
+  },
+  {
+    version: '0.4.3',
+    date: '2026-09-03',
+    announce: false,
+    lead: {
+      zh: '深链接可以直达某一轮，画布可以按稳定 id 打开；子 Agent 的会话文件不再打扰实时监听。',
+      en: 'A deep link can land on a turn and a canvas opens by its stable id; subagent session files no longer disturb the live watcher.',
+    },
+    items: [],
+  },
+  {
+    version: '0.4.2',
+    date: '2026-09-02',
+    announce: false,
+    lead: {
+      zh: '镜像节点列出那一轮碰过的文件（✏️ 改过、📖 读过），预览用结论而不是开头；子 Agent 的会话作为子线程识别，报告折回发起它的那一轮。',
+      en: 'A mirrored node lists the files its turn touched (✏️ edited, 📖 read) and previews the conclusion rather than the opening line; subagent files are recognized as sub-threads and their reports fold into the launching turn.',
+    },
+    items: [],
+  },
+  {
+    version: '0.4.1',
+    date: '2026-09-01',
+    announce: false,
+    lead: {
+      zh: 'Agent 对话地图首发：本地 Claude Code 与 Codex 的会话按项目文件夹聚成一张图，一键接入，随对话实时生长。',
+      en: 'Session Atlas debuts: local Claude Code and Codex sessions group by project folder into one map, connect in one click, and grow with the conversation.',
+    },
+    items: [],
+  },
 ];
 
-/** The entry for a version, or null when that version has nothing to announce. */
-export function whatsNewFor(version: string | null | undefined): WhatsNewEntry | null {
-  if (!version) return null;
-  const e = WHATS_NEW.find((x) => x.version === version);
-  return e && e.announce ? e : null;
+/** Numeric compare of dotted versions: negative when a < b. */
+export function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map((x) => parseInt(x, 10) || 0);
+  const pb = b.split('.').map((x) => parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
+/**
+ * What to show a person who last saw `after` (null: never saw any notes) and
+ * now runs `upTo`: every announced entry in between, newest first. Skipped
+ * releases are included, so an update that arrives two versions late still
+ * tells the whole story.
+ */
+export function announcedSince(after: string | null, upTo: string): WhatsNewEntry[] {
+  return WHATS_NEW.filter((e) => e.announce
+    && compareVersions(e.version, upTo) <= 0
+    && (after === null || compareVersions(e.version, after) > 0));
 }

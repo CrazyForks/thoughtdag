@@ -85,6 +85,8 @@ interface UiState {
   memories: import('./memory').MemoryEntry[];
   setMemories: (entries: import('./memory').MemoryEntry[]) => void;
   memoryManagerOpen: boolean;
+  releaseNotesOpen: boolean;
+  setReleaseNotesOpen: (open: boolean) => void;
   highlightsOverviewOpen: boolean;
   setHighlightsOverviewOpen: (open: boolean) => void;
   materialsOverviewOpen: boolean;
@@ -251,6 +253,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   timelineOverviewOpen: false,
   setTimelineOverviewOpen: (open) => set({ timelineOverviewOpen: open }),
   setMemoryManagerOpen: (open) => set({ memoryManagerOpen: open }),
+  releaseNotesOpen: false,
+  setReleaseNotesOpen: (open) => set({ releaseNotesOpen: open }),
   apiKeyModalOpen: false,
   setApiKeyModalOpen: (open) => set({ apiKeyModalOpen: open }),
   modelPickerPing: 0,

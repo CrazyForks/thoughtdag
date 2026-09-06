@@ -102,7 +102,9 @@ async function boot() {
   // detects as always.
   const langArg = process.argv.find((a) => a === '--lang=en' || a === '--lang=zh');
   const langQ = langArg ? `&lang=${langArg.slice('--lang='.length)}` : '';
-  win.loadURL(`http://127.0.0.1:${port}/?dv=${encodeURIComponent(app.getVersion())}&su=1${langQ}`);
+  // TD_WHATS_NEW=1 forces the what's-new dialog for this version (development).
+  const wnQ = process.env.TD_WHATS_NEW === '1' ? '&wn=1' : '';
+  win.loadURL(`http://127.0.0.1:${port}/?dv=${encodeURIComponent(app.getVersion())}&su=1${langQ}${wnQ}`);
 }
 
 // ─── Session atlas: read-only access to runner session stores ───────────
