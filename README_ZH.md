@@ -24,7 +24,7 @@ dsh plugin --profile web add dsh-thoughtdag
 dsh web
 ```
 
-- **Agent 对话地图看到三家。** Harness 自己的会话和 Claude Code、Codex 并列；打开一个就是一张图，随对话实时生长。
+- **Agent 对话地图看到四家。** Harness 自己的会话和 Claude Code、Codex、Pi 并列；打开一个就是一张图，随对话实时生长。
 - **在画布上提问。** 选 Harness 的任一模型，或选 **DeepSeek Harness · Agent**，问题作为一轮真实的 Harness 对话执行，工具随它用。回答流回节点，这一轮留在 Harness 的会话日志里。
 - **连线决定 Harness 看到什么。** 连进问题的材料、笔记和节点就是它收到的上下文；在镜像会话的链尾追问，会续接那个会话。
 

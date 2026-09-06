@@ -24,7 +24,7 @@ dsh plugin --profile web add dsh-thoughtdag
 dsh web
 ```
 
-- **Session Atlas sees all three agents.** The harness's own sessions sit beside Claude Code and Codex; open one as a graph and it follows the conversation live.
+- **Session Atlas sees all four agents.** The harness's own sessions sit beside Claude Code, Codex and Pi; open one as a graph and it follows the conversation live.
 - **Ask from the canvas.** Pick one of the harness's models, or **DeepSeek Harness · Agent** to run the question as a real harness turn with tools. The answer streams back into the node, and the turn stays in the harness's session log.
 - **The wires decide what the harness sees.** Materials, notes and nodes wired into a question arrive as its context; a follow-up at the tail of a mirrored session continues that session.
 
