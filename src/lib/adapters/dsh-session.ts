@@ -191,7 +191,9 @@ export class DshSessionCollector {
   }
 
   private feed(line: DshSessionLine): void {
-    if (line.type === 'session' && line.id) {
+    // a Pi header is also `type: "session"`; DSH's carries createdAt (a number),
+    // Pi's a string timestamp and format version ≥ 3 — not ours
+    if (line.type === 'session' && line.id && !('timestamp' in line)) {
       if (!this.sessionId) this.sessionId = line.id;
       if (line.cwd && !this.cwd) this.cwd = line.cwd;
       return;

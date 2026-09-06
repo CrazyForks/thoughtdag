@@ -368,6 +368,7 @@ const SOURCE = { kind: 'plugin', plugin: 'dsh-thoughtdag' }
 const FILE_ROOTS = {
   'claude-projects': join(os.homedir(), '.claude', 'projects'),
   'codex-sessions': join(os.homedir(), '.codex', 'sessions'),
+  'pi-sessions': join(os.homedir(), '.pi', 'agent', 'sessions'),
 }
 const FILE_READ_MAX = 256 * 1024 * 1024
 

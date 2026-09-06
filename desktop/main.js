@@ -118,6 +118,8 @@ const BUILTIN_ROOTS = process.env.TD_SESSION_ROOTS
     'codex-sessions': path.join(os.homedir(), '.codex', 'sessions'),
     // DeepSeek Harness: one session per dir under ~/.dsh/sessions/<encoded cwd>/
     'dsh-sessions': path.join(process.env.DSH_HOME || path.join(os.homedir(), '.dsh'), 'sessions'),
+    // Pi: one JSONL per session under ~/.pi/agent/sessions/<encoded cwd>/
+    'pi-sessions': path.join(os.homedir(), '.pi', 'agent', 'sessions'),
   };
 // Custom roots join the whitelist ONLY through the native directory picker
 // (sessions:add-root) — the page can never name a path in a string. They

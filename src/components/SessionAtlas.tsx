@@ -36,13 +36,13 @@ function SourcesDialog({ roots, counts, onChanged, onClose }: {
 }) {
   const t = useT();
   const off = disabledRoots();
-  const builtinLabel: Record<string, string> = { 'claude-projects': 'Claude Code', 'codex-sessions': 'Codex', 'dsh-sessions': 'DeepSeek Harness' };
+  const builtinLabel: Record<string, string> = { 'claude-projects': 'Claude Code', 'codex-sessions': 'Codex', 'dsh-sessions': 'DeepSeek Harness', 'pi-sessions': 'Pi' };
   // one-command handoff: install /thoughtdag ($thoughtdag) into the
   // agent's own commands directory, content-compare driving the state
   const [cmds, setCmds] = useState<Record<string, { state: string; dest: string; invoke: string }> | null>(null);
   const refreshCmds = () => { void window.desktopSessions?.commandsStatus?.().then(setCmds).catch(() => {}); };
   useEffect(refreshCmds, []);
-  const runnerLabel: Record<string, string> = { 'claude-code': 'Claude Code', codex: 'Codex', dsh: 'DeepSeek Harness' };
+  const runnerLabel: Record<string, string> = { 'claude-code': 'Claude Code', codex: 'Codex', dsh: 'DeepSeek Harness', pi: 'Pi' };
   const row = (root: SessionRoot) => (
     <div key={root.key} className="flex items-center gap-3 px-4 py-2.5 border-b border-line last:border-b-0" data-atlas-source={root.key}>
       <input
@@ -126,13 +126,6 @@ function SourcesDialog({ roots, counts, onChanged, onClose }: {
             ))}
           </>
         )}
-        {['Pi'].map((name) => (
-          <div key={name} className="flex items-center gap-3 px-4 py-2.5 border-b border-line opacity-50">
-            <input type="checkbox" disabled className="shrink-0" />
-            <div className="flex-1 text-sm text-ink">{name}</div>
-            <span className="text-2xs text-ink-faint">{t('atlas.parserSoon')}</span>
-          </div>
-        ))}
         {roots.filter((r) => !r.builtin).map(row)}
         <div className="flex items-center gap-2 px-4 py-3">
           <button

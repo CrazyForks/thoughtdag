@@ -12,7 +12,7 @@ import { autoLayout } from './layout';
 export interface ImportableConversation {
   title: string;
   messageCount: number;
-  source: 'chatgpt' | 'claude' | 'claude-code' | 'codex' | 'dsh';
+  source: 'chatgpt' | 'claude' | 'claude-code' | 'codex' | 'dsh' | 'pi';
   /** Runner-session identity — set by session adapters only; the key the
       canonical-canvas contract matches on. */
   sessionId?: string;

@@ -45,6 +45,17 @@ export const THOUGHTDAG_MANIFEST: AdapterManifest = {
   contextSurface: OBS_PART, // exact for logged commits, upstream-only before
 };
 
+export const PI_MANIFEST: AdapterManifest = {
+  runner: 'pi', schema: 'pi-session/v3',
+  turns: OBS_FULL,          // one user message opens every turn
+  parenting: OBS_FULL,      // every entry names its parent; the session is a tree
+  messages: OBS_PART,       // assistant text blocks fold per turn; thinking is dropped
+  toolPairing: OBS_FULL,    // toolCall blocks ↔ toolResult messages pair by toolCallId
+  artifactTouch: OBS_FULL,  // `path` on read/edit/write; shell commands stay opaque, as for every runner
+  compaction: UNKNOWN,      // not projected yet
+  contextSurface: UNKNOWN,  // the log records messages, not requests
+};
+
 export const DSH_MANIFEST: AdapterManifest = {
   runner: 'dsh', schema: 'dsh-events/2026-09',
   turns: OBS_FULL,          // user/message events (source.kind=user) bound every turn
@@ -60,5 +71,6 @@ export const MANIFESTS: Record<string, AdapterManifest> = {
   'claude-code': CLAUDE_CODE_MANIFEST,
   codex: CODEX_MANIFEST,
   dsh: DSH_MANIFEST,
+  pi: PI_MANIFEST,
   thoughtdag: THOUGHTDAG_MANIFEST,
 };

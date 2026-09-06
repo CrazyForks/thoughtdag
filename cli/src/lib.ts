@@ -30,6 +30,7 @@ import * as zlib from 'node:zlib';
 import { ClaudeSessionCollector } from '../../src/lib/adapters/claude-code-session';
 import { CodexSessionCollector } from '../../src/lib/adapters/codex-session';
 import { DshSessionCollector } from '../../src/lib/adapters/dsh-session';
+import { PiSessionCollector } from '../../src/lib/adapters/pi-session';
 import { decompressZstdFrames } from '../../src/lib/adapters/dsh-zstd';
 import { conclusionOf } from '../../src/lib/turn-insight';
 import type { RunnerTurn } from '../../src/lib/adapters/shared';
@@ -50,7 +51,7 @@ interface FactTurn { i: number; t: string; item?: string; at?: string; q: string
  *  several — a resumed Codex thread opens a new rollout each time — so
  *  the store is keyed by source, and readers group by `id`. */
 interface FactSession {
-  id: string; runner: 'claude-code' | 'codex' | 'dsh' | 'thoughtdag'; file: string; mtime: number; size: number;
+  id: string; runner: 'claude-code' | 'codex' | 'dsh' | 'pi' | 'thoughtdag'; file: string; mtime: number; size: number;
   cwd: string; workspace: string; title: string; subagent?: boolean; turns: FactTurn[];
   /** opened from a canvas hand-off */
   anchor?: { project: string; node: string; bundle: string };
@@ -90,8 +91,10 @@ const LEGACY_FILE = path.join(HOME, 'why-index.json');
 const CONFIG_FILE = path.join(HOME, 'config.json');
 // DSH keeps one directory per session under <DSH_HOME>/sessions/<encoded cwd>/
 const DSH_ROOT = path.join(process.env.DSH_HOME ?? path.join(os.homedir(), '.dsh'), 'sessions');
+// Pi keeps one JSONL per session under ~/.pi/agent/sessions/<encoded cwd>/
+const PI_ROOT = path.join(os.homedir(), '.pi', 'agent', 'sessions');
 const ROOTS = (process.env.THOUGHTDAG_SESSION_ROOTS?.split(path.delimiter).filter(Boolean))
-  ?? [path.join(os.homedir(), '.claude', 'projects'), path.join(os.homedir(), '.codex', 'sessions'), DSH_ROOT];
+  ?? [path.join(os.homedir(), '.claude', 'projects'), path.join(os.homedir(), '.codex', 'sessions'), DSH_ROOT, PI_ROOT];
 
 /** Folders holding canvases (*.thoughtdag.json). Always: the records the
  *  desktop app writes itself under <home>/canvases. Plus the env var, or
@@ -257,7 +260,7 @@ async function eventsOf(file: string, sourceId?: string): Promise<Projected | nu
   // DSH logs are zstd frames: whole-file decode (the frame walk needs the
   // container), then the same line-by-line collector as everyone else. The
   // other runners' plain JSONL streams through unchanged.
-  let meta: { type?: string; id?: unknown } = {};
+  let meta: { type?: string; id?: unknown; timestamp?: unknown } = {};
   let lines: Iterable<string> | AsyncIterable<string>;
   if (file.endsWith('.zstd')) {
     if (!zstdInflate) { zstdSkipped++; return null; }
@@ -267,16 +270,18 @@ async function eventsOf(file: string, sourceId?: string): Promise<Projected | nu
     let text: string;
     try { text = Buffer.from(decompressZstdFrames(raw, zstdInflate)).toString('utf8'); } catch { return null; }
     const arr = text.split('\n');
-    try { meta = JSON.parse(arr[0] ?? '') as { type?: string; id?: unknown }; } catch { /* not json */ }
+    try { meta = JSON.parse(arr[0] ?? '') as { type?: string; id?: unknown; timestamp?: unknown }; } catch { /* not json */ }
     lines = arr;
   } else {
-    try { meta = JSON.parse(await firstLine(file)) as { type?: string; id?: unknown }; } catch { /* not json */ }
+    try { meta = JSON.parse(await firstLine(file)) as { type?: string; id?: unknown; timestamp?: unknown }; } catch { /* not json */ }
     lines = createInterface({ input: createReadStream(file, { encoding: 'utf8', highWaterMark: 1 << 20 }) });
   }
   // the runner is read off the first line's own signature, never off the folder
-  const runner: 'claude-code' | 'codex' | 'dsh' = meta.type === 'session_meta' ? 'codex'
-    : (meta.type === 'session' && typeof meta.id === 'string') ? 'dsh' : 'claude-code';
-  const collector = runner === 'codex' ? new CodexSessionCollector() : runner === 'dsh' ? new DshSessionCollector() : new ClaudeSessionCollector();
+  // two runners open with `type: "session"`: Pi's header carries a string
+  // timestamp, DSH's a numeric createdAt
+  const runner: 'claude-code' | 'codex' | 'dsh' | 'pi' = meta.type === 'session_meta' ? 'codex'
+    : (meta.type === 'session' && typeof meta.id === 'string') ? (typeof meta.timestamp === 'string' ? 'pi' : 'dsh') : 'claude-code';
+  const collector = runner === 'codex' ? new CodexSessionCollector() : runner === 'dsh' ? new DshSessionCollector() : runner === 'pi' ? new PiSessionCollector() : new ClaudeSessionCollector();
   for await (const line of lines) collector.feedLine(line);
   const s = collector.finish();
   if (!s) return null;
@@ -889,7 +894,7 @@ async function renderRecall(facts: FactIndex, sidPrefix: string, n: number): Pro
 const CLI_VERSION = '0.1.0';
 const MCP_TOOLS = [
   { name: 'why_check', description: 'Cheap first question before editing a file: does this artifact have any history in local agent sessions? One line; history true/false.', inputSchema: { type: 'object', properties: { path: { type: 'string', description: 'file path (absolute or relative to cwd), URL, or arxiv:<id>' } }, required: ['path'] } },
-  { name: 'why_file', description: 'The turns across local Claude Code, Codex, DeepSeek Harness and ThoughtDAG sessions that touched a file, URL or paper: when, what changed (Δ, observed), what was asked, what the answer said about it (≈, a candidate explanation, not a verified reason). Each hit carries a deep link.', inputSchema: { type: 'object', properties: { path: { type: 'string' }, include_read: { type: 'boolean', description: 'also list turns that only read it (default false)' }, limit: { type: 'number', description: 'max hits (default 10)' } }, required: ['path'] } },
+  { name: 'why_file', description: 'The turns across local Claude Code, Codex, DeepSeek Harness, Pi and ThoughtDAG sessions that touched a file, URL or paper: when, what changed (Δ, observed), what was asked, what the answer said about it (≈, a candidate explanation, not a verified reason). Each hit carries a deep link.', inputSchema: { type: 'object', properties: { path: { type: 'string' }, include_read: { type: 'boolean', description: 'also list turns that only read it (default false)' }, limit: { type: 'number', description: 'max hits (default 10)' } }, required: ['path'] } },
   { name: 'find', description: 'Where these exact words were asked (Q), answered (A) or attached (M) across local sessions and canvases. Exact, case-insensitive match; every hit is a verbatim snippet with a pointer.', inputSchema: { type: 'object', properties: { phrase: { type: 'string' }, in: { type: 'string', enum: ['q', 'a', 'm', 'all'] }, limit: { type: 'number' } }, required: ['phrase'] } },
   { name: 'recall_turn', description: 'One turn in full — the question, the answer, the tool calls with their diffs — by session id (or prefix) and turn number as shown by why_file.', inputSchema: { type: 'object', properties: { session: { type: 'string' }, turn: { type: 'number' } }, required: ['session', 'turn'] } },
 ];

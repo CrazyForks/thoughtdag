@@ -12,7 +12,7 @@
 //   - read-only by contract, inherited from the shell primitives.
 
 export interface SessionCard {
-  runner: 'claude-code' | 'codex' | 'dsh';
+  runner: 'claude-code' | 'codex' | 'dsh' | 'pi';
   rootKey: string;
   rel: string;
   sessionId: string;
@@ -75,7 +75,17 @@ function cardFromHead(rootKey: string, rel: string, head: string, mtime: number,
   // dsh: the session-open event is FIRST, names id+cwd at the top level;
   // the human title arrives as its own session/title event later in the head
   // (fallback: the first real user message, then the id).
-  const dshOpen = lines.find((l) => l.type === 'session') as { id?: string; cwd?: string } | undefined;
+  // pi: the header is `type: "session"` too, with a string timestamp and
+  // format version ≥ 3; the title is the first user message
+  const piOpen = lines.find((l) => l.type === 'session' && typeof l.timestamp === 'string') as { id?: string; cwd?: string } | undefined;
+  if (typeof piOpen?.id === 'string') {
+    const first = lines.find((l) => l.type === 'message' && (l as { message?: { role?: string } }).message?.role === 'user') as { message?: { content?: { type?: string; text?: string }[] | string } } | undefined;
+    const c = first?.message?.content;
+    const text = typeof c === 'string' ? c : (c ?? []).filter((b) => b.type === 'text' && b.text).map((b) => b.text).join('\n').trim();
+    const title = text ? text.split('\n')[0].slice(0, 80) : `session ${piOpen.id.slice(0, 8)}`;
+    return { runner: 'pi', rootKey, rel, sessionId: piOpen.id, cwd: piOpen.cwd ?? null, title, mtime, size };
+  }
+  const dshOpen = lines.find((l) => l.type === 'session' && typeof l.timestamp !== 'string') as { id?: string; cwd?: string } | undefined;
   if (typeof dshOpen?.id === 'string') {
     const id = dshOpen.id;
     const titleLine = lines.find((l) => l.type === 'session/title') as { data?: { title?: string } } | undefined;
