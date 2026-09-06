@@ -17,6 +17,22 @@ const statelessProviders = () => {
 
 const STREAM_URL = `${API_BASE}/api/stream`;
 const PDF_EXTRACT_URL = `${API_BASE}/api/pdf-extract`;
+const APPROVALS_URL = `${API_BASE}/api/approvals`;
+
+/** The person's decision on a pending approval, back to the runtime that
+    asked (the harness bridge today). False when nothing was waiting under
+    that id any more — the runtime withdrew it, or the turn ended. */
+export async function answerApproval(id: string, outcome: 'allowed-once' | 'rejected'): Promise<boolean> {
+  try {
+    const r = await fetch(`${APPROVALS_URL}/${encodeURIComponent(id)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+      body: JSON.stringify({ outcome }),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
 
 export interface ContextMessage {
   role: 'user' | 'assistant' | 'system';
@@ -170,6 +186,10 @@ export interface StreamCallbacks {
   /** Inside DeepSeek Harness: the dsh turn a harness-agent question created —
       the canvas node becomes that turn's mirror. */
   onHarnessTurn?: (turn: { session: string; turn: number | null; userMessageId: string | null; seq: number | null }) => void;
+  /** An agent runtime asks whether one action may proceed; the turn waits. */
+  onApproval?: (request: Omit<import('../types').ApprovalRequest, 'askedAt'>) => void;
+  /** The runtime learned the decision (the person's, or a cancellation). */
+  onApprovalDecided?: (decision: { id: string; outcome: import('../types').ApprovalOutcome }) => void;
   /** The chosen model cannot see images: a vision model answers instead. */
   onRerouted?: (from: string, to: string) => void;
   /** The request is leaving — exactly this payload, after every image
@@ -333,6 +353,12 @@ export async function llmCallStream(
           }
           if (parsed.harnessTurn?.session) {
             cbs.onHarnessTurn?.(parsed.harnessTurn);
+          }
+          if (parsed.approval?.id) {
+            cbs.onApproval?.(parsed.approval);
+          }
+          if (parsed.approvalDecided?.id) {
+            cbs.onApprovalDecided?.(parsed.approvalDecided);
           }
           if (Array.isArray(parsed.sources)) {
             cbs.onSources?.(parsed.sources);

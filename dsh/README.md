@@ -62,6 +62,16 @@ full-screen iframe.
 
 ### Canvas-side import
 
+When a turn launched from the canvas needs the person's approval (the
+harness's sandbox asking to escalate, a policy hook answering `ask`), the
+plugin answers first: it registers ahead of the harness's own panel on the
+`approval/request` waterfall for the sessions it is running, streams the
+question to the canvas as an `approval` frame, and the node shows it —
+tool, command, the harness's reason, allow once or reject. The decision
+returns through `POST /thoughtdag/api/approvals/:id` and stays on the node
+as part of the turn's record. If the canvas stream is gone, the request
+is handed down the chain to the harness's panel unchanged.
+
 Inside the iframe the canvas runs with this bridge as its session source
 (the SPA is built with `VITE_DSH_BRIDGE=/thoughtdag/api`): Session Atlas
 lists the harness's sessions beside Claude Code's, Codex's and Pi's (served by

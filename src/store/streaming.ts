@@ -199,7 +199,7 @@ export async function runNodeGeneration(
         const reasonings = [...kept.map(({ rs }) => rs), n.data.reasoning || undefined];
         const generatedAts = [...kept.map(({ at }) => at), now];
         const editedAts = [...kept.map(({ ed }) => ed), undefined];
-        return { ...n, data: { ...n.data, response, responses, questions, generatedBy, gatewaySearches, reasonings, generatedAts, editedAts, reasoning: undefined, restreaming: undefined, responseIndex: responses.length - 1, isLoading: false, tokenCount, generationFailed: failed || undefined, references, highlights: pruneHighlights(n.data.highlights, response), lastContextHash: contextHash, lastGeneratedAt: now } };
+        return { ...n, data: { ...n.data, response, responses, questions, generatedBy, gatewaySearches, reasonings, generatedAts, editedAts, reasoning: undefined, restreaming: undefined, pendingApproval: undefined, responseIndex: responses.length - 1, isLoading: false, tokenCount, generationFailed: failed || undefined, references, highlights: pruneHighlights(n.data.highlights, response), lastContextHash: contextHash, lastGeneratedAt: now } };
       }),
     }));
   };
@@ -319,6 +319,28 @@ export async function runNodeGeneration(
       onHarnessTurn: (turn) => {
         harnessTurn = turn;
         if (harnessRoute && !harnessClaim) harnessClaim = claimHarnessTurn(set, nodeId, harnessRoute, turn).catch(() => false);
+      },
+      onApproval: (request) => {
+        if (!isCurrent()) return;
+        const askedAt = new Date().toISOString();
+        set((state) => ({
+          nodes: state.nodes.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, pendingApproval: { ...request, askedAt } } } : n),
+        }));
+        toast('info', t('approval.toast'), 8000);
+      },
+      onApprovalDecided: ({ id, outcome }) => {
+        if (!isCurrent()) return;
+        const decidedAt = new Date().toISOString();
+        set((state) => ({
+          nodes: state.nodes.map((n) => {
+            if (n.id !== nodeId) return n;
+            const pending = n.data.pendingApproval;
+            if (!pending || pending.id !== id) return { ...n, data: { ...n.data, pendingApproval: undefined } };
+            const asked = { ...pending };
+            delete asked.answered;
+            return { ...n, data: { ...n.data, pendingApproval: undefined, approvals: [...(n.data.approvals ?? []), { ...asked, outcome, decidedAt }] } };
+          }),
+        }));
       },
       onRerouted: (_from, to) => { actualModel = to; },
       onImageFallback: (model) => { actualModel = model; },

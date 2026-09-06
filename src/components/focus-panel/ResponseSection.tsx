@@ -9,6 +9,7 @@ import { useT } from '../../i18n';
 import { isViewerMode } from '../../lib/viewer';
 import { collectExploreMarksKey, type ExploreMark } from '../../lib/explore-marks';
 import ReasoningDisclosure from '../ui/ReasoningDisclosure';
+import { ApprovalCard, ApprovalRecords } from '../ui/ApprovalCard';
 import type { ThoughtData } from '../../types';
 
 export default function ResponseSection({
@@ -159,7 +160,9 @@ export default function ResponseSection({
         )}
       </div>
 
-      {data.isLoading && (!data.response || data.restreaming) ? (
+      {data.isLoading && data.pendingApproval ? (
+        <div className="py-1"><ApprovalCard nodeId={nodeId} request={data.pendingApproval} /></div>
+      ) : data.isLoading && (!data.response || data.restreaming) ? (
         data.reasoning ? (
           <div className="py-1">
             <div className="text-2xs text-ink-faint mb-1">💭 {t('node.reasoningLive')}</div>
@@ -194,6 +197,7 @@ export default function ResponseSection({
         </div>
       ) : (
         <div ref={responseRef} className="relative">
+          {data.approvals && data.approvals.length > 0 && <ApprovalRecords records={data.approvals} />}
           {data.reasonings?.[data.responseIndex] && (
             <ReasoningDisclosure text={data.reasonings[data.responseIndex]!} />
           )}

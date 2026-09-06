@@ -75,7 +75,7 @@ import { fileURLToPath } from 'node:url'
 import { zstdDecompressSync } from 'node:zlib'
 
 export const name = 'thoughtdag'
-export const inject = ['webServer', 'sessions', 'sessionController', 'agents', 'llm', 'attachments', 'web', 'tools', 'commands', 'systemPrompt']
+export const inject = ['webServer', 'sessions', 'sessionController', 'agents', 'llm', 'attachments', 'web', 'tools', 'commands', 'systemPrompt', 'approval']
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const APP_DIR = resolve(__dirname, '../dist-app')
@@ -545,9 +545,55 @@ function toolQuery(name, args) {
   return first ? first.slice(0, 120) : ''
 }
 
+// ── approvals from the canvas ──────────────────────────────────────────
+// A turn launched from the canvas runs behind the harness's own approval
+// panel, which the canvas view covers. So the plugin answers first: while a
+// canvas turn is running, its session is registered here; an approval the
+// harness asks for that session becomes an `approval` frame on the turn's
+// stream, the node shows the question, and the person's answer comes back
+// through POST /approvals/:id. When the canvas stream is gone, the request
+// is handed down the chain (`next()`) to the harness's panel instead.
+
+/** sessionId → the canvas turn running in it: its frame emitter, its
+ *  close probe, and the tool calls seen so far (callId → name, arguments). */
+const canvasTurns = new Map()
+/** approval id → the resolver waiting for the person's decision */
+const pendingApprovals = new Map()
+
+const APPROVAL_OUTCOMES = new Set(['allowed-once', 'rejected'])
+
+function installApprovalAnswerer(ctx) {
+  ctx.on('approval/request', async function (req, next) {
+    const entry = canvasTurns.get(req?.agent?.id)
+    if (!entry) return next()
+    const id = 'td-' + randomUUID()
+    const call = req.callId !== undefined ? entry.calls.get(req.callId) : undefined
+    const name = call?.name ?? req.toolName
+    entry.emit({ approval: {
+      id, toolName: req.toolName, callId: req.callId ?? null, reason: req.reason ?? null,
+      name, query: call ? toolQuery(name, call.arguments) : '', arguments: typeof call?.arguments === 'string' ? call.arguments : (call?.arguments ? JSON.stringify(call.arguments) : null),
+    } })
+    let clear
+    const decision = new Promise(resolve => { pendingApprovals.set(id, { resolve, sessionId: req.agent.id }) })
+    const closed = new Promise(resolve => { const t = setInterval(() => { if (entry.isClosed()) { clearInterval(t); resolve('closed') } }, 500); clear = () => clearInterval(t) })
+    const aborted = new Promise(resolve => {
+      if (!req.signal) return
+      if (req.signal.aborted) resolve('aborted')
+      else req.signal.addEventListener('abort', () => resolve('aborted'), { once: true })
+    })
+    const r = await Promise.race([decision, closed, aborted])
+    pendingApprovals.delete(id)
+    clear?.()
+    if (r === 'closed') return next()
+    const outcome = r === 'aborted' ? 'cancelled' : r
+    entry.emit({ approvalDecided: { id, outcome } })
+    return outcome
+  }, true)
+}
+
 /** Run one question through the harness's agent loop in a fresh session and
  *  report it as SSE-style frames via `emit`; resolves when the turn ends. */
-async function runAgentTurn(ctx, body, emit, isClosed) {
+async function runAgentTurn(ctx, body, emit, isClosed, { answerApprovals = true } = {}) {
   const { question, context } = compileForAgent(body)
   // continue the session the canvas mirrors (a tail follow-up), else a fresh
   // session in the requested working directory (the canvas's project)
@@ -560,6 +606,10 @@ async function runAgentTurn(ctx, body, emit, isClosed) {
     sessionId = (await ctx.sessionController.create({ ...cwd })).sessionId
   }
   emit({ harnessSession: sessionId, continued: sessionId === continueId })
+  // a streaming caller can show and answer approvals; a one-shot caller
+  // (/claude) cannot, so its requests fall through to the harness's own panel
+  const turnEntry = { emit, isClosed, calls: new Map() }
+  if (answerApprovals) canvasTurns.set(sessionId, turnEntry)
   const hasImages = Array.isArray(body?.images) && body.images.length > 0
   if (hasImages) {
     const vm = await visionModel(ctx).catch(() => null)
@@ -589,9 +639,8 @@ async function runAgentTurn(ctx, body, emit, isClosed) {
       // chunks did not reach us live (e.g. a compacted row): the whole text at once
       const text = (event.data?.message?.content ?? []).filter(b => b.type === 'text').map(b => b.text).join('')
       if (text) { fullText += text; emit({ text }) }
-    } else if (event.type === 'tool/call') {
-      emit({ tool: { name: event.data?.name ?? 'tool', query: toolQuery(event.data?.name, event.data?.arguments) } })
-    } else if (event.type === 'tool/code-dispatch-start') {
+    } else if (event.type === 'tool/call' || event.type === 'tool/code-dispatch-start') {
+      if (event.data?.callId) turnEntry.calls.set(event.data.callId, { name: event.data?.name ?? 'tool', arguments: event.data?.arguments })
       emit({ tool: { name: event.data?.name ?? 'tool', query: toolQuery(event.data?.name, event.data?.arguments) } })
     } else if (event.type === 'turn/end') {
       done()
@@ -611,6 +660,7 @@ async function runAgentTurn(ctx, body, emit, isClosed) {
     if (isClosed()) { try { agent.cancel({ kind: 'user' }) } catch { /* best effort */ } }
   } finally {
     if (typeof off === 'function') off()
+    if (canvasTurns.get(sessionId) === turnEntry) canvasTurns.delete(sessionId)
   }
   return { sessionId, text: fullText }
 }
@@ -820,11 +870,21 @@ export async function apply(ctx, config) {
       }
       // ── model connection (the SPA's proxy protocol, on the harness's providers) ──
       if (path === '/models' && req.method === 'GET') return sendJson(res, 200, await modelsPayload(ctx))
+      const approvalRoute = /^\/approvals\/([^/]+)$/.exec(path)
+      if (approvalRoute !== null && req.method === 'POST') {
+        const id = decodeURIComponent(approvalRoute[1])
+        const body = await readJson(req, MAX_WRITE_BODY_BYTES)
+        const pending = pendingApprovals.get(id)
+        if (!pending) return sendJson(res, 404, { error: 'no such pending approval' })
+        const outcome = APPROVAL_OUTCOMES.has(body?.outcome) ? body.outcome : 'rejected'
+        pending.resolve(outcome)
+        return sendJson(res, 200, { id, outcome })
+      }
       if ((path === '/stream' || path === '/claude') && req.method === 'POST') {
         const body = await readJson(req, MAX_CALL_BODY_BYTES)
         if (body?.model === AGENT_MODEL) {
           if (path === '/claude') {
-            const r = await runAgentTurn(ctx, body, () => {}, () => false)
+            const r = await runAgentTurn(ctx, body, () => {}, () => false, { answerApprovals: false })
             return sendJson(res, 200, { text: r.text, model: AGENT_MODEL, harnessSession: r.sessionId })
           }
           res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
@@ -935,5 +995,6 @@ export async function apply(ctx, config) {
   ctx.effect(() => ctx.webServer.register({ kind: 'prefix', path: prefix + '/api', handler: api }), 'thoughtdag: api')
   ctx.effect(() => ctx.webServer.register({ kind: 'prefix', path: prefix, handler: staticHandler }), 'thoughtdag: static')
   ctx.logger.info('[dsh-thoughtdag] ThoughtDAG mounted at ' + prefix + '/')
+  installApprovalAnswerer(ctx)
   await installWhyLayer(ctx, config)
 }

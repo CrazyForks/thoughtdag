@@ -16,6 +16,7 @@ import SearchToggles from './ui/SearchToggles';
 import { Markdown, HighlightedMarkdown } from './Markdown';
 import FanOutModal from './FanOutModal';
 import ReasoningDisclosure from './ui/ReasoningDisclosure';
+import { ApprovalCard, ApprovalRecords } from './ui/ApprovalCard';
 import { useT, fmt } from '../i18n';
 import MentionSurface from './ui/NodeMention';
 import { useMentions } from '../lib/mentions';
@@ -710,7 +711,9 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
               <Hourglass size={13} strokeWidth={1.75} /> {t('paradigm.waitingUpstream')}
             </div>
           ) : data.isLoading ? (
-            data.response && !data.restreaming ? (
+            data.pendingApproval ? (
+              <ApprovalCard nodeId={id} request={data.pendingApproval} compact />
+            ) : data.response && !data.restreaming ? (
               // Streaming: show the live tail of the response on the canvas
               <div className="text-sm text-ink-muted leading-relaxed px-3 py-2.5 bg-surface rounded-xl max-h-[180px] overflow-hidden flex flex-col justify-end whitespace-pre-wrap break-words">
                 {data.response.length > 400 ? '…' + data.response.slice(-400) : data.response}
@@ -817,6 +820,9 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
               {data.references!.length > 3 && <span>+{data.references!.length - 3}</span>}
             </div>
           )}
+
+          {/* Approvals decided during this turn: part of the answer's record */}
+          {!data.isLoading && data.approvals && data.approvals.length > 0 && <ApprovalRecords records={data.approvals} />}
 
           {/* Response action row — LLM-chat convention: the actions that act
               on THIS answer live right under it (regenerate = new version in

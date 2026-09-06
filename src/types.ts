@@ -36,6 +36,33 @@ export interface Highlight {
 }
 
 /** A web source the model consulted while generating a response. */
+/** An agent runtime asking the person whether one action may proceed —
+    shown on the node while the turn waits. */
+export interface ApprovalRequest {
+  id: string;
+  /** the tool the runtime is deciding about (its own name) */
+  toolName: string;
+  callId: string | null;
+  /** the runtime's or a policy hook's human-readable reason */
+  reason: string | null;
+  /** the call as the canvas already shows it: tool name and its one-line query */
+  name: string;
+  query: string;
+  /** the full arguments, serialized, when the runtime supplied them */
+  arguments: string | null;
+  askedAt: string;
+  /** set the moment the person clicks, before the runtime confirms */
+  answered?: ApprovalOutcome;
+}
+
+export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable';
+
+/** A decided approval: part of the turn's record, like a tool footprint. */
+export interface ApprovalRecord extends ApprovalRequest {
+  outcome: ApprovalOutcome;
+  decidedAt: string;
+}
+
 export interface Reference {
   title: string;
   url?: string;
@@ -67,6 +94,10 @@ export interface ThoughtData extends Record<string, unknown> {
       the OLD text (cleared on the first new chunk) — display shows the live
       thinking, not the stale answer. */
   restreaming?: boolean;
+  /** Transient: an agent runtime is waiting for the person's decision on one action. */
+  pendingApproval?: ApprovalRequest;
+  /** Every approval decided during this turn's generations, oldest first. */
+  approvals?: ApprovalRecord[];
   archived?: boolean; // pruned-but-kept: dimmed on canvas, EXCLUDED from every context walk
   archivedAt?: string; // ISO timestamp: when it was pruned (thinking-timeline raw data)
   /** Provenance seed for staleness tracking: fingerprint of the exact

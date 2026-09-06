@@ -26,6 +26,7 @@ export function stripTransient(nodes: ThoughtNode[]): ThoughtNode[] {
       isEditing: false,
       isEditingResponse: false,
       restreaming: undefined,
+      pendingApproval: undefined,
       attachments: (n.data.attachments || []).map((a) =>
         a.isExtracting ? { ...a, isExtracting: false } : a
       ),
