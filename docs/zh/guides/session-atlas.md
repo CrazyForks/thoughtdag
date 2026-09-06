@@ -14,7 +14,7 @@ Agent 对话地图是 ThoughtDAG 面向本地 Agent 工作的**可视化上下�
 
 对话地图不是为了取代 Agent 自带的 compact，而是在它之上提供更细粒度、可追溯的整理方式。你可以把它理解为 CLI 会话之上的**可视化协同与上下文传递层**，但它还不是一个自动调度进程、权限和资源的 Agent OS。
 
-它可在**桌面版和 [DeepSeek Harness 插件](./deepseek-harness)**中使用，支持 Codex、Claude Code 与 DeepSeek Harness 的本地会话。下文的系统文件选择器、桌面 App 和终端唤起操作以桌面版为准；Harness 内的打开与续接方式见插件手册。
+它可在**桌面版和 [DeepSeek Harness 插件](./deepseek-harness)**中使用，支持 Codex、Claude Code、DeepSeek Harness 与 Pi 的本地会话。下文的系统文件选择器、桌面 App 和终端唤起操作以桌面版为准；Harness 内的打开与续接方式见插件手册。
 
 ## 原 Agent 继续工作，镜像独立整理
 

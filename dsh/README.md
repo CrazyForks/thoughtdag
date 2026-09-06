@@ -64,7 +64,7 @@ full-screen iframe.
 
 Inside the iframe the canvas runs with this bridge as its session source
 (the SPA is built with `VITE_DSH_BRIDGE=/thoughtdag/api`): Session Atlas
-lists the harness's sessions beside Claude Code's and Codex's (served by
+lists the harness's sessions beside Claude Code's, Codex's and Pi's (served by
 this host from their directories), opens one as a graph, and follows it
 live by polling the session's seq. The client half tells the canvas which
 session the chat shows (`td:current-session`) and switches the chat when the

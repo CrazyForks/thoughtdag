@@ -14,7 +14,7 @@ To query a file, phrase, URL, or paper directly from an agent, see [Why layer: C
 
 Atlas does not replace an agent's own compact command. It adds a finer-grained, traceable layer above it. You can think of Atlas as a **visual coordination and context-transfer layer** above CLI sessions, but not yet as an Agent OS that autonomously schedules processes, permissions, and resources.
 
-Atlas is available in the **desktop app and the [DeepSeek Harness plugin](./deepseek-harness)**, supporting local Codex, Claude Code, and DeepSeek Harness sessions. System file pickers, desktop-app links, and terminal launching below describe the desktop app; see the plugin manual for opening and continuing sessions inside Harness.
+Atlas is available in the **desktop app and the [DeepSeek Harness plugin](./deepseek-harness)**, supporting local Codex, Claude Code, DeepSeek Harness, and Pi sessions. System file pickers, desktop-app links, and terminal launching below describe the desktop app; see the plugin manual for opening and continuing sessions inside Harness.
 
 ## The source agent keeps working; the mirror is yours to curate
 
