@@ -9,7 +9,10 @@ const os = require('node:os');
 const ops = require('./ops.cjs');
 const terminal = require('../terminal.cjs');
 
-const RUNTIME_FACTORIES = { pi: (log) => require('./pi.cjs').createPiRuntime({ log }) };
+const RUNTIME_FACTORIES = {
+  pi: (log) => require('./pi.cjs').createPiRuntime({ log }),
+  codex: (log) => require('./codex.cjs').createCodexRuntime({ log }),
+};
 
 function createAgentsHttp({ workspaceRoot = path.join(os.homedir(), '.thoughtdag', 'workspaces'), log = () => {} } = {}) {
   const runtimes = new Map();

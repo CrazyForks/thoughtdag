@@ -762,7 +762,10 @@ let codexRpc = null; // null=not started, 'dead'=CLI absent, else client
 // addressed by its id: abort and answer find the runtime that owns it.
 const RUNTIME_DIR = app.isPackaged ? path.join(process.resourcesPath, 'payload', 'runtime') : path.join(__dirname, '..', 'runtime');
 const agentOps = require(path.join(RUNTIME_DIR, 'agents', 'ops.cjs'));
-const RUNTIME_FACTORIES = { pi: () => require(path.join(RUNTIME_DIR, 'agents', 'pi.cjs')).createPiRuntime({ log: (line) => console.log(line) }) };
+const RUNTIME_FACTORIES = {
+  pi: () => require(path.join(RUNTIME_DIR, 'agents', 'pi.cjs')).createPiRuntime({ log: (line) => console.log(line) }),
+  codex: () => require(path.join(RUNTIME_DIR, 'agents', 'codex.cjs')).createCodexRuntime({ log: (line) => console.log(line) }),
+};
 const runtimes = new Map();
 function agentsRuntime(name = 'pi') {
   const key = RUNTIME_FACTORIES[name] ? name : 'pi';

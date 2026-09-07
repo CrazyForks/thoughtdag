@@ -1,0 +1,302 @@
+// Codex as an agent runtime: one long-lived `codex app-server` (JSON-RPC 2.0
+// over stdio, newline-delimited). A run is one turn on one thread: fresh
+// (`thread/start` in the working directory), continued (`thread/resume`),
+// or branched (`thread/fork`). The server's notifications become the same
+// event kinds the Pi runtime emits, so the renderer reads nothing new:
+// text and reasoning deltas, tool starts and ends, questions (the server's
+// own approval and user-input requests), run_end. Codex keeps its rollout
+// files, login and model list; the shell only asks.
+'use strict';
+
+const { spawn } = require('node:child_process');
+const path = require('node:path');
+const fs = require('node:fs');
+const os = require('node:os');
+const { randomUUID } = require('node:crypto');
+const { snapshotDir, diffSnapshots } = require('./fs-diff.cjs');
+
+const fsp = fs.promises;
+const RESPONSE_MS = 30 * 1000;
+const CANDIDATE_DIRS = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', path.join(os.homedir(), '.bun', 'bin'), path.join(os.homedir(), '.npm-global', 'bin'), path.join(os.homedir(), '.local', 'bin')];
+
+async function executable(p) { try { await fsp.access(p, fs.constants.X_OK); return true; } catch { return false; } }
+async function findCodex() {
+  const names = process.platform === 'win32' ? ['codex.cmd', 'codex.exe', 'codex'] : ['codex'];
+  const dirs = [...(process.env.PATH || '').split(path.delimiter), ...CANDIDATE_DIRS].filter(Boolean);
+  for (const d of dirs) for (const n of names) { const p = path.join(d, n); if (await executable(p)) return p; }
+  return null;
+}
+function childEnv() {
+  const seen = new Set((process.env.PATH || '').split(path.delimiter).filter(Boolean));
+  return { ...process.env, PATH: [...seen, ...CANDIDATE_DIRS.filter((d) => !seen.has(d))].join(path.delimiter) };
+}
+
+/** The guard file the canvas writes per working directory, as Codex policy. */
+async function policyFor(cwd) {
+  try {
+    const raw = JSON.parse(await fsp.readFile(path.join(cwd, '.thoughtdag', 'guard.json'), 'utf8'));
+    if (raw?.mode === 'allow') return { approvalPolicy: 'never', sandbox: 'danger-full-access' };
+  } catch { /* default */ }
+  return { approvalPolicy: 'on-request', sandbox: 'workspace-write' };
+}
+
+const threadIdOf = (sessionPath) => {
+  const m = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(String(sessionPath ?? ''));
+  return m ? m[1] : null;
+};
+
+function createCodexRuntime({ log } = {}) {
+  const say = log || (() => {});
+  let proc = null;            // the app-server child
+  let ready = null;           // initialize handshake
+  let buf = '';
+  let nextId = 1;
+  const pending = new Map();  // our request id → resolve
+  const runs = new Map();     // runId → run state
+  const byThread = new Map(); // threadId → runId
+  const serverAsks = new Map(); // question id → { rpcId, respond(answer) }
+  let binPromise = null;
+  const bin = () => { if (!binPromise) binPromise = findCodex(); return binPromise; };
+
+  const write = (obj) => { try { proc.stdin.write(JSON.stringify(obj) + '\n'); return true; } catch { return false; } };
+  const send = (method, params, timeoutMs = RESPONSE_MS) => new Promise((resolve, reject) => {
+    if (!proc) return reject(new Error('codex app-server is not running'));
+    const id = nextId++;
+    const timer = setTimeout(() => { pending.delete(id); reject(new Error(`codex did not answer ${method} in ${timeoutMs / 1000}s`)); }, timeoutMs);
+    pending.set(id, (msg) => { clearTimeout(timer); if (msg.error) reject(new Error(msg.error.message || `codex refused ${method}`)); else resolve(msg.result); });
+    if (!write({ jsonrpc: '2.0', id, method, params })) { clearTimeout(timer); pending.delete(id); reject(new Error('codex stdin closed')); }
+  });
+
+  const die = (reason) => {
+    for (const p of pending.values()) p({ error: { message: reason } });
+    pending.clear();
+    for (const r of runs.values()) { r.emit({ type: 'run_error', message: reason }); r.end('exit'); }
+    proc = null; ready = null;
+  };
+
+  async function ensureServer() {
+    if (proc && ready) return ready;
+    const b = await bin();
+    if (!b) throw new Error('codex is not installed (no `codex` on PATH or in the usual places)');
+    proc = spawn(b, ['app-server'], { env: childEnv(), stdio: ['pipe', 'pipe', 'pipe'] });
+    buf = '';
+    proc.stdout.on('data', (d) => {
+      buf += d.toString();
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1);
+        if (!line.trim()) continue;
+        let msg; try { msg = JSON.parse(line); } catch { continue; }
+        dispatch(msg);
+      }
+    });
+    proc.stderr.on('data', (d) => say('[codex stderr] ' + d.toString().trim().slice(0, 400)));
+    proc.on('error', (e) => die('spawn error: ' + e.message));
+    proc.on('exit', (code, signal) => die(`codex exited (${signal || code})`));
+    ready = send('initialize', { clientInfo: { name: 'thoughtdag', title: 'ThoughtDAG', version: '0.5.0' }, capabilities: null })
+      .then(() => { write({ jsonrpc: '2.0', method: 'initialized', params: {} }); });
+    return ready;
+  }
+
+  const runOf = (threadId) => { const id = byThread.get(threadId); return id ? runs.get(id) : undefined; };
+
+  // ── the server speaks: responses, notifications, and its own requests ──
+  function dispatch(msg) {
+    if (msg.id !== undefined && msg.method === undefined) { const p = pending.get(msg.id); if (p) { pending.delete(msg.id); p(msg); } return; }
+    const params = msg.params ?? {};
+    const run = runOf(params.threadId);
+    if (msg.id !== undefined && msg.method) { serverRequest(msg, run); return; }
+    if (!run) return;
+    switch (msg.method) {
+      case 'item/agentMessage/delta':
+        run.text += String(params.delta ?? '');
+        run.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: String(params.delta ?? '') } });
+        break;
+      case 'item/reasoning/textDelta':
+      case 'item/reasoning/summaryTextDelta':
+        run.emit({ type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: String(params.delta ?? '') } });
+        break;
+      case 'item/started': {
+        const it = params.item ?? {};
+        const t = toolOf(it);
+        if (t) run.emit({ type: 'tool_execution_start', toolCallId: it.id, toolName: t.name, args: t.args });
+        break;
+      }
+      case 'item/completed': {
+        const it = params.item ?? {};
+        if (it.type === 'agentMessage' && typeof it.text === 'string') run.final = it.text;
+        const t = toolOf(it);
+        if (t) run.emit({ type: 'tool_execution_end', toolCallId: it.id, toolName: t.name, result: t.result, isError: t.isError });
+        break;
+      }
+      case 'turn/completed': {
+        const turn = params.turn ?? {};
+        if (turn.status === 'failed') run.emit({ type: 'run_error', message: turn.error?.message ?? 'the turn failed' });
+        run.end(turn.status === 'interrupted' ? 'aborted' : turn.status === 'failed' ? 'error' : 'end');
+        break;
+      }
+      default: break;
+    }
+  }
+
+  /** A thread item as a tool call, for the trace and the record. */
+  function toolOf(it) {
+    switch (it.type) {
+      case 'commandExecution': return { name: 'bash', args: { command: it.command, cwd: it.cwd }, result: it.aggregatedOutput ?? null, isError: it.status === 'failed' || (typeof it.exitCode === 'number' && it.exitCode !== 0) };
+      case 'fileChange': return { name: 'edit', args: { path: (it.changes ?? []).map((c) => c.path).join(', ') }, result: it.status ?? null, isError: it.status === 'failed' || it.status === 'declined' };
+      case 'mcpToolCall': return { name: `${it.server}/${it.tool}`, args: it.arguments ?? {}, result: it.result ?? it.error ?? null, isError: !!it.error };
+      case 'dynamicToolCall': return { name: it.tool, args: it.arguments ?? {}, result: null, isError: it.status === 'failed' };
+      case 'webSearch': return { name: 'web_search', args: { query: it.query ?? '' }, result: null, isError: false };
+      default: return null;
+    }
+  }
+
+  // ── the server asks the person: approvals and user input ──
+  function serverRequest(msg, run) {
+    const reply = (result) => write({ jsonrpc: '2.0', id: msg.id, result });
+    const params = msg.params ?? {};
+    if (!run) {
+      // nobody at the canvas for this thread: fail closed
+      if (msg.method === 'item/tool/requestUserInput') return reply({ answers: {} });
+      if (msg.method === 'item/permissions/requestApproval') return reply({ permissions: {}, scope: 'turn' });
+      return reply({ decision: 'decline' });
+    }
+    const ask = (question, respond) => {
+      const id = `q-${msg.id}`;
+      serverAsks.set(id, { rpcId: msg.id, respond });
+      run.waiting = true;
+      run.emit({ type: 'question', id, ...question });
+    };
+    const decided = (id, outcome, value) => { run.waiting = false; run.emit({ type: 'question_answered', id, outcome, value: value ?? null }); };
+    switch (msg.method) {
+      case 'item/commandExecution/requestApproval':
+        return ask({ kind: 'confirm', title: 'command needs approval', message: [params.command, params.reason].filter(Boolean).join('\n'), options: [], placeholder: null, prefill: null, paths: [], suggest: null },
+          (a, id) => { const yes = !!a?.confirmed; reply({ decision: yes ? 'accept' : 'decline' }); decided(id, yes ? 'allowed-once' : 'rejected'); });
+      case 'item/fileChange/requestApproval':
+        return ask({ kind: 'confirm', title: 'file change needs approval', message: [params.reason, params.grantRoot].filter(Boolean).join('\n') || 'apply the proposed file changes', options: [], placeholder: null, prefill: null, paths: [], suggest: null },
+          (a, id) => { const yes = !!a?.confirmed; reply({ decision: yes ? 'accept' : 'decline' }); decided(id, yes ? 'allowed-once' : 'rejected'); });
+      case 'item/permissions/requestApproval':
+        return ask({ kind: 'confirm', title: 'more permissions requested', message: [params.reason, JSON.stringify(params.permissions ?? {})].filter(Boolean).join('\n'), options: [], placeholder: null, prefill: null, paths: [], suggest: null },
+          (a, id) => { const yes = !!a?.confirmed; reply({ permissions: yes ? (params.permissions ?? {}) : {}, scope: 'turn' }); decided(id, yes ? 'allowed-once' : 'rejected'); });
+      case 'item/tool/requestUserInput': {
+        // one question at a time; the answers go back together
+        const qs = Array.isArray(params.questions) ? params.questions : [];
+        const answers = {};
+        const next = (i) => {
+          if (i >= qs.length) { reply({ answers }); return; }
+          const q = qs[i];
+          const opts = (q.options ?? []).map((o) => o.label);
+          ask({ kind: opts.length ? 'select' : 'input', title: q.header || 'question', message: q.question || '', options: opts, placeholder: q.isOther ? 'other…' : null, prefill: null, paths: [], suggest: null },
+            (a, id) => { const v = typeof a?.value === 'string' ? a.value : ''; answers[q.id] = { answers: v ? [v] : [] }; decided(id, v ? 'answered' : 'cancelled', v || null); next(i + 1); });
+        };
+        return next(0);
+      }
+      default:
+        return write({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: `unsupported request ${msg.method}` } });
+    }
+  }
+
+  const modelEntry = (m) => ({ provider: 'codex', id: m.model ?? m.id, name: m.displayName ?? m.model ?? m.id, reasoning: true, vision: true });
+  // the model a run uses when the canvas named none: the server's own
+  // default from model/list, not the config file's — a config can name a
+  // model this CLI version cannot run, and the list only carries runnable ones
+  let defaultModel = null;
+  async function defaultModelId() {
+    if (defaultModel) return defaultModel;
+    try { const r = await send('model/list', {}); const d = (r?.data ?? []).find((m) => m.isDefault) ?? (r?.data ?? [])[0]; defaultModel = d ? (d.model ?? d.id) : null; } catch { /* leave it to the config */ }
+    return defaultModel;
+  }
+
+  return {
+    available: () => bin(),
+
+    async models() {
+      const b = await bin();
+      if (!b) return { installed: false, models: [], default: null };
+      await ensureServer();
+      const r = await send('model/list', {});
+      const models = (r?.data ?? []).filter((m) => !m.hidden).map(modelEntry);
+      const def = (r?.data ?? []).find((m) => m.isDefault);
+      defaultModel = def ? (def.model ?? def.id) : defaultModel;
+      return { installed: true, models, default: def ? `codex/${def.model ?? def.id}` : (models[0] ? `codex/${models[0].id}` : null) };
+    },
+
+    async run(req, onEvent) {
+      const cwd = String(req.cwd || '');
+      if (!cwd || !path.isAbsolute(cwd)) throw new Error('run needs an absolute cwd');
+      await fsp.mkdir(cwd, { recursive: true });
+      await ensureServer();
+      const runId = randomUUID();
+      const emit = (event) => { try { onEvent({ runId, event }); } catch { /* renderer gone */ } };
+      const state = { runId, threadId: null, turnId: null, text: '', final: null, waiting: false, emit, end: null, done: null };
+      state.done = new Promise((resolve) => { state.end = (how) => { if (state.ended) return; state.ended = true; resolve(how); }; });
+      runs.set(runId, state);
+      void (async () => {
+        const IDLE = Number(process.env.TD_AGENT_IDLE_MS) || 10 * 60 * 1000;
+        let lastEvent = Date.now();
+        const origEmit = state.emit;
+        state.emit = (event) => { lastEvent = Date.now(); if (event.type === 'question') state.waiting = true; if (event.type === 'question_answered') state.waiting = false; origEmit(event); };
+        const watchdog = setInterval(() => {
+          if (state.waiting || Date.now() - lastEvent < IDLE) return;
+          state.emit({ type: 'run_error', message: `no activity for ${IDLE >= 60000 ? Math.round(IDLE / 60000) + ' min' : Math.round(IDLE / 1000) + ' s'}; the turn was stopped` });
+          if (state.threadId && state.turnId) send('turn/interrupt', { threadId: state.threadId, turnId: state.turnId }).catch(() => {});
+          setTimeout(() => state.end('idle'), 5000);
+        }, 15000);
+        try {
+          const policy = await policyFor(cwd);
+          const model = (req.model && typeof req.model === 'object' && req.model.id ? req.model.id : null) ?? await defaultModelId();
+          let thread;
+          const resumeId = req.sessionPath ? threadIdOf(req.sessionPath) : null;
+          if (req.forkEntryId && resumeId) thread = (await send('thread/fork', { threadId: resumeId, cwd, ...policy, ...(model ? { model } : {}) })).thread;
+          else if (resumeId) thread = (await send('thread/resume', { threadId: resumeId, cwd, ...policy, ...(model ? { model } : {}) })).thread;
+          else thread = (await send('thread/start', { cwd, ...policy, ...(model ? { model } : {}) })).thread;
+          state.threadId = thread.id;
+          byThread.set(thread.id, runId);
+          state.emit({ type: 'session', sessionId: thread.id, sessionFile: thread.path ?? null, model: model ? { provider: 'codex', id: model, name: model } : null, cwd });
+          const before = await snapshotDir(cwd).catch(() => null);
+          const input = [{ type: 'text', text: String(req.prompt ?? ''), text_elements: [] }];
+          for (const img of Array.isArray(req.images) ? req.images : []) if (img && typeof img.data === 'string') input.push({ type: 'image', url: `data:${img.mimeType};base64,${img.data}` });
+          const started = await send('turn/start', { threadId: thread.id, input, ...(model ? { model } : {}) }, 60 * 1000);
+          state.turnId = started?.turn?.id ?? null;
+          const how = await state.done;
+          if (before) {
+            const after = await snapshotDir(cwd).catch(() => null);
+            if (after) { const d = diffSnapshots(before, after); if (d.changed.length || d.added.length || d.removed.length || d.truncated) state.emit({ type: 'fs_changes', ...d }); }
+          }
+          state.emit({ type: 'run_end', text: state.final ?? state.text, how });
+        } catch (e) {
+          state.emit({ type: 'run_error', message: e instanceof Error ? e.message : String(e) });
+          state.emit({ type: 'run_end', text: state.final ?? state.text, how: 'error' });
+        } finally {
+          clearInterval(watchdog);
+          if (state.threadId) byThread.delete(state.threadId);
+          runs.delete(runId);
+        }
+      })();
+      return runId;
+    },
+
+    abort(runId) {
+      const r = runs.get(runId);
+      if (!r) return false;
+      // withdraw any question still open for this run, then interrupt
+      for (const [id, ask] of serverAsks) { if (id.startsWith('q-')) { /* the server's own timeout covers it */ } void ask; }
+      if (r.threadId && r.turnId) send('turn/interrupt', { threadId: r.threadId, turnId: r.turnId }).catch(() => {});
+      return true;
+    },
+
+    answer(runId, requestId, response) {
+      const ask = serverAsks.get(String(requestId));
+      if (!ask || !runs.has(runId)) return false;
+      serverAsks.delete(String(requestId));
+      const a = response && typeof response === 'object' ? response : { confirmed: !!response };
+      if (a.cancelled) { ask.respond({ confirmed: false, value: '' }, String(requestId)); return true; }
+      ask.respond(a, String(requestId));
+      return true;
+    },
+
+    shutdown() { try { proc?.kill(); } catch { /* gone */ } proc = null; ready = null; },
+  };
+}
+
+module.exports = { createCodexRuntime, findCodex };

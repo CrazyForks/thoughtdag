@@ -27,7 +27,7 @@ export const AGENT_RUNTIMES: Record<AgentRuntime, { prefix: string; label: strin
   'claude-code': { prefix: 'claude/', label: 'Claude Code', rootKey: 'claude-projects' },
 };
 /** The runtimes the shell implements today. */
-export const LIVE_RUNTIMES: AgentRuntime[] = ['pi'];
+export const LIVE_RUNTIMES: AgentRuntime[] = ['pi', 'codex'];
 
 
 /** The provider key the picker groups every agent-run model under. */
@@ -45,8 +45,10 @@ export function agentTarget(id: string): { runtime: AgentRuntime; provider: stri
   const runtime = runtimeOf(id);
   if (!runtime) return null;
   const rest = id.slice(AGENT_RUNTIMES[runtime].prefix.length);
+  if (!rest) return null;
   const i = rest.indexOf('/');
-  if (i <= 0 || i === rest.length - 1) return null;
+  // a runtime with one provider (Codex) names models without a provider segment
+  if (i <= 0 || i === rest.length - 1) return { runtime, provider: runtime, id: rest };
   return { runtime, provider: rest.slice(0, i), id: rest.slice(i + 1) };
 }
 
