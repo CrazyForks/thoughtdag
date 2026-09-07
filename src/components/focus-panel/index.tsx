@@ -9,6 +9,7 @@ import { awaitingInput } from '../../utils';
 import { useT } from '../../i18n';
 import { isViewerMode } from '../../lib/viewer';
 import RoleLine from './RoleLine';
+import AgentSessionLine from './AgentSessionLine';
 import AttachmentsSection from './AttachmentsSection';
 import QuestionSection from './QuestionSection';
 import ResponseSection from './ResponseSection';
@@ -128,6 +129,7 @@ export default function FocusPanel({ onFocusNode }: { onFocusNode?: (id: string)
 
       {/* Scrollable content: one card per section */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5">
+        <AgentSessionLine data={data} />
         <QuestionSection
           key={`q-${selectedNodeId}`}
           nodeId={selectedNodeId!}

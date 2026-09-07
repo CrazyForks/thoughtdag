@@ -276,7 +276,8 @@ export function buildContext(
     }
     if (pointers.size > 0 && pointerSource) {
       const parts = [...pointers.entries()].map(([op, set]) => `${op}: ${[...set].join(', ')}`);
-      messages.push({ role: 'user', content: `[Files this turn touched — contents not included] ${parts.join('; ')}` });
+      const where = node.data.agentSession?.cwd ?? node.data.importSource?.cwd;
+      messages.push({ role: 'user', content: `[Files this turn touched${where ? ` in ${where}` : ''} — contents not included] ${parts.join('; ')}` });
       sources.push(attSource(pointerSource));
     }
   };
