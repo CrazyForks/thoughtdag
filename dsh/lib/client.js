@@ -33,6 +33,10 @@ window.__ModuleLoader__.load({
       host.innerHTML = '<div class="dsh-td-switch" role="group" aria-label="view switch"><button type="button" data-view="dialog" class="active" aria-pressed="true">对话</button><button type="button" data-view="map" aria-pressed="false">思维图</button></div><section class="dsh-td-overlay" hidden><iframe title="ThoughtDAG" data-src="/thoughtdag/"></iframe></section>'
       document.body.append(host)
 
+      // the plugin's version, for the canvas's update dialog and release history
+      let pluginVersion = null
+      fetch('/thoughtdag/api/version').then(r => (r.ok ? r.json() : null)).then(j => { if (j && typeof j.version === 'string') pluginVersion = j.version }).catch(() => {})
+
       const dialogBtn = host.querySelector('[data-view="dialog"]')
       const mapBtn = host.querySelector('[data-view="map"]')
       const overlay = host.querySelector('.dsh-td-overlay')
@@ -58,7 +62,7 @@ window.__ModuleLoader__.load({
         // the SPA boots on first open, never while hidden: a canvas that
         // measures itself inside a display:none frame fits its view to a 0×0
         // box and shows nothing when revealed
-        if (!frame.src) frame.src = frame.dataset.src
+        if (!frame.src) frame.src = frame.dataset.src + (pluginVersion ? (frame.dataset.src.includes('?') ? '&' : '?') + 'dv=' + encodeURIComponent(pluginVersion) : '')
         syncCurrent()
         // let the SPA boot, then re-sync so its listener is ready
         window.setTimeout(syncCurrent, 400)

@@ -81,6 +81,22 @@ export const inject = ['webServer', 'sessions', 'sessionController', 'agents', '
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const require = createRequire(import.meta.url)
 const APP_DIR = resolve(__dirname, '../dist-app')
+
+// The plugin's own version travels into the canvas's URL (?dv=), so the
+// update dialog and the release history know which release runs here, as
+// they do in the desktop shell. The registry is asked for the newest
+// version at most once a day; a failed lookup is silence, not an error.
+const PLUGIN_VERSION = (() => { try { return require(resolve(__dirname, '..', 'package.json')).version ?? null } catch { return null } })()
+let latestLookup = { value: null, at: 0 }
+async function latestPluginVersion() {
+  if (Date.now() - latestLookup.at < 24 * 60 * 60 * 1000) return latestLookup.value
+  latestLookup = { value: latestLookup.value, at: Date.now() }
+  try {
+    const r = await fetch('https://registry.npmjs.org/dsh-thoughtdag/latest', { signal: AbortSignal.timeout(5000), headers: { accept: 'application/json' } })
+    if (r.ok) { const j = await r.json(); if (typeof j?.version === 'string') latestLookup.value = j.version }
+  } catch { /* offline, or the registry is slow: keep what we had */ }
+  return latestLookup.value
+}
 // the shared runtime, copied under lib/runtime by the build (Node code, no harness dependency)
 let agentsHttpInstance = null
 function agentsHttp() {
@@ -845,6 +861,7 @@ export async function apply(ctx, config) {
         return sendJson(res, 200, { session: sessionSummary(session) })
       }
       if (path === '/why/status' && req.method === 'GET') return sendJson(res, 200, whyStatus)
+      if (path === '/version' && req.method === 'GET') return sendJson(res, 200, { version: PLUGIN_VERSION, latest: await latestPluginVersion(), checkedAt: latestLookup.at || null })
       // ── the other agents' session files ──
       if (path === '/roots' && req.method === 'GET') {
         const roots = []

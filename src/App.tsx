@@ -75,6 +75,7 @@ import Tutorial from './components/Tutorial';
 import WhatsNewDialog from './components/ui/WhatsNewDialog';
 import ReleaseNotesDialog from './components/ui/ReleaseNotesDialog';
 import AgentCwdChip from './components/ui/AgentCwdChip';
+import { PLUGIN_UPDATE_COMMAND } from './lib/plugin-update';
 import { useT, t as ti, fmt, useI18n } from './i18n';
 import { isViewerMode, buildViewerLink } from './lib/viewer';
 import { useModels } from './lib/use-models';
@@ -853,6 +854,7 @@ function Canvas() {
   // so the top-right row stays short in both languages and with the panel
   // dragged wide.
   const [moreOpen, setMoreOpen] = useState(false);
+  const pluginUpdate = useUiStore((s) => s.pluginUpdate);
   const [diagPing, setDiagPing] = useState(0);
   const searching = useUiStore((s2) => s2.searchHitIds !== null);
   const moreRef = useRef<HTMLDivElement>(null);
@@ -1871,6 +1873,16 @@ function Canvas() {
               >
                 <CircleHelp size={14} strokeWidth={1.75} className="text-ink-faint shrink-0" /> {t('landing.howItWorks')}
               </button>
+              {pluginUpdate && (
+                <button
+                  onClick={() => { setMoreOpen(false); void navigator.clipboard.writeText(PLUGIN_UPDATE_COMMAND).then(() => toast('success', t('plugin.updateCopied'), 6000)).catch(() => {}); }}
+                  className="w-full text-left px-3 py-2 text-xs text-accent hover:bg-wash transition-colors flex items-center gap-2.5"
+                  title={fmt(t('plugin.updateHint'), { cmd: PLUGIN_UPDATE_COMMAND })}
+                  data-plugin-update
+                >
+                  <Download size={14} strokeWidth={1.75} className="shrink-0" /> {fmt(t('plugin.updateAvailable'), { v: pluginUpdate.latest })}
+                </button>
+              )}
               <button
                 onClick={() => { setMoreOpen(false); useUiStore.getState().setReleaseNotesOpen(true); }}
                 className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-wash transition-colors flex items-center gap-2.5"

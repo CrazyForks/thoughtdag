@@ -87,6 +87,9 @@ interface UiState {
   memoryManagerOpen: boolean;
   releaseNotesOpen: boolean;
   setReleaseNotesOpen: (open: boolean) => void;
+  /** inside the harness: a newer plugin on the registry than the one running */
+  pluginUpdate: { current: string; latest: string } | null;
+  setPluginUpdate: (u: { current: string; latest: string } | null) => void;
   highlightsOverviewOpen: boolean;
   setHighlightsOverviewOpen: (open: boolean) => void;
   materialsOverviewOpen: boolean;
@@ -255,6 +258,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   setMemoryManagerOpen: (open) => set({ memoryManagerOpen: open }),
   releaseNotesOpen: false,
   setReleaseNotesOpen: (open) => set({ releaseNotesOpen: open }),
+  pluginUpdate: null,
+  setPluginUpdate: (u) => set({ pluginUpdate: u }),
   apiKeyModalOpen: false,
   setApiKeyModalOpen: (open) => set({ apiKeyModalOpen: open }),
   modelPickerPing: 0,

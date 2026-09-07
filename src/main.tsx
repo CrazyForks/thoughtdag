@@ -17,6 +17,7 @@ initAppearance()
 // and the live mirror light up exactly as they do in the desktop shell.
 const dshApi = import.meta.env.VITE_DSH_BRIDGE as string | undefined
 if (dshApi && !window.desktopSessions) installDshSessionsBridge(dshApi)
+if (dshApi) void import('./lib/plugin-update').then((mod) => mod.bootPluginUpdateCheck(dshApi))
 // Agent runtimes over HTTP: the harness host serves them; a local server on
 // this machine does too. The probe answers 404 everywhere else and nothing
 // is installed — the picker simply has no agent group.
