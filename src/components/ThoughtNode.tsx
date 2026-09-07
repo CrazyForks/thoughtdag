@@ -16,7 +16,7 @@ import SearchToggles from './ui/SearchToggles';
 import { Markdown, HighlightedMarkdown } from './Markdown';
 import FanOutModal from './FanOutModal';
 import ReasoningDisclosure from './ui/ReasoningDisclosure';
-import { ApprovalCard, ApprovalRecords } from './ui/ApprovalCard';
+import { ApprovalCard } from './ui/ApprovalCard';
 import { AgentTrace } from './ui/AgentTrace';
 import { SquareTerminal } from 'lucide-react';
 import { useT, fmt } from '../i18n';
@@ -824,9 +824,6 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
               {data.references!.length > 3 && <span>+{data.references!.length - 3}</span>}
             </div>
           )}
-
-          {/* Approvals decided during this turn: part of the answer's record */}
-          {!data.isLoading && data.approvals && data.approvals.length > 0 && <ApprovalRecords records={data.approvals} />}
 
           {/* Response action row — LLM-chat convention: the actions that act
               on THIS answer live right under it (regenerate = new version in

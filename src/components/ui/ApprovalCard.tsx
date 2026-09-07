@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ShieldAlert } from 'lucide-react';
+import { ShieldAlert, ChevronDown, ChevronRight } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useStore } from '../../store';
 import { answerApproval } from '../../lib/api';
@@ -59,11 +59,11 @@ export function ApprovalCard({ nodeId, request, compact }: { nodeId: string; req
           <span className="text-ink-faint">{t('approval.reason')} · </span>{request.reason}
         </p>
       )}
-      <div className="mt-2.5 flex items-center gap-2">
+      <div className={`mt-2.5 flex flex-wrap items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
         <button
           onClick={() => void decide('allowed-once')}
           disabled={busy}
-          className="text-xs text-white px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-strong transition-colors disabled:opacity-50"
+          className={`${compact ? 'text-2xs px-2.5 py-1' : 'text-xs px-3 py-1.5'} text-white rounded-lg bg-accent hover:bg-accent-strong transition-colors disabled:opacity-50 whitespace-nowrap`}
           data-approval-allow
         >
           {t('approval.allowOnce')}
@@ -72,7 +72,7 @@ export function ApprovalCard({ nodeId, request, compact }: { nodeId: string; req
           <button
             onClick={() => void decide('allowed-once', request.suggest!)}
             disabled={busy}
-            className="text-xs text-accent px-3 py-1.5 rounded-lg border border-accent/40 hover:bg-accent/10 transition-colors disabled:opacity-50 max-w-[45%] truncate"
+            className={`${compact ? 'text-2xs px-2.5 py-1 max-w-[150px]' : 'text-xs px-3 py-1.5 max-w-[240px]'} text-accent rounded-lg border border-accent/40 hover:bg-accent/10 transition-colors disabled:opacity-50 truncate`}
             title={`${t('approval.allowLocationTitle')} ${request.suggest}`}
             data-approval-allow-location
           >
@@ -82,7 +82,7 @@ export function ApprovalCard({ nodeId, request, compact }: { nodeId: string; req
         <button
           onClick={() => void decide('rejected')}
           disabled={busy}
-          className="text-xs text-ink px-3 py-1.5 rounded-lg border border-line hover:bg-wash transition-colors disabled:opacity-50"
+          className={`${compact ? 'text-2xs px-2.5 py-1' : 'text-xs px-3 py-1.5'} text-ink rounded-lg border border-line hover:bg-wash transition-colors disabled:opacity-50 whitespace-nowrap`}
           data-approval-reject
         >
           {t('approval.reject')}
@@ -92,8 +92,8 @@ export function ApprovalCard({ nodeId, request, compact }: { nodeId: string; req
             {t('approval.showArgs')}
           </button>
         )}
-        <span className="ml-auto text-2xs text-ink-faint">{busy ? t('approval.sending') : t('approval.waiting')}</span>
       </div>
+      <div className="mt-1.5 text-2xs text-ink-faint">{busy ? t('approval.sending') : t('approval.waiting')}</div>
     </div>
   );
 }
@@ -112,5 +112,26 @@ export function ApprovalRecords({ records }: { records: ApprovalRecord[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** The turn's decisions behind a toggle, beside the reasoning: the card's
+ *  face is the answer; what was allowed or refused is backstage. */
+export function DecisionsDisclosure({ records }: { records: ApprovalRecord[] }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const allowed = records.filter((r) => r.outcome === 'allowed-once').length;
+  return (
+    <div className="mb-2 nopan">
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className="flex items-center gap-1 text-2xs text-ink-faint hover:text-ink-muted transition-colors"
+        data-decisions-toggle
+      >
+        {open ? <ChevronDown size={12} strokeWidth={1.75} /> : <ChevronRight size={12} strokeWidth={1.75} />}
+        <span>🛡 {t('approval.decisions')} · {allowed}/{records.length}</span>
+      </button>
+      {open && <div className="mt-1 px-3 py-1.5 bg-wash/70 rounded-xl"><ApprovalRecords records={records} /></div>}
+    </div>
   );
 }

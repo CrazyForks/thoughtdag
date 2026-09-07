@@ -97,6 +97,7 @@ export const zh: Record<keyof typeof en, string> = {
   'approval.cancelled': '已撤回',
   'approval.unavailable': '无人应答',
   'approval.toast': '有一个操作等待你批准',
+  'approval.decisions': '决定',
   'whatsNew.multi': '包含上一次之后所有版本的更新',
   'releaseNotes.entry': '更新历史',
   'releaseNotes.title': '更新历史',

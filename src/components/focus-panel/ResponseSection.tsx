@@ -9,7 +9,7 @@ import { useT } from '../../i18n';
 import { isViewerMode } from '../../lib/viewer';
 import { collectExploreMarksKey, type ExploreMark } from '../../lib/explore-marks';
 import ReasoningDisclosure from '../ui/ReasoningDisclosure';
-import { ApprovalCard, ApprovalRecords } from '../ui/ApprovalCard';
+import { ApprovalCard, DecisionsDisclosure } from '../ui/ApprovalCard';
 import { AgentTrace } from '../ui/AgentTrace';
 import type { ThoughtData } from '../../types';
 
@@ -200,7 +200,7 @@ export default function ResponseSection({
         </div>
       ) : (
         <div ref={responseRef} className="relative">
-          {data.approvals && data.approvals.length > 0 && <ApprovalRecords records={data.approvals} />}
+          {data.approvals && data.approvals.length > 0 && <DecisionsDisclosure records={data.approvals} />}
           {data.reasonings?.[data.responseIndex] && (
             <ReasoningDisclosure text={data.reasonings[data.responseIndex]!} />
           )}

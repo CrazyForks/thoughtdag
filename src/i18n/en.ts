@@ -97,6 +97,7 @@ export const en = {
   'approval.cancelled': 'Withdrawn',
   'approval.unavailable': 'Unanswered',
   'approval.toast': 'An action is waiting for your approval',
+  'approval.decisions': 'Decisions',
   'whatsNew.multi': 'Everything since the version you last read about',
   'releaseNotes.entry': 'Release notes',
   'releaseNotes.title': 'Release notes',
