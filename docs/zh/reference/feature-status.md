@@ -10,7 +10,7 @@ title: 功能状态
 | 分支、合并、剪枝、重算与重放 | 当前功能 | 使用受控的上下文前后对比演示 |
 | PDF 阅读与内容摘取 | 当前功能 | 保留来源和页码 |
 | 本地存储、备份、导出与分享 | 当前功能 | 不承诺未经验证的全部跨版本兼容性 |
-| 受支持本地会话的 Agent 对话地图 | 桌面版与 Harness 插件 | 已适配 Codex、Claude Code 与 DeepSeek Harness；runner 格式可能变化 |
+| 受支持本地会话的 Agent 对话地图 | 桌面版与 Harness 插件 | 已适配 Codex、Claude Code、DeepSeek Harness 与 Pi；runner 格式可能变化 |
 | 增量会话镜像与 tool result 附件 | 当前功能 | 整理镜像不改写来源历史 |
 | Why 层 CLI 与只读 MCP | 已发布，实验性 | 候选解释不等于已核验的原因 |
 | Harness 内嵌画布与 Agent 轮次 | 插件 0.4.4 已发布 | 普通模型回答仅留画布；Agent 方式执行并记录真实轮次 |

@@ -4,7 +4,7 @@ title: 在 DeepSeek Harness 中使用 ThoughtDAG
 
 # 在 DeepSeek Harness 中使用 ThoughtDAG
 
-插件把 ThoughtDAG 画布嵌入 Harness 网页界面。你在图上整理下一轮的上下文，Harness 负责执行；也可以通过 Agent 对话地图浏览 Claude Code、Codex 和 Harness 的会话。
+插件把 ThoughtDAG 画布嵌入 Harness 网页界面。你在图上整理下一轮的上下文，Harness 负责执行；也可以通过 Agent 对话地图浏览 Claude Code、Codex、Pi 和 Harness 的会话。
 
 ## 安装
 

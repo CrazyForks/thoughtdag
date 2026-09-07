@@ -4,7 +4,7 @@ title: Use ThoughtDAG inside DeepSeek Harness
 
 # Use ThoughtDAG inside DeepSeek Harness
 
-The plugin embeds the ThoughtDAG canvas in the Harness web UI. Compose the next turn's context on the graph and let the harness execute it. Session Atlas also lets you explore Claude Code, Codex, and Harness conversations.
+The plugin embeds the ThoughtDAG canvas in the Harness web UI. Compose the next turn's context on the graph and let the harness execute it. Session Atlas also lets you explore Claude Code, Codex, Pi, and Harness conversations.
 
 ## Install
 

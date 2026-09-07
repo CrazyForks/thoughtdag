@@ -10,7 +10,7 @@ title: Feature status
 | Branch, merge, prune, regenerate, and replay | Current | Demonstrate with controlled before/after context |
 | PDF reading and extraction | Current | Preserve source and page provenance |
 | Local storage, backup, export, and sharing | Current | Do not promise unverified compatibility across every version |
-| Session Atlas for supported local sessions | Desktop app and Harness plugin | Codex, Claude Code, and DeepSeek Harness adapters; runner formats may change |
+| Session Atlas for supported local sessions | Desktop app and Harness plugin | Codex, Claude Code, DeepSeek Harness, and Pi adapters; runner formats may change |
 | Incremental session mirrors and tool-result attachments | Current | Curating a mirror does not rewrite source history |
 | Why layer CLI and read-only MCP | Published, experimental | Candidate explanations are not verified causes |
 | Embedded Harness canvas and Agent turns | Plugin 0.4.4 published | Regular-model answers stay on the canvas; Agent mode records real Harness turns |
