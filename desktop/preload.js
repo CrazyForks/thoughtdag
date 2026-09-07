@@ -49,7 +49,7 @@ contextBridge.exposeInMainWorld('desktopAgents', {
   run: (request) => ipcRenderer.invoke('agents:run', request),
   abort: (runId) => ipcRenderer.invoke('agents:abort', runId),
   workspace: (canvasId) => ipcRenderer.invoke('agents:workspace', canvasId),
-  answer: (runId, requestId, confirmed) => ipcRenderer.invoke('agents:answer', runId, requestId, confirmed),
+  answer: (runId, requestId, response) => ipcRenderer.invoke('agents:answer', runId, requestId, response),
   guardWrite: (cwd, config) => ipcRenderer.invoke('agents:guard-write', cwd, config),
   pickCwd: () => ipcRenderer.invoke('agents:pick-cwd'),
   writeMaterials: (cwd, files) => ipcRenderer.invoke('agents:write-materials', cwd, files),

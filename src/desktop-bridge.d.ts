@@ -112,8 +112,8 @@ interface DesktopAgentsBridge {
   abort(runId: string): Promise<boolean>;
   /** the shell-managed working directory of a canvas, created on demand */
   workspace(canvasId: string): Promise<string>;
-  /** the person's answer to a runtime's confirm question during a run */
-  answer(runId: string, requestId: string, confirmed: boolean): Promise<boolean>;
+  /** the person's answer to a runtime's question during a run */
+  answer(runId: string, requestId: string, response: { confirmed: boolean } | { value: string } | { cancelled: true }): Promise<boolean>;
   /** a folder picked in the system dialog, or null */
   pickCwd(): Promise<string | null>;
   /** the boundary guard's tuning for a working directory */

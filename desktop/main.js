@@ -790,7 +790,7 @@ function setupAgents() {
   });
   ipcMain.handle('agents:abort', async (_e, runId) => agentsRuntime().abort(String(runId)));
   ipcMain.handle('agents:workspace', async (_e, canvasId) => workspaceFor(canvasId));
-  ipcMain.handle('agents:answer', async (_e, runId, requestId, confirmed) => agentsRuntime().answer(String(runId), String(requestId), !!confirmed));
+  ipcMain.handle('agents:answer', async (_e, runId, requestId, response) => agentsRuntime().answer(String(runId), String(requestId), response));
   // the guard's tuning for a working directory: <cwd>/.thoughtdag/guard.json
   ipcMain.handle('agents:guard-write', async (_e, cwd, config) => {
     if (typeof cwd !== 'string' || !path.isAbsolute(cwd)) return false;

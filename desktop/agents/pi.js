@@ -63,7 +63,9 @@ class PiProcess {
     this.listener = null;       // the run currently receiving events
     this.openDialogs = new Set(); // confirm questions forwarded to the canvas, not yet answered
     this.idleTimer = null;
-    const args = ['--mode', 'rpc', ...(opts.noSession ? ['--no-session'] : ['-e', GUARD])];
+    // extra extensions for development and tests (colon-separated paths)
+    const extra = (process.env.TD_PI_EXTRA_EXTENSIONS || '').split(':').filter(Boolean).flatMap((e) => ['-e', e]);
+    const args = ['--mode', 'rpc', ...(opts.noSession ? ['--no-session'] : ['-e', GUARD, ...extra])];
     this.proc = spawn(bin, args, { cwd, env: childEnv(), stdio: ['pipe', 'pipe', 'pipe'] });
     this.proc.stdout.on('data', (d) => this.feed(d.toString()));
     this.proc.stderr.on('data', (d) => this.log('[pi stderr] ' + d.toString().trim().slice(0, 400)));
@@ -96,10 +98,13 @@ class PiProcess {
       return;
     }
     if (msg.type === 'extension_ui_request') {
-      // a confirm question goes to the run (the canvas shows it as an
-      // approval and answers through `answer`); any other dialog has
-      // nobody at the terminal, so it is withdrawn and the run hears about it
-      if (msg.method === 'confirm' && this.listener) {
+      // a question for the person — confirm, select, input, editor — goes to
+      // the run as one `question` event; the canvas shows it on the node and
+      // answers through `answer`. Fire-and-forget notices (notify, status,
+      // widget, title) are not questions and get no answer.
+      const method = String(msg.method ?? '');
+      const KINDS = { confirm: 'confirm', select: 'select', input: 'input', editor: 'editor' };
+      if (KINDS[method] && this.listener) {
         this.openDialogs.add(String(msg.id));
         // the guard appends a structured tail (paths, a directory to offer)
         // after U+241F; the person sees only the text before it
@@ -107,11 +112,19 @@ class PiProcess {
         const cut = raw.indexOf('\u241F');
         let extra = {};
         if (cut >= 0) { try { extra = JSON.parse(raw.slice(cut + 1)); } catch { extra = {}; } }
-        this.listener({ type: 'approval', id: msg.id, title: msg.title ?? '', message: cut >= 0 ? raw.slice(0, cut) : raw, paths: Array.isArray(extra.paths) ? extra.paths : [], suggest: typeof extra.suggest === 'string' ? extra.suggest : null });
+        this.listener({
+          type: 'question', kind: KINDS[method], id: msg.id, title: msg.title ?? '', message: cut >= 0 ? raw.slice(0, cut) : raw,
+          options: Array.isArray(msg.options) ? msg.options.map(String) : [],
+          placeholder: typeof msg.placeholder === 'string' ? msg.placeholder : null,
+          prefill: typeof msg.prefill === 'string' ? msg.prefill : null,
+          paths: Array.isArray(extra.paths) ? extra.paths : [], suggest: typeof extra.suggest === 'string' ? extra.suggest : null,
+        });
         return;
       }
-      this.write({ type: 'extension_ui_response', id: msg.id, cancelled: true });
-      this.listener?.({ type: 'extension_ui_cancelled', method: msg.method, title: msg.title ?? null });
+      if (KINDS[method]) {
+        // nobody is listening: the dialog resolves to its default at once
+        this.write({ type: 'extension_ui_response', id: msg.id, cancelled: true });
+      }
       return;
     }
     this.listener?.(msg);
@@ -248,8 +261,8 @@ function createPiRuntime({ log } = {}) {
         }, 15000);
         proc.listener = (event) => {
           lastEvent = Date.now();
-          if (event.type === 'approval') waitingOnPerson = true;
-          if (event.type === 'approval_decided') waitingOnPerson = false;
+          if (event.type === 'question') waitingOnPerson = true;
+          if (event.type === 'question_answered') waitingOnPerson = false;
           if (event.type === 'message_end' && event.message?.role === 'assistant') text = textOf(event.message) || text;
           if (event.type === 'process_exit') { emit({ type: 'run_error', message: event.reason }); ended('exit'); return; }
           emit(event);
@@ -291,13 +304,22 @@ function createPiRuntime({ log } = {}) {
       return true;
     },
 
-    /** The person's answer to a confirm question of a running turn. */
-    answer(runId, requestId, confirmed) {
+    /**
+     * The person's answer to a question of a running turn:
+     * { confirmed } for a confirm, { value } for select/input/editor,
+     * { cancelled: true } to withdraw (the dialog's default applies).
+     */
+    answer(runId, requestId, response) {
       const r = runs.get(runId);
       if (!r) return false;
-      const ok = r.proc.write({ type: 'extension_ui_response', id: String(requestId), confirmed: !!confirmed });
-      r.proc.openDialogs.delete(String(requestId));
-      if (ok) r.proc.listener?.({ type: 'approval_decided', id: String(requestId), outcome: confirmed ? 'allowed-once' : 'rejected' });
+      const id = String(requestId);
+      const a = response && typeof response === 'object' ? response : { confirmed: !!response };
+      const wire = a.cancelled ? { type: 'extension_ui_response', id, cancelled: true }
+        : typeof a.value === 'string' ? { type: 'extension_ui_response', id, value: a.value }
+        : { type: 'extension_ui_response', id, confirmed: !!a.confirmed };
+      const ok = r.proc.write(wire);
+      r.proc.openDialogs.delete(id);
+      if (ok) r.proc.listener?.({ type: 'question_answered', id, outcome: a.cancelled ? 'cancelled' : typeof a.value === 'string' ? 'answered' : (a.confirmed ? 'allowed-once' : 'rejected'), value: typeof a.value === 'string' ? a.value : null });
       return ok;
     },
 

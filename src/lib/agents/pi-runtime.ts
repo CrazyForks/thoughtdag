@@ -257,13 +257,17 @@ export async function agentCallStream(
             callbacks?.onAgentTool?.({ id, name: 'dialog', query: '', phase: 'end', isError: true });
             break;
           }
-          case 'approval_decided':
-            callbacks?.onApprovalDecided?.({ id: String(event.id), outcome: event.outcome === 'allowed-once' ? 'allowed-once' : 'rejected' });
+          case 'question_answered':
+            callbacks?.onApprovalDecided?.({ id: String(event.id), outcome: (event.outcome as import('../../types').ApprovalOutcome) ?? 'cancelled', value: typeof event.value === 'string' ? event.value : null });
             break;
-          case 'approval':
+          case 'question':
             callbacks?.onApproval?.({
-              id: String(event.id), toolName: 'pi', callId: null,
-              reason: null, name: String(event.title ?? ''), query: String(event.message ?? ''), arguments: null,
+              id: String(event.id), kind: (event.kind as 'confirm' | 'select' | 'input' | 'editor') ?? 'confirm',
+              toolName: 'pi', callId: null, reason: null,
+              name: String(event.title ?? ''), query: String(event.message ?? ''), arguments: null,
+              options: Array.isArray(event.options) ? (event.options as string[]) : [],
+              placeholder: typeof event.placeholder === 'string' ? event.placeholder : null,
+              prefill: typeof event.prefill === 'string' ? event.prefill : null,
               channel: { runId },
               paths: Array.isArray(event.paths) ? (event.paths as string[]) : [],
               suggest: typeof event.suggest === 'string' ? event.suggest : null,

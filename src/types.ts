@@ -40,6 +40,11 @@ export interface Highlight {
     shown on the node while the turn waits. */
 export interface ApprovalRequest {
   id: string;
+  /** what is being asked: a yes/no (the default), a pick, a line, a text */
+  kind?: 'confirm' | 'select' | 'input' | 'editor';
+  options?: string[];
+  placeholder?: string | null;
+  prefill?: string | null;
   /** the tool the runtime is deciding about (its own name) */
   toolName: string;
   callId: string | null;
@@ -71,12 +76,14 @@ export interface AgentTraceEntry {
   endedAt?: string;
 }
 
-export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable';
+export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable' | 'answered';
 
 /** A decided approval: part of the turn's record, like a tool footprint. */
 export interface ApprovalRecord extends ApprovalRequest {
   outcome: ApprovalOutcome;
   decidedAt: string;
+  /** the pick or the text, for select/input/editor */
+  value?: string;
 }
 
 export interface Reference {

@@ -20,14 +20,19 @@ const STREAM_URL = `${API_BASE}/api/stream`;
 const PDF_EXTRACT_URL = `${API_BASE}/api/pdf-extract`;
 const APPROVALS_URL = `${API_BASE}/api/approvals`;
 
-/** The person's decision on a pending approval, back to the runtime that
-    asked (the harness bridge today). False when nothing was waiting under
-    that id any more — the runtime withdrew it, or the turn ended. */
-export async function answerApproval(request: { id: string; channel?: { runId: string } }, outcome: 'allowed-once' | 'rejected'): Promise<boolean> {
+/** The person's answer to a pending question, back to the runtime that
+    asked: a yes/no for a confirm, a value for a pick or a text, or a
+    withdrawal. A desktop runtime's run answers through the shell; the
+    harness bridge takes only the yes/no. False when nothing was waiting
+    under that id any more — the runtime withdrew it, or the turn ended. */
+export type QuestionAnswer = { confirmed: boolean } | { value: string } | { cancelled: true };
+export async function answerApproval(request: { id: string; channel?: { runId: string } }, answer: QuestionAnswer | 'allowed-once' | 'rejected'): Promise<boolean> {
   const id = request.id;
+  const a: QuestionAnswer = typeof answer === 'string' ? { confirmed: answer === 'allowed-once' } : answer;
   if (request.channel?.runId && window.desktopAgents) {
-    try { return await window.desktopAgents.answer(request.channel.runId, id, outcome === 'allowed-once'); } catch { return false; }
+    try { return await window.desktopAgents.answer(request.channel.runId, id, a); } catch { return false; }
   }
+  const outcome = 'confirmed' in a && a.confirmed ? 'allowed-once' : 'rejected';
   try {
     const r = await fetch(`${APPROVALS_URL}/${encodeURIComponent(id)}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
@@ -198,7 +203,7 @@ export interface StreamCallbacks {
   /** An agent runtime asks whether one action may proceed; the turn waits. */
   onApproval?: (request: Omit<import('../types').ApprovalRequest, 'askedAt'>) => void;
   /** The runtime learned the decision (the person's, or a cancellation). */
-  onApprovalDecided?: (decision: { id: string; outcome: import('../types').ApprovalOutcome }) => void;
+  onApprovalDecided?: (decision: { id: string; outcome: import('../types').ApprovalOutcome; value?: string | null }) => void;
   /** The chosen model cannot see images: a vision model answers instead. */
   onRerouted?: (from: string, to: string) => void;
   /** The request is leaving — exactly this payload, after every image

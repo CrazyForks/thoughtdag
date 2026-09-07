@@ -347,7 +347,7 @@ export async function runNodeGeneration(
         }));
         toast('info', t('approval.toast'), 8000);
       },
-      onApprovalDecided: ({ id, outcome }) => {
+      onApprovalDecided: ({ id, outcome, value }) => {
         if (!isCurrent()) return;
         const decidedAt = new Date().toISOString();
         set((state) => ({
@@ -357,7 +357,7 @@ export async function runNodeGeneration(
             if (!pending || pending.id !== id) return { ...n, data: { ...n.data, pendingApproval: undefined } };
             const asked = { ...pending };
             delete asked.answered;
-            return { ...n, data: { ...n.data, pendingApproval: undefined, approvals: [...(n.data.approvals ?? []), { ...asked, outcome, decidedAt }] } };
+            return { ...n, data: { ...n.data, pendingApproval: undefined, approvals: [...(n.data.approvals ?? []), { ...asked, outcome, decidedAt, ...(value ? { value } : {}) }] } };
           }),
         }));
       },
