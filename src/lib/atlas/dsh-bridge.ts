@@ -242,6 +242,8 @@ export function installDshSessionsBridge(apiBase: string): void {
 // byte-identical elsewhere.
 
 export const HARNESS_AGENT_MODEL = 'harness/agent';
+/** The bare entry or one of its per-model forms ('harness/agent/<provider>/<model>'). */
+export const isHarnessAgentModel = (id: string | undefined | null): boolean => !!id && (id === HARNESS_AGENT_MODEL || id.startsWith(HARNESS_AGENT_MODEL + '/'));
 
 /** The working directory a fresh agent turn should run in: the project the
  *  active canvas mirrors, else the session the harness chat currently shows. */
@@ -265,7 +267,7 @@ async function activeCanvasCwd(): Promise<string | null> {
  *  wired in, continues that session (a follow-up); any richer wiring gets a
  *  fresh session carrying the compiled context. */
 export async function harnessOutbound(nodeId: string, model: string | undefined): Promise<{ cwd?: string; session?: string } | undefined> {
-  if (!window.desktopSessions || model !== HARNESS_AGENT_MODEL) return undefined;
+  if (!window.desktopSessions || !isHarnessAgentModel(model)) return undefined;
   const cwd = (await activeCanvasCwd()) ?? currentSession?.cwd ?? undefined;
   try {
     const { useStore } = await import('../../store');

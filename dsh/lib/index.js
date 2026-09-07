@@ -476,6 +476,18 @@ function splitModelId(id) {
  *  seeing images: a model is marked vision when its adapter declares image
  *  input; those images then enter the attachment store and ride the call. */
 const AGENT_MODEL = 'harness/agent'
+/** One agent entry per catalog model: 'harness/agent/<provider>/<model>'.
+ *  The bare 'harness/agent' stays accepted (older canvases) and means the
+ *  session's current model. */
+const isAgentModelId = (id) => typeof id === 'string' && (id === AGENT_MODEL || id.startsWith(AGENT_MODEL + '/'))
+function agentTargetOf(id) {
+  if (!isAgentModelId(id) || id === AGENT_MODEL) return null
+  const rest = id.slice(AGENT_MODEL.length + 1)
+  const i = rest.indexOf('/')
+  return i > 0 && i < rest.length - 1 ? { provider: rest.slice(0, i), model: rest.slice(i + 1) } : null
+}
+// the picker groups every agent-run entry under this key (the SPA's AGENT_PROVIDER)
+const AGENT_GROUP = '__agent__'
 
 /** Which of a provider's models take images: the adapter's declared input
  *  modalities; a name that says "vision" only when the adapter says nothing. */
@@ -492,11 +504,18 @@ async function visionIdsOf(ctx, providerId, catalogModels) {
 async function modelsPayload(ctx) {
   const cat = await ctx.sessionController.modelCatalog()
   // the harness itself, as an entry: the agent loop with tools, not a bare model
-  const models = [{ id: AGENT_MODEL, name: 'DeepSeek Harness · Agent (tools)', provider: 'DeepSeek Harness', vision: true }]
+  // the harness's agent loop with tools, once per model it can run on —
+  // grouped with the other agent runtimes; the bare models follow by provider
+  const models = []
+  const agents = []
   for (const g of cat.groups ?? []) {
     const vision = await visionIdsOf(ctx, g.id, g.models ?? [])
-    for (const m of g.models ?? []) models.push({ id: `${g.id}/${m.id}`, name: m.name ?? m.id, provider: g.name ?? g.id, vision: vision.has(m.id) })
+    for (const m of g.models ?? []) {
+      models.push({ id: `${g.id}/${m.id}`, name: m.name ?? m.id, provider: g.name ?? g.id, vision: vision.has(m.id) })
+      agents.push({ id: `${AGENT_MODEL}/${g.id}/${m.id}`, name: `Harness · ${m.name ?? m.id}`, provider: AGENT_GROUP, vision: vision.has(m.id) })
+    }
   }
+  models.push(...agents)
   const def = cat.default ? `${cat.default.provider}/${cat.default.model}` : null
   return {
     models,
@@ -644,6 +663,10 @@ async function runAgentTurn(ctx, body, emit, isClosed, { answerApprovals = true 
     const vm = await visionModel(ctx).catch(() => null)
     if (vm) await ctx.sessionController.selectModel({ sessionId, provider: vm.provider, model: vm.model }).catch(() => {})
   }
+  // the model the canvas picked for this agent turn, unless images already
+  // moved the session to a vision model
+  const picked = agentTargetOf(body?.model)
+  if (picked && !hasImages) await ctx.sessionController.selectModel({ sessionId, provider: picked.provider, model: picked.model }).catch(() => {})
   const agent = await agentOf(ctx, sessionId)
   let sawChunk = false
   let fullText = ''
@@ -917,10 +940,10 @@ export async function apply(ctx, config) {
       }
       if ((path === '/stream' || path === '/claude') && req.method === 'POST') {
         const body = await readJson(req, MAX_CALL_BODY_BYTES)
-        if (body?.model === AGENT_MODEL) {
+        if (isAgentModelId(body?.model)) {
           if (path === '/claude') {
             const r = await runAgentTurn(ctx, body, () => {}, () => false, { answerApprovals: false })
-            return sendJson(res, 200, { text: r.text, model: AGENT_MODEL, harnessSession: r.sessionId })
+            return sendJson(res, 200, { text: r.text, model: body.model, harnessSession: r.sessionId })
           }
           res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
           let closed = false
