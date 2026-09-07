@@ -32,6 +32,16 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.4.7',
+    date: '2026-09-07',
+    announce: false,
+    lead: {
+      zh: 'DeepSeek Harness 插件里，Agent 需要你批准的操作现在直接出现在节点上：工具、命令、理由，允许一次或拒绝，决定留在节点记录里。桌面版本次只同步版本号。',
+      en: 'Inside the DeepSeek Harness plugin, an action the agent needs approved now appears on the node itself: tool, command, reason, allow once or reject, and the decision stays in the node\'s record. The desktop app only moves its version number this time.',
+    },
+    items: [],
+  },
+  {
     version: '0.4.6',
     date: '2026-09-06',
     announce: true,
