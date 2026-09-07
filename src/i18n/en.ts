@@ -204,6 +204,8 @@ export const en = {
   'frame.titlePlaceholder': 'Frame title…',
   'model.none': 'No model yet',
   'model.agentGroup': 'Agent runs',
+  'model.agentGroupHint': 'Models in this group are reported by each agent\'s own CLI. Missing one you expected? That CLI is probably older than the model; update it, then refresh.',
+  'model.agentGroupLoading': 'Asking the installed agents for their models…',
   'agent.trace': 'The agent is doing',
   'agent.openInTerminal': 'Open this session in the terminal',
   'agent.cwd': 'Working directory',

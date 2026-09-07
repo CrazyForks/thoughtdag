@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, Cpu, KeyRound, RefreshCw } from 'lucide-react';
+import { Check, ChevronDown, Cpu, KeyRound, RefreshCw, Info, Loader2 } from 'lucide-react';
 import { toast, useUiStore } from '../../lib/ui-store';
 import { useModels, setModelsCache } from '../../lib/use-models';
 import { AGENT_PROVIDER } from '../../lib/agents/agent-runtime';
@@ -63,6 +63,9 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
   const activeId = nodeMode ? (value ?? null) : globalId;
   const active = activeId ? models.find((m) => m.id === activeId) : null;
   const providers = [...new Set(models.map((m) => m.provider))];
+  // the agent group is listed while the runtimes are still answering, so the
+  // picker has somewhere to say so
+  if (data?.agentsPending && !providers.includes(AGENT_PROVIDER)) providers.push(AGENT_PROVIDER);
 
   const label = nodeMode
     ? (active ? active.name : t('model.inherit'))
@@ -112,7 +115,14 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
           )}
           {providers.map((provider) => (
             <div key={provider}>
-              <p className="text-2xs text-ink-faint uppercase tracking-wider font-medium px-3 pt-2 pb-1">{provider === AGENT_PROVIDER ? t('model.agentGroup') : provider}</p>
+              <p className="text-2xs text-ink-faint uppercase tracking-wider font-medium px-3 pt-2 pb-1 flex items-center gap-1.5" title={provider === AGENT_PROVIDER ? t('model.agentGroupHint') : undefined}>
+                {provider === AGENT_PROVIDER ? t('model.agentGroup') : provider}
+                {provider === AGENT_PROVIDER && <Info size={11} strokeWidth={1.75} className="text-ink-faint/70" data-agent-group-hint />}
+                {provider === AGENT_PROVIDER && data?.agentsPending && <Loader2 size={11} className="animate-spin text-ink-faint" data-agent-group-pending />}
+              </p>
+              {provider === AGENT_PROVIDER && data?.agentsPending && models.filter((m) => m.provider === AGENT_PROVIDER).length === 0 && (
+                <p className="text-2xs text-ink-faint px-3 pb-1.5">{t('model.agentGroupLoading')}</p>
+              )}
               {models.filter((m) => m.provider === provider).map((m) => (
                 <button
                   key={m.id}

@@ -204,6 +204,8 @@ export const zh: Record<keyof typeof en, string> = {
   'frame.titlePlaceholder': '分区标题…',
   'model.none': '未配置模型',
   'model.agentGroup': 'Agent 执行',
+  'model.agentGroupHint': '这一组的模型由各个 Agent 的命令行自己报告。找不到你期待的模型？多半是那个命令行版本旧了，更新它，再点刷新。',
+  'model.agentGroupLoading': '正在向已安装的 Agent 查询模型…',
   'agent.trace': 'Agent 正在做',
   'agent.openInTerminal': '在终端打开这个会话',
   'agent.cwd': '工作目录',

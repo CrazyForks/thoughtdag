@@ -19,7 +19,7 @@ export interface Capabilities {
   vision: boolean;
 }
 
-export type ModelData = { models: ModelInfo[]; default: string | null; capabilities?: Capabilities };
+export type ModelData = { models: ModelInfo[]; default: string | null; capabilities?: Capabilities; /** the agent runtimes are still being asked */ agentsPending?: boolean };
 
 // Model list is fetched once per session and shared by every picker
 let cache: ModelData | null = null;
@@ -33,15 +33,23 @@ export function getModelsOnce(): Promise<ModelData | null> {
     // browser-stored providers re-register themselves before the first list
     // fetch (the proxy holds them in memory only, so restarts forget them)
     const stored = storedProviders();
+    let base: ModelData | null = null;
     if (stored.length > 0) {
-      try {
-        return (cache = await withAgents(await pushProviders(stored)));
-      } catch { /* proxy down or bad config: fall through to the plain list */ }
+      try { base = await pushProviders(stored); } catch { /* proxy down or bad config: fall through to the plain list */ }
     }
-    return fetch(`${API_BASE}/api/models`)
-      .then((r) => r.json())
-      .then(async (d) => (cache = await withAgents({ models: d.models ?? [], default: d.default ?? null, capabilities: d.capabilities })))
-      .catch(() => null);
+    if (!base) {
+      base = await fetch(`${API_BASE}/api/models`)
+        .then((r) => r.json())
+        .then((d) => ({ models: d.models ?? [], default: d.default ?? null, capabilities: d.capabilities }) as ModelData)
+        .catch(() => null);
+    }
+    if (!base) return null;
+    // the API models show at once; the agent runtimes answer in their own
+    // time (a CLI to start, a catalog to read) — last launch's agent list
+    // fills the gap, then the fresh one replaces it
+    cache = withRemembered(base);
+    void refreshAgents(cache);
+    return cache;
   })();
   return inflight;
 }
@@ -63,31 +71,38 @@ export function reconcileModelId(pinned: string, models: ModelInfo[]): string | 
   return match ? match.id : null;
 }
 
-/** The agent runtimes' models (Pi, in the desktop app) appended to a list;
-    a list that already carries them is left alone. */
-async function withAgents(d: ModelData): Promise<ModelData> {
-  if (d.models.some((m) => m.provider === AGENT_PROVIDER)) return d;
-  const extra = await agentModels();
-  return extra.length ? { ...d, models: [...d.models, ...extra] } : d;
+const AGENT_CACHE_KEY = 'thoughtdag.agentModels';
+const hasAgentsBridge = () => typeof window !== 'undefined' && !!window.desktopAgents;
+
+/** Last launch's agent models, so the picker is whole while the runtimes answer. */
+function withRemembered(d: ModelData): ModelData {
+  if (!hasAgentsBridge()) return d;
+  let remembered: ModelInfo[] = [];
+  try { remembered = JSON.parse(localStorage.getItem(AGENT_CACHE_KEY) ?? '[]'); } catch { remembered = []; }
+  const own = d.models.filter((m) => m.provider !== AGENT_PROVIDER);
+  return { ...d, models: [...own, ...remembered.filter((m) => m && m.provider === AGENT_PROVIDER)], agentsPending: true };
 }
 
-// an HTTP agents bridge installs after boot; when it lands, the agent group joins the list
-window.addEventListener('td:agents-ready', () => {
-  if (!cache) return;
-  void withAgents(cache).then((merged) => { if (merged !== cache) setModelsCache(merged); });
-});
+/** Ask the runtimes and replace the agent group when they answer. */
+async function refreshAgents(base: ModelData): Promise<void> {
+  if (!hasAgentsBridge()) return;
+  const extra = await agentModels().catch(() => [] as ModelInfo[]);
+  try { localStorage.setItem(AGENT_CACHE_KEY, JSON.stringify(extra)); } catch { /* ignore */ }
+  const own = (cache ?? base).models.filter((m) => m.provider !== AGENT_PROVIDER);
+  setModelsCache({ ...(cache ?? base), models: [...own, ...extra], agentsPending: false });
+}
 
 /** Replace the shared cache (after a runtime-key change) and notify every subscribed picker. */
 export function setModelsCache(d: ModelData): void {
   cache = d;
   inflight = Promise.resolve(d);
   for (const fn of listeners) fn(d);
-  void withAgents(d).then((merged) => {
-    if (merged === d || cache !== d) return;
-    cache = merged;
-    inflight = Promise.resolve(merged);
-    for (const fn of listeners) fn(merged);
-  });
+  // a list rebuilt from a runtime-key change carries no agent group yet
+  if (d.agentsPending === undefined && hasAgentsBridge() && !d.models.some((m) => m.provider === AGENT_PROVIDER)) {
+    cache = withRemembered(d);
+    for (const fn of listeners) fn(cache);
+    void refreshAgents(cache);
+  }
 }
 
 export function useModels(): ModelData | null {
