@@ -61,6 +61,7 @@ class PiProcess {
     this.dead = false;
     this.busy = Promise.resolve();
     this.listener = null;       // the run currently receiving events
+    this.openDialogs = new Set(); // confirm questions forwarded to the canvas, not yet answered
     this.idleTimer = null;
     const args = ['--mode', 'rpc', ...(opts.noSession ? ['--no-session'] : ['-e', GUARD])];
     this.proc = spawn(bin, args, { cwd, env: childEnv(), stdio: ['pipe', 'pipe', 'pipe'] });
@@ -99,6 +100,7 @@ class PiProcess {
       // approval and answers through `answer`); any other dialog has
       // nobody at the terminal, so it is withdrawn and the run hears about it
       if (msg.method === 'confirm' && this.listener) {
+        this.openDialogs.add(String(msg.id));
         // the guard appends a structured tail (paths, a directory to offer)
         // after U+241F; the person sees only the text before it
         const raw = String(msg.message ?? '');
@@ -117,6 +119,13 @@ class PiProcess {
 
   write(obj) {
     try { this.proc.stdin.write(JSON.stringify(obj) + '\n'); return true; } catch { return false; }
+  }
+
+  /** Withdraw every question still waiting on the canvas: Pi resolves each
+   *  with its default at once, so nothing dangles after a stop. */
+  withdrawDialogs() {
+    for (const id of this.openDialogs) this.write({ type: 'extension_ui_response', id, cancelled: true });
+    this.openDialogs.clear();
   }
 
   send(cmd, timeoutMs = RESPONSE_MS) {
@@ -218,13 +227,29 @@ function createPiRuntime({ log } = {}) {
       const proc = await processFor(cwd);
       const emit = (event) => { try { onEvent({ runId, event }); } catch { /* renderer gone */ } };
       const aborter = { aborted: false };
-      runs.set(runId, { proc, abort: () => { aborter.aborted = true; proc.send({ type: 'abort' }).catch(() => {}); } });
+      runs.set(runId, { proc, abort: () => { aborter.aborted = true; proc.withdrawDialogs(); proc.send({ type: 'abort' }).catch(() => {}); } });
 
       void proc.exclusive(async () => {
         let text = '';
         let ended;
         const finished = new Promise((resolve) => { ended = resolve; });
+        // a turn that produces nothing for a long while — a command waiting
+        // on stdin, a stuck process — is stopped, with the reason on the node;
+        // a question waiting on the person does not count as silence
+        const IDLE = Number(process.env.TD_AGENT_IDLE_MS) || 10 * 60 * 1000;
+        let lastEvent = Date.now();
+        let waitingOnPerson = false;
+        const watchdog = setInterval(() => {
+          if (waitingOnPerson || Date.now() - lastEvent < IDLE) return;
+          emit({ type: 'run_error', message: `no activity for ${IDLE >= 60000 ? Math.round(IDLE / 60000) + ' min' : Math.round(IDLE / 1000) + ' s'}; the turn was stopped` });
+          proc.withdrawDialogs();
+          proc.send({ type: 'abort' }).catch(() => {});
+          setTimeout(() => ended('idle'), 5000);
+        }, 15000);
         proc.listener = (event) => {
+          lastEvent = Date.now();
+          if (event.type === 'approval') waitingOnPerson = true;
+          if (event.type === 'approval_decided') waitingOnPerson = false;
           if (event.type === 'message_end' && event.message?.role === 'assistant') text = textOf(event.message) || text;
           if (event.type === 'process_exit') { emit({ type: 'run_error', message: event.reason }); ended('exit'); return; }
           emit(event);
@@ -249,6 +274,8 @@ function createPiRuntime({ log } = {}) {
           emit({ type: 'run_error', message: e instanceof Error ? e.message : String(e) });
           emit({ type: 'run_end', text, how: 'error' });
         } finally {
+          clearInterval(watchdog);
+          proc.withdrawDialogs();
           proc.listener = null;
           proc.touch();
           runs.delete(runId);
@@ -269,6 +296,7 @@ function createPiRuntime({ log } = {}) {
       const r = runs.get(runId);
       if (!r) return false;
       const ok = r.proc.write({ type: 'extension_ui_response', id: String(requestId), confirmed: !!confirmed });
+      r.proc.openDialogs.delete(String(requestId));
       if (ok) r.proc.listener?.({ type: 'approval_decided', id: String(requestId), outcome: confirmed ? 'allowed-once' : 'rejected' });
       return ok;
     },

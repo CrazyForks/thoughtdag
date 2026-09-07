@@ -248,6 +248,15 @@ export async function agentCallStream(
           case 'tool_execution_end':
             callbacks?.onAgentTool?.({ id: String(event.toolCallId ?? ''), name: String(event.toolName ?? 'tool'), query: '', phase: 'end', isError: !!event.isError });
             break;
+          case 'extension_ui_cancelled': {
+            // an extension's own question, withdrawn: the run goes on with the
+            // dialog's default; the trace says so, the terminal is where to answer
+            const id = `dialog-${Date.now()}`;
+            const title = String(event.title ?? event.method ?? 'dialog');
+            callbacks?.onAgentTool?.({ id, name: 'dialog', query: title, phase: 'start' });
+            callbacks?.onAgentTool?.({ id, name: 'dialog', query: '', phase: 'end', isError: true });
+            break;
+          }
           case 'approval_decided':
             callbacks?.onApprovalDecided?.({ id: String(event.id), outcome: event.outcome === 'allowed-once' ? 'allowed-once' : 'rejected' });
             break;
