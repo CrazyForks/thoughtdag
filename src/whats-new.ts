@@ -32,6 +32,16 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.4.9',
+    date: '2026-09-07',
+    announce: false,
+    lead: {
+      zh: 'Agent 执行预览：桌面版的模型选择器多了「Agent 执行」组，装了 Pi 的话可以直接在画布里让它带工具作答，轨迹、足迹、审批和提问都落在节点上，工作目录在顶栏可见可改。正式版会连同 Claude Code 与 Codex 一起发布。DeepSeek Harness 插件里的审批卡片同步更新。',
+      en: 'Agent runs, preview: the desktop picker gains an "Agent runs" group; with Pi installed, a question runs through it with tools right from the canvas, and the trace, footprints, approvals and questions land on the node, with the working directory visible on the toolbar. The full release will arrive together with Claude Code and Codex. The approval card inside the DeepSeek Harness plugin is updated alike.',
+    },
+    items: [],
+  },
+  {
     version: '0.4.8',
     date: '2026-09-07',
     announce: false,
