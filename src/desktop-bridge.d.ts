@@ -116,6 +116,8 @@ interface DesktopAgentsBridge {
   answer(runId: string, requestId: string, confirmed: boolean): Promise<boolean>;
   /** a folder picked in the system dialog, or null */
   pickCwd(): Promise<string | null>;
+  /** the boundary guard's tuning for a working directory */
+  guardWrite(cwd: string, config: { mode: 'ask' | 'allow'; allow: string[] }): Promise<boolean>;
   /** the canvas's materials written under <cwd>/.thoughtdag/materials */
   writeMaterials(cwd: string, files: { name: string; content: string; encoding?: 'utf8' | 'base64' }[]): Promise<{ dir: string | null; written: string[] }>;
   onEvent(cb: (payload: { runId: string; event: Record<string, unknown> & { type: string } }) => void): void;

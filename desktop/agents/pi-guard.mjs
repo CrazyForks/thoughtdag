@@ -6,10 +6,18 @@
 // approval. Denied means the call is blocked with a reason the model
 // sees. Paths the system owns (/usr, /bin, /dev, /tmp…) pass: a command
 // that runs /usr/bin/env is not an excursion.
-import { resolve, sep } from 'node:path';
+//
+// The canvas tunes the rule through <cwd>/.thoughtdag/guard.json, read on
+// every call so a change takes effect mid-run:
+//   { "mode": "ask" | "allow", "allow": ["/a/directory", …] }
+// `allow` mode asks nothing; a path under an allowed directory passes.
+import { resolve, sep, dirname, join } from 'node:path';
 import { homedir } from 'node:os';
+import { readFileSync, statSync } from 'node:fs';
 
 const SYSTEM_PREFIXES = ['/dev/', '/usr/', '/bin/', '/sbin/', '/opt/', '/etc/', '/tmp/', '/private/tmp/', '/private/var/', '/var/', '/System/', '/Library/', '/Applications/', '/proc/'];
+/** the separator between the human message and the structured tail of a confirm */
+const TAIL = '␟';
 
 function expand(p, cwd) {
   if (p === '~') return homedir();
@@ -39,15 +47,35 @@ function pathsOf(event, cwd) {
   }
 }
 
+function config(cwd) {
+  try {
+    const raw = JSON.parse(readFileSync(join(cwd, '.thoughtdag', 'guard.json'), 'utf8'));
+    return { mode: raw?.mode === 'allow' ? 'allow' : 'ask', allow: Array.isArray(raw?.allow) ? raw.allow.filter((x) => typeof x === 'string' && x.startsWith('/')).map((x) => resolve(x)) : [] };
+  } catch { return { mode: 'ask', allow: [] }; }
+}
+
+/** The directory to offer as "allow this location": the path itself when
+ *  it is a directory, else its parent; several paths → their common parent. */
+function suggestion(paths) {
+  const dirs = paths.map((p) => { try { return statSync(p).isDirectory() ? p : dirname(p); } catch { return dirname(p); } });
+  let common = dirs[0].split(sep);
+  for (const d of dirs.slice(1)) { const parts = d.split(sep); let i = 0; while (i < common.length && i < parts.length && common[i] === parts[i]) i++; common = common.slice(0, i); }
+  const dir = common.join(sep) || sep;
+  return dir === sep ? dirs[0] : dir;
+}
+
 export default function (pi) {
   pi.on('tool_call', async (event, ctx) => {
     const root = resolve(ctx.cwd);
-    const outside = pathsOf(event, root).filter((p) => !inside(p, root) && !systemOwned(p));
+    const cfg = config(root);
+    if (cfg.mode === 'allow') return;
+    const outside = pathsOf(event, root).filter((p) => !inside(p, root) && !systemOwned(p) && !cfg.allow.some((a) => inside(p, a)));
     if (outside.length === 0) return;
     const where = outside.slice(0, 3).join(', ') + (outside.length > 3 ? ` (+${outside.length - 3})` : '');
     if (!ctx.hasUI) return { block: true, reason: `outside the working directory (${where}); nobody to ask` };
     const detail = event.toolName === 'bash' ? String(event.input?.command ?? '') : where;
-    const ok = await ctx.ui.confirm(`${event.toolName} outside the working directory`, detail);
+    const tail = TAIL + JSON.stringify({ paths: outside, suggest: suggestion(outside) });
+    const ok = await ctx.ui.confirm(`${event.toolName} outside the working directory`, detail + tail);
     if (!ok) return { block: true, reason: `the person did not allow ${event.toolName} outside the working directory (${where})` };
   });
 }

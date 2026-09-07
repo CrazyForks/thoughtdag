@@ -202,6 +202,7 @@ export async function agentCallStream(
   const cwd = route?.cwd ?? (await agentOutbound(modelId))?.cwd;
   if (!cwd) throw new Error('no working directory for this canvas');
   const { question, context } = compileForAgent(messages);
+  await writeGuard(cwd);
   const materials = await materialsToDisk(nodeId, cwd);
   const ahead = [context, materials].filter(Boolean).join('\n\n');
   const prompt = ahead ? `${ahead}\n\n---\n\n${question}` : question;
@@ -255,6 +256,8 @@ export async function agentCallStream(
               id: String(event.id), toolName: 'pi', callId: null,
               reason: null, name: String(event.title ?? ''), query: String(event.message ?? ''), arguments: null,
               channel: { runId },
+              paths: Array.isArray(event.paths) ? (event.paths as string[]) : [],
+              suggest: typeof event.suggest === 'string' ? event.suggest : null,
             });
             break;
           case 'run_end':
@@ -348,4 +351,45 @@ export async function adoptPiTurn(nodeId: string, session: { sessionFile: string
   } catch {
     return false;
   }
+}
+
+/** The active canvas's guard tuning, as the guard file expects it. */
+export async function guardConfig(): Promise<{ mode: 'ask' | 'allow'; allow: string[] }> {
+  try {
+    const { useProjects } = await import('../../store/projects');
+    const { projects, activeId } = useProjects.getState();
+    const g = projects.find((p) => p.id === activeId)?.agentGuard;
+    return { mode: g?.mode === 'allow' ? 'allow' : 'ask', allow: g?.allow ?? [] };
+  } catch { return { mode: 'ask', allow: [] }; }
+}
+
+/** Write the guard file for a working directory (the run's, or the
+ *  canvas's current one when omitted). */
+export async function writeGuard(cwd?: string): Promise<void> {
+  if (!window.desktopAgents) return;
+  const dir = cwd ?? (await resolveAgentCwd())?.cwd;
+  if (!dir) return;
+  try { await window.desktopAgents.guardWrite(dir, await guardConfig()); } catch { /* the guard falls back to asking */ }
+}
+
+/** Switch the active canvas's guard mode, effective for the run in progress. */
+export async function setGuardMode(mode: 'ask' | 'allow'): Promise<void> {
+  const { useProjects, setProjectAgentGuard } = await import('../../store/projects');
+  const { projects, activeId } = useProjects.getState();
+  if (!activeId) return;
+  const g = projects.find((p) => p.id === activeId)?.agentGuard;
+  await setProjectAgentGuard(activeId, { mode, allow: g?.allow ?? [] });
+  await writeGuard();
+}
+
+/** Let a directory through from now on for the active canvas (and the
+ *  run in progress); `remove` takes it back. */
+export async function allowLocation(dir: string, remove = false): Promise<void> {
+  const { useProjects, setProjectAgentGuard } = await import('../../store/projects');
+  const { projects, activeId } = useProjects.getState();
+  if (!activeId) return;
+  const g = projects.find((p) => p.id === activeId)?.agentGuard;
+  const allow = remove ? (g?.allow ?? []).filter((a) => a !== dir) : [...new Set([...(g?.allow ?? []), dir])];
+  await setProjectAgentGuard(activeId, { mode: g?.mode ?? 'ask', allow });
+  await writeGuard();
 }

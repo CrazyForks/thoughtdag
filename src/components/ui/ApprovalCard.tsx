@@ -3,6 +3,7 @@ import { ShieldAlert } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useStore } from '../../store';
 import { answerApproval } from '../../lib/api';
+import { allowLocation } from '../../lib/agents/pi-runtime';
 import type { ApprovalRequest, ApprovalRecord } from '../../types';
 
 // The question an agent runtime asks mid-turn, answered where the turn is
@@ -16,8 +17,9 @@ export function ApprovalCard({ nodeId, request, compact }: { nodeId: string; req
   const [showArgs, setShowArgs] = useState(false);
   const busy = !!request.answered;
 
-  const decide = async (outcome: 'allowed-once' | 'rejected') => {
+  const decide = async (outcome: 'allowed-once' | 'rejected', allowDir?: string) => {
     if (busy) return;
+    if (allowDir) await allowLocation(allowDir);
     useStore.setState((s) => ({
       nodes: s.nodes.map((n) => n.id === nodeId && n.data.pendingApproval?.id === request.id
         ? { ...n, data: { ...n.data, pendingApproval: { ...n.data.pendingApproval, answered: outcome } } }
@@ -66,6 +68,17 @@ export function ApprovalCard({ nodeId, request, compact }: { nodeId: string; req
         >
           {t('approval.allowOnce')}
         </button>
+        {request.suggest && request.channel && (
+          <button
+            onClick={() => void decide('allowed-once', request.suggest!)}
+            disabled={busy}
+            className="text-xs text-accent px-3 py-1.5 rounded-lg border border-accent/40 hover:bg-accent/10 transition-colors disabled:opacity-50 max-w-[45%] truncate"
+            title={`${t('approval.allowLocationTitle')} ${request.suggest}`}
+            data-approval-allow-location
+          >
+            {t('approval.allowLocation')} {request.suggest.split('/').filter(Boolean).pop()}
+          </button>
+        )}
         <button
           onClick={() => void decide('rejected')}
           disabled={busy}

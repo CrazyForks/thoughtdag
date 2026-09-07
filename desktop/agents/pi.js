@@ -99,7 +99,13 @@ class PiProcess {
       // approval and answers through `answer`); any other dialog has
       // nobody at the terminal, so it is withdrawn and the run hears about it
       if (msg.method === 'confirm' && this.listener) {
-        this.listener({ type: 'approval', id: msg.id, title: msg.title ?? '', message: msg.message ?? '' });
+        // the guard appends a structured tail (paths, a directory to offer)
+        // after U+241F; the person sees only the text before it
+        const raw = String(msg.message ?? '');
+        const cut = raw.indexOf('\u241F');
+        let extra = {};
+        if (cut >= 0) { try { extra = JSON.parse(raw.slice(cut + 1)); } catch { extra = {}; } }
+        this.listener({ type: 'approval', id: msg.id, title: msg.title ?? '', message: cut >= 0 ? raw.slice(0, cut) : raw, paths: Array.isArray(extra.paths) ? extra.paths : [], suggest: typeof extra.suggest === 'string' ? extra.suggest : null });
         return;
       }
       this.write({ type: 'extension_ui_response', id: msg.id, cancelled: true });

@@ -55,6 +55,10 @@ export interface ApprovalRequest {
   answered?: ApprovalOutcome;
   /** where the answer goes: a desktop runtime's run, else the harness bridge */
   channel?: { runId: string };
+  /** the paths outside the working directory this step reaches for */
+  paths?: string[];
+  /** a directory the person can allow from now on, instead of once */
+  suggest?: string | null;
 }
 
 /** One tool call of a running agent turn, as the node shows it live. */

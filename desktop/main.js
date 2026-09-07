@@ -791,6 +791,16 @@ function setupAgents() {
   ipcMain.handle('agents:abort', async (_e, runId) => agentsRuntime().abort(String(runId)));
   ipcMain.handle('agents:workspace', async (_e, canvasId) => workspaceFor(canvasId));
   ipcMain.handle('agents:answer', async (_e, runId, requestId, confirmed) => agentsRuntime().answer(String(runId), String(requestId), !!confirmed));
+  // the guard's tuning for a working directory: <cwd>/.thoughtdag/guard.json
+  ipcMain.handle('agents:guard-write', async (_e, cwd, config) => {
+    if (typeof cwd !== 'string' || !path.isAbsolute(cwd)) return false;
+    const dir = path.join(cwd, '.thoughtdag');
+    await fsp.mkdir(dir, { recursive: true });
+    const mode = config?.mode === 'allow' ? 'allow' : 'ask';
+    const allow = Array.isArray(config?.allow) ? config.allow.filter((x) => typeof x === 'string' && path.isAbsolute(x)).slice(0, 100) : [];
+    await fsp.writeFile(path.join(dir, 'guard.json'), JSON.stringify({ mode, allow }, null, 2));
+    return true;
+  });
   // a folder the person picks as a canvas's working directory
   ipcMain.handle('agents:pick-cwd', async () => {
     const r = await dialog.showOpenDialog(win ?? undefined, { properties: ['openDirectory', 'createDirectory'] });
