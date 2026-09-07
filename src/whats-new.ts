@@ -32,6 +32,16 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.4.10',
+    date: '2026-09-07',
+    announce: false,
+    lead: {
+      zh: 'Agent 执行预览继续：Codex 加入，和 Pi 一样在画布里带工具作答；这条通道现在在桌面版、本地网页版和 DeepSeek Harness 插件里都可用；插件里的 Harness Agent 按模型平铺；插件有新版本时画布会提示。',
+      en: 'Agent runs, preview continued: Codex joins Pi, answering with tools right from the canvas; the lane now works in the desktop app, the local web app and the DeepSeek Harness plugin alike; inside the plugin the Harness agent lists one entry per model; the canvas tells you when a newer plugin is out.',
+    },
+    items: [],
+  },
+  {
     version: '0.4.9',
     date: '2026-09-07',
     announce: false,
