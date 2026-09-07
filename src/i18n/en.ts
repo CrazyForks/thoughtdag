@@ -210,6 +210,8 @@ export const en = {
   'agent.cwdRecent': 'Recent',
   'agent.cwdPick': 'Choose a folder…',
   'agent.guard': 'Steps outside the working directory',
+  'agent.continued': 'continued',
+  'agent.continuedTitle': 'This turn continued the same agent session; only the question was sent',
   'agent.guardAsk': 'Ask every time',
   'agent.guardAskHint': 'Reads, writes and commands elsewhere ask first',
   'agent.guardAllow': 'Let them through',

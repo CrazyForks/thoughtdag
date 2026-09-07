@@ -217,8 +217,21 @@ export function buildContext(
 
   const pushAttachments = (node: ThoughtNode, layer: 'material' | 'chain') => {
     const attSource = (att: { id: string }): MessageSource => ({ layer, nodeId: node.id, attachmentId: att.id, part: 'attachment' });
+    // an agent turn's tool outputs left out of context still leave their
+    // footprint: which files the turn touched, so the model can ask for
+    // the current contents instead of trusting a stale copy
+    const pointers = new Map<string, Set<string>>();
+    let pointerSource: { id: string } | null = null;
     for (const att of node.data.attachments || []) {
-      if (excludeSet.has(att.id)) continue;
+      if (excludeSet.has(att.id)) {
+        if (att.op && att.paths?.length) {
+          pointerSource ??= att;
+          const set = pointers.get(att.op) ?? new Set<string>();
+          for (const p of att.paths) set.add(p.split('/').filter(Boolean).pop() ?? p);
+          pointers.set(att.op, set);
+        }
+        continue;
+      }
       const fp = attachmentFingerprint(att);
       if (seenAttachmentFingerprints.has(fp)) continue;
       seenAttachmentFingerprints.add(fp);
@@ -260,6 +273,11 @@ export function buildContext(
         messages.push({ role: 'user', content: `[File: ${att.name}]\n${att.content}` });
         sources.push(attSource(att));
       }
+    }
+    if (pointers.size > 0 && pointerSource) {
+      const parts = [...pointers.entries()].map(([op, set]) => `${op}: ${[...set].join(', ')}`);
+      messages.push({ role: 'user', content: `[Files this turn touched — contents not included] ${parts.join('; ')}` });
+      sources.push(attSource(pointerSource));
     }
   };
 

@@ -867,6 +867,9 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
                   {data.generatedBy[data.responseIndex]!.split('/').pop()}
                 </span>
               )}
+              {data.agentSession?.continued && (
+                <span className="text-2xs text-ink-faint ml-1 shrink-0" title={t('agent.continuedTitle')} data-agent-continued>↩ {t('agent.continued')}</span>
+              )}
               {data.importSource?.runner === 'pi' && window.desktopSessions && (
                 <button
                   onClick={(e) => { e.stopPropagation(); void window.desktopSessions!.openInCli('pi', data.importSource!.cwd ?? '', data.importSource!.sessionId, 'terminal'); }}

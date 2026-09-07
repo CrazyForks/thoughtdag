@@ -5,7 +5,7 @@ import { sha256Hex, canonicalStringify } from '../lib/context-bundle';
 import { pruneHighlights } from '../lib/highlight-match';
 import { llmCall, llmCallStream, type ContextMessage, type ImageAttachment } from '../lib/api';
 import { harnessOutbound, claimHarnessTurn, stampHarnessTurn } from '../lib/atlas/dsh-bridge';
-import { agentOutbound, adoptPiTurn } from '../lib/agents/pi-runtime';
+import { agentOutbound, adoptPiTurn, claimPiTurn } from '../lib/agents/pi-runtime';
 import { countTokens, activeSummary } from '../utils';
 import { toast, useUiStore } from '../lib/ui-store';
 import { getModelsOnce, reconcileModelId } from '../lib/use-models';
@@ -164,7 +164,7 @@ export async function runNodeGeneration(
   // reports which session it ran in and the turn it created, so this node can
   // become that turn's mirror (and the live mirror not append it again).
   const harnessRoute = await harnessOutbound(nodeId, pinnedModel ?? useUiStore.getState().selectedModel ?? serverDefaultModel ?? undefined);
-  const agentRoute = harnessRoute ? undefined : await agentOutbound(pinnedModel ?? useUiStore.getState().selectedModel ?? serverDefaultModel ?? undefined);
+  const agentRoute = harnessRoute ? undefined : await agentOutbound(pinnedModel ?? useUiStore.getState().selectedModel ?? serverDefaultModel ?? undefined, nodeId);
   let harnessSession: string | undefined;
   let harnessTurn: { session: string; turn: number | null; userMessageId: string | null; seq: number | null } | null = null;
   // the turn is claimed the moment the bridge names it (mid-generation), so a
@@ -333,7 +333,13 @@ export async function runNodeGeneration(
       },
       onAgentSession: (session) => {
         if (!isCurrent()) return;
-        set((state) => ({ nodes: state.nodes.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, agentSession: session } } : n) }));
+        const continued = !!agentRoute?.continue;
+        set((state) => ({ nodes: state.nodes.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, agentSession: { ...session, continued } } } : n) }));
+        if (continued && session.sessionId) void claimPiTurn(nodeId, session.sessionId, session.cwd);
+      },
+      onAgentChanges: (changes) => {
+        if (!isCurrent()) return;
+        set((state) => ({ nodes: state.nodes.map((n) => n.id === nodeId && n.data.agentSession ? { ...n, data: { ...n.data, agentSession: { ...n.data.agentSession, changes } } } : n) }));
       },
       onHarnessTurn: (turn) => {
         harnessTurn = turn;

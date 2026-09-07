@@ -210,6 +210,8 @@ export const zh: Record<keyof typeof en, string> = {
   'agent.cwdRecent': '最近用过',
   'agent.cwdPick': '选择文件夹…',
   'agent.guard': '工作目录之外的操作',
+  'agent.continued': '续接',
+  'agent.continuedTitle': '这一轮接在同一个 Agent 会话上，只发送了问题',
   'agent.guardAsk': '每次询问',
   'agent.guardAskHint': '越界的读写和命令先问你',
   'agent.guardAllow': '直接放行',

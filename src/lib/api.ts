@@ -192,6 +192,8 @@ export interface StreamCallbacks {
   onReasoning?: (chunk: string, fullSoFar: string) => void;
   /** An agent runtime's tool call starting or ending, for the node's live trace. */
   onAgentTool?: (call: { id: string; name: string; query: string; phase: 'start' | 'end'; isError?: boolean }) => void;
+  /** An agent runtime in the desktop app: what changed on disk during the turn. */
+  onAgentChanges?: (changes: { changed: string[]; added: string[]; removed: string[]; truncated?: boolean }) => void;
   /** An agent runtime in the desktop app: which session this turn ran in. */
   onAgentSession?: (session: { runtime: 'pi'; sessionId: string | null; sessionFile: string | null; cwd: string }) => void;
   /** Inside DeepSeek Harness: the harness session this generation ran in
@@ -233,7 +235,7 @@ export async function llmCallStream(
       session it continues (a tail follow-up) — the harness's inside
       DeepSeek Harness, the desktop runtime's (Pi) in the app. Ignored by
       every model backend. */
-  harness?: { cwd?: string; session?: string; sessionPath?: string; forkEntryId?: string; nodeId?: string },
+  harness?: { cwd?: string; session?: string; sessionPath?: string; forkEntryId?: string; nodeId?: string; continue?: boolean },
 ): Promise<string> {
   // On the Workers deployment, OpenRouter models stream straight from the
   // browser — the proxy's CPU allowance can't survive big contexts + heavy
@@ -243,7 +245,7 @@ export async function llmCallStream(
   // tools; the canvas's compiled context rides ahead of the question.
   if (modelId && isAgentModel(modelId) && window.desktopAgents) {
     callbacks?.onDispatch?.({ messages: contextMessages, images: images ?? [], model: modelId, toolPrefs: toolPrefs ?? {}, lane: 'proxy' });
-    return agentCallStream(contextMessages, onChunk, signal, images, callbacks, modelId, harness?.cwd ? { cwd: harness.cwd, sessionPath: harness.sessionPath, forkEntryId: harness.forkEntryId } : undefined, harness?.nodeId);
+    return agentCallStream(contextMessages, onChunk, signal, images, callbacks, modelId, harness?.cwd ? { cwd: harness.cwd, sessionPath: harness.sessionPath, forkEntryId: harness.forkEntryId, continue: harness.continue } : undefined, harness?.nodeId);
   }
   images = await imagesForModel(modelId, images);
 

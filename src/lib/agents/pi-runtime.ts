@@ -43,7 +43,7 @@ export async function agentModels(): Promise<ModelInfo[]> {
   }
 }
 
-export type AgentRoute = { cwd: string; sessionPath?: string; forkEntryId?: string };
+export type AgentRoute = { cwd: string; sessionPath?: string; forkEntryId?: string; continue?: boolean };
 
 export type CwdChoice = { cwd: string; kind: 'chosen' | 'mirrored' | 'workspace' };
 
@@ -90,10 +90,81 @@ export async function mirroredCwd(): Promise<string | null> {
   } catch { return null; }
 }
 
-export async function agentOutbound(model: string | undefined): Promise<AgentRoute | undefined> {
+/** The Pi session file for a session id: the tail node's own record, else
+ *  the file under the Pi root whose name carries the id. */
+async function piSessionFile(sessionId: string, tail: { data: { agentSession?: { sessionId: string | null; sessionFile: string | null } } } | undefined): Promise<string | null> {
+  const own = tail?.data.agentSession;
+  if (own?.sessionId === sessionId && own.sessionFile) return own.sessionFile;
+  const bridge = window.desktopSessions;
+  if (!bridge) return null;
+  try {
+    const roots = await bridge.roots();
+    const root = roots.find((x) => x.key === 'pi-sessions');
+    if (!root) return null;
+    const files = await bridge.list('pi-sessions');
+    const hit = files.find((f) => f.rel.includes(sessionId));
+    return hit ? `${root.path.replace(/\/$/, '')}/${hit.rel}` : null;
+  } catch { return null; }
+}
+
+/**
+ * The route for the node about to generate. A question asked DIRECTLY off
+ * the tail of a Pi session this canvas subscribes to, with nothing else
+ * wired in, continues that session in its own directory: the session
+ * already holds the conversation, so only the question travels. Any other
+ * wiring, or a different working directory, opens a fresh session carrying
+ * the compiled context.
+ */
+export async function agentOutbound(model: string | undefined, nodeId?: string): Promise<AgentRoute | undefined> {
   if (!window.desktopAgents || !isAgentModel(model)) return undefined;
   const choice = await resolveAgentCwd();
-  return choice ? { cwd: choice.cwd } : undefined;
+  if (!choice) return undefined;
+  if (!nodeId) return { cwd: choice.cwd };
+  try {
+    const { useStore } = await import('../../store');
+    const { useProjects } = await import('../../store/projects');
+    const { projects, activeId } = useProjects.getState();
+    const ss = projects.find((p) => p.id === activeId)?.sourceSession;
+    if (!ss) return { cwd: choice.cwd };
+    const { nodes, edges } = useStore.getState();
+    const incoming = edges.filter((e) => e.target === nodeId);
+    if (incoming.length !== 1) return { cwd: choice.cwd };
+    const parentId = incoming[0].source;
+    const entries = [ss, ...(ss.chapters ?? []), ...(ss.branches ?? [])].filter((e) => e.runner === 'pi' && e.sessionId);
+    const entry = entries.find((e) => e.tailNodeId === parentId);
+    if (!entry) return { cwd: choice.cwd };
+    const tail = nodes.find((n) => n.id === parentId);
+    const sessionCwd = tail?.data.agentSession?.cwd ?? tail?.data.importSource?.cwd ?? null;
+    if (sessionCwd && sessionCwd !== choice.cwd) return { cwd: choice.cwd };
+    const sessionPath = await piSessionFile(entry.sessionId, tail);
+    if (!sessionPath) return { cwd: choice.cwd };
+    return { cwd: sessionCwd ?? choice.cwd, sessionPath, continue: true };
+  } catch {
+    return { cwd: choice.cwd };
+  }
+}
+
+/**
+ * The moment a continued turn names its session: the node becomes that
+ * turn's mirror now — provenance stamped, ledger advanced — so the live
+ * sweep, which polls the file every few seconds, does not append the
+ * in-progress turn a second time. The completion stamp fills in the rest.
+ */
+export async function claimPiTurn(nodeId: string, sessionId: string, cwd: string): Promise<void> {
+  try {
+    const { useStore } = await import('../../store');
+    const { useProjects, patchLedgerEntry, subscribedSessionIds } = await import('../../store/projects');
+    const { projects, activeId } = useProjects.getState();
+    const meta = activeId ? projects.find((p) => p.id === activeId) : undefined;
+    if (!meta || !activeId || !subscribedSessionIds(meta).includes(sessionId)) return;
+    const ss = meta.sourceSession!;
+    const entry = [ss, ...(ss.chapters ?? []), ...(ss.branches ?? [])].find((e) => e.sessionId === sessionId);
+    if (!entry) return;
+    useStore.setState((st) => ({
+      nodes: st.nodes.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, importSource: { runner: 'pi', sessionId, itemIds: [], cwd } } } : n),
+    }));
+    await patchLedgerEntry(activeId, sessionId, { importedCount: entry.importedCount + 1, tailNodeId: nodeId });
+  } catch { /* the completion stamp still lands */ }
 }
 
 /** The materials wired into a node's context — its own and its ancestors'
@@ -203,8 +274,9 @@ export async function agentCallStream(
   if (!cwd) throw new Error('no working directory for this canvas');
   const { question, context } = compileForAgent(messages);
   await writeGuard(cwd);
-  const materials = await materialsToDisk(nodeId, cwd);
-  const ahead = [context, materials].filter(Boolean).join('\n\n');
+  const continuing = !!route?.continue && !!route?.sessionPath;
+  const materials = continuing ? '' : await materialsToDisk(nodeId, cwd);
+  const ahead = continuing ? '' : [context, materials].filter(Boolean).join('\n\n');
   const prompt = ahead ? `${ahead}\n\n---\n\n${question}` : question;
   subscribe();
 
@@ -273,6 +345,9 @@ export async function agentCallStream(
               suggest: typeof event.suggest === 'string' ? event.suggest : null,
             });
             break;
+          case 'fs_changes':
+            callbacks?.onAgentChanges?.({ changed: (event.changed as string[]) ?? [], added: (event.added as string[]) ?? [], removed: (event.removed as string[]) ?? [], truncated: !!event.truncated });
+            break;
           case 'run_end':
             finalText = typeof event.text === 'string' && event.text ? event.text : full;
             handlers.delete(runId);
@@ -328,11 +403,19 @@ export async function adoptPiTurn(nodeId: string, session: { sessionFile: string
     if (idx < 0) idx = qa.length - 1;
     if (idx < 0) return false;
     const turn = qa[idx];
+    const toolAtts = turn.data.attachments ?? [];
+    // what the file system saw change, beyond what the tools declared:
+    // a shell redirect, a script's output — one footprint attachment
+    const fsAtt = fsFootprint(session, toolAtts);
+    const agentAtts = fsAtt ? [...toolAtts, fsAtt] : toolAtts;
     useStore.setState((st) => ({
       nodes: st.nodes.map((n) => n.id === nodeId
         ? { ...n, data: {
             ...n.data,
-            attachments: [...(n.data.attachments ?? []).filter((a) => !a.op), ...(turn.data.attachments ?? [])],
+            attachments: [...(n.data.attachments ?? []).filter((a) => !a.op), ...agentAtts],
+            // footprints are pointers, not contents: an agent turn's tool
+            // outputs stay out of downstream context unless brought back by hand
+            excludedAttachmentIds: [...new Set([...(n.data.excludedAttachmentIds ?? []), ...agentAtts.map((a) => a.id)])],
             importSource: turn.data.importSource,
             // the snapshot is what Pi recorded — the compiled context ahead of
             // the question — so the node reads as edited (the question as
@@ -405,4 +488,29 @@ export async function allowLocation(dir: string, remove = false): Promise<void> 
   const allow = remove ? (g?.allow ?? []).filter((a) => a !== dir) : [...new Set([...(g?.allow ?? []), dir])];
   await setProjectAgentGuard(activeId, { mode: g?.mode ?? 'ask', allow });
   await writeGuard();
+}
+
+/** One attachment naming the files the file system saw change during the
+ *  turn that the tools did not already declare — absolute paths, op
+ *  "write", the why layer's join key like any footprint. */
+function fsFootprint(
+  session: { cwd: string; changes?: { changed: string[]; added: string[]; removed: string[]; truncated?: boolean } },
+  toolAtts: import('../../types').Attachment[],
+): import('../../types').Attachment | null {
+  const ch = session.changes;
+  if (!ch) return null;
+  const declared = new Set<string>();
+  for (const a of toolAtts) for (const p of a.paths ?? []) declared.add(p.startsWith('/') ? p : `${session.cwd.replace(/\/$/, '')}/${p}`);
+  const changed = [...ch.changed, ...ch.added].filter((p) => !declared.has(p));
+  const removed = ch.removed.filter((p) => !declared.has(p));
+  if (changed.length === 0 && removed.length === 0 && !ch.truncated) return null;
+  const rel = (p: string) => (p.startsWith(session.cwd) ? p.slice(session.cwd.length).replace(/^\//, '') : p);
+  const lines: string[] = [];
+  if (changed.length) lines.push('Changed on disk during this turn (seen by the file system, not declared by a tool):', ...changed.map((p) => '- ' + rel(p)));
+  if (removed.length) lines.push('Removed:', ...removed.map((p) => '- ' + rel(p)));
+  if (ch.truncated) lines.push('(the directory was too large to scan completely)');
+  return {
+    id: `fs-${Date.now().toString(36)}`, name: 'tool: fs-changes', type: 'text/plain', size: 0,
+    content: lines.join('\n'), op: 'write', paths: [...changed, ...removed],
+  } as import('../../types').Attachment;
 }

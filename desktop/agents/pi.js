@@ -180,6 +180,45 @@ class PiProcess {
   }
 }
 
+// ── what changed on disk during a turn ───────────────────────────────
+// Agent-agnostic footprints: a snapshot of the working directory before the
+// prompt and after the turn; the difference is what this turn changed,
+// whatever tool did it (an edit, a write, a shell redirect). Bounded so a
+// big repository does not stall a turn; bulk directories are skipped.
+const SKIP_DIRS = new Set(['.git', 'node_modules', '.thoughtdag', 'dist', 'build', 'target', '.venv', 'venv', '__pycache__', '.cache', '.next', '.turbo', 'out', 'coverage']);
+const SNAPSHOT_MAX_FILES = 20000;
+const SNAPSHOT_MAX_DEPTH = 12;
+
+async function snapshotDir(root) {
+  const files = new Map();
+  let truncated = false;
+  const walk = async (dir, depth) => {
+    if (truncated || depth > SNAPSHOT_MAX_DEPTH) return;
+    let entries;
+    try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (truncated) return;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) await walk(p, depth + 1); continue; }
+      if (!e.isFile()) continue;
+      try { const st = await fsp.stat(p); files.set(p, `${st.mtimeMs}:${st.size}`); } catch { /* vanished */ }
+      if (files.size >= SNAPSHOT_MAX_FILES) truncated = true;
+    }
+  };
+  await walk(root, 0);
+  return { files, truncated };
+}
+
+function diffSnapshots(before, after) {
+  const changed = []; const added = []; const removed = [];
+  for (const [p, sig] of after.files) {
+    const prev = before.files.get(p);
+    if (prev === undefined) added.push(p); else if (prev !== sig) changed.push(p);
+  }
+  for (const p of before.files.keys()) if (!after.files.has(p)) removed.push(p);
+  return { changed, added, removed, truncated: before.truncated || after.truncated };
+}
+
 const textOf = (message) => (Array.isArray(message?.content) ? message.content : [])
   .filter((b) => b && b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('');
 
@@ -276,12 +315,20 @@ function createPiRuntime({ log } = {}) {
           if (req.thinkingLevel) await proc.send({ type: 'set_thinking_level', level: req.thinkingLevel });
           const state = await proc.send({ type: 'get_state' });
           emit({ type: 'session', sessionId: state?.sessionId ?? null, sessionFile: state?.sessionFile ?? null, model: state?.model ? { provider: state.model.provider, id: state.model.id, name: state.model.name } : null, cwd });
+          const before = await snapshotDir(cwd).catch(() => null);
           if (aborter.aborted) { ended('aborted'); }
           else {
             // the prompt's response may follow the whole turn; the end is read from events
             proc.send({ type: 'prompt', message: String(req.prompt ?? ''), ...(Array.isArray(req.images) && req.images.length ? { images: req.images } : {}) }, 24 * 60 * 60 * 1000).catch((e) => { emit({ type: 'run_error', message: e.message }); ended('error'); });
           }
           const how = await finished;
+          if (before) {
+            const after = await snapshotDir(cwd).catch(() => null);
+            if (after) {
+              const d = diffSnapshots(before, after);
+              if (d.changed.length || d.added.length || d.removed.length || d.truncated) emit({ type: 'fs_changes', ...d });
+            }
+          }
           emit({ type: 'run_end', text, how });
         } catch (e) {
           emit({ type: 'run_error', message: e instanceof Error ? e.message : String(e) });

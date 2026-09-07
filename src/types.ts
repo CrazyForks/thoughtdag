@@ -118,7 +118,13 @@ export interface ThoughtData extends Record<string, unknown> {
       thinking, not the stale answer. */
   restreaming?: boolean;
   /** The runtime session this node's last agent turn ran in (desktop agent lanes). */
-  agentSession?: { runtime: 'pi'; sessionId: string | null; sessionFile: string | null; cwd: string };
+  agentSession?: {
+    runtime: 'pi'; sessionId: string | null; sessionFile: string | null; cwd: string;
+    /** the turn continued the mirrored session instead of opening a fresh one */
+    continued?: boolean;
+    /** what changed on disk during the turn, by the file system's account */
+    changes?: { changed: string[]; added: string[]; removed: string[]; truncated?: boolean };
+  };
   /** Transient: the tool calls of the agent turn running now, in order. */
   agentTrace?: AgentTraceEntry[];
   /** Transient: an agent runtime is waiting for the person's decision on one action. */
