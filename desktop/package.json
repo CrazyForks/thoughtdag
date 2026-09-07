@@ -34,7 +34,8 @@
       "main.js",
       "preload.js",
       "package.json",
-      "splash.html"
+      "splash.html",
+      "agents/**"
     ],
     "extraResources": [
       {

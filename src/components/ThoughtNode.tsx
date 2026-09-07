@@ -17,6 +17,8 @@ import { Markdown, HighlightedMarkdown } from './Markdown';
 import FanOutModal from './FanOutModal';
 import ReasoningDisclosure from './ui/ReasoningDisclosure';
 import { ApprovalCard, ApprovalRecords } from './ui/ApprovalCard';
+import { AgentTrace } from './ui/AgentTrace';
+import { SquareTerminal } from 'lucide-react';
 import { useT, fmt } from '../i18n';
 import MentionSurface from './ui/NodeMention';
 import { useMentions } from '../lib/mentions';
@@ -713,6 +715,8 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
           ) : data.isLoading ? (
             data.pendingApproval ? (
               <ApprovalCard nodeId={id} request={data.pendingApproval} compact />
+            ) : data.agentTrace && data.agentTrace.length > 0 && (!data.response || data.restreaming) ? (
+              <AgentTrace entries={data.agentTrace} compact />
             ) : data.response && !data.restreaming ? (
               // Streaming: show the live tail of the response on the canvas
               <div className="text-sm text-ink-muted leading-relaxed px-3 py-2.5 bg-surface rounded-xl max-h-[180px] overflow-hidden flex flex-col justify-end whitespace-pre-wrap break-words">
@@ -865,6 +869,16 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
                 >
                   {data.generatedBy[data.responseIndex]!.split('/').pop()}
                 </span>
+              )}
+              {data.importSource?.runner === 'pi' && window.desktopSessions && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); void window.desktopSessions!.openInCli('pi', data.importSource!.cwd ?? '', data.importSource!.sessionId, 'terminal'); }}
+                  className="rounded-full w-6 h-6 flex items-center justify-center hover:text-accent hover:bg-wash transition-colors"
+                  title={t('agent.openInTerminal')}
+                  data-open-in-terminal
+                >
+                  <SquareTerminal size={13} strokeWidth={1.75} />
+                </button>
               )}
               {data.gatewaySearches?.[data.responseIndex] && (
                 <span className="text-2xs text-ink-faint ml-1 shrink-0" title={t('node.gatewaySearchedTitle')} data-gateway-searched>

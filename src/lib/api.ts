@@ -23,7 +23,11 @@ const APPROVALS_URL = `${API_BASE}/api/approvals`;
 /** The person's decision on a pending approval, back to the runtime that
     asked (the harness bridge today). False when nothing was waiting under
     that id any more — the runtime withdrew it, or the turn ended. */
-export async function answerApproval(id: string, outcome: 'allowed-once' | 'rejected'): Promise<boolean> {
+export async function answerApproval(request: { id: string; channel?: { runId: string } }, outcome: 'allowed-once' | 'rejected'): Promise<boolean> {
+  const id = request.id;
+  if (request.channel?.runId && window.desktopAgents) {
+    try { return await window.desktopAgents.answer(request.channel.runId, id, outcome === 'allowed-once'); } catch { return false; }
+  }
   try {
     const r = await fetch(`${APPROVALS_URL}/${encodeURIComponent(id)}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
@@ -181,6 +185,8 @@ export interface StreamCallbacks {
   onSources?: (sources: import('../types').Reference[]) => void;
   /** Reasoning/thinking tokens (models that emit them; never enters context). */
   onReasoning?: (chunk: string, fullSoFar: string) => void;
+  /** An agent runtime's tool call starting or ending, for the node's live trace. */
+  onAgentTool?: (call: { id: string; name: string; query: string; phase: 'start' | 'end'; isError?: boolean }) => void;
   /** An agent runtime in the desktop app: which session this turn ran in. */
   onAgentSession?: (session: { runtime: 'pi'; sessionId: string | null; sessionFile: string | null; cwd: string }) => void;
   /** Inside DeepSeek Harness: the harness session this generation ran in
@@ -222,7 +228,7 @@ export async function llmCallStream(
       session it continues (a tail follow-up) — the harness's inside
       DeepSeek Harness, the desktop runtime's (Pi) in the app. Ignored by
       every model backend. */
-  harness?: { cwd?: string; session?: string; sessionPath?: string; forkEntryId?: string },
+  harness?: { cwd?: string; session?: string; sessionPath?: string; forkEntryId?: string; nodeId?: string },
 ): Promise<string> {
   // On the Workers deployment, OpenRouter models stream straight from the
   // browser — the proxy's CPU allowance can't survive big contexts + heavy
@@ -232,7 +238,7 @@ export async function llmCallStream(
   // tools; the canvas's compiled context rides ahead of the question.
   if (modelId && isAgentModel(modelId) && window.desktopAgents) {
     callbacks?.onDispatch?.({ messages: contextMessages, images: images ?? [], model: modelId, toolPrefs: toolPrefs ?? {}, lane: 'proxy' });
-    return agentCallStream(contextMessages, onChunk, signal, images, callbacks, modelId, harness?.cwd ? { cwd: harness.cwd, sessionPath: harness.sessionPath, forkEntryId: harness.forkEntryId } : undefined);
+    return agentCallStream(contextMessages, onChunk, signal, images, callbacks, modelId, harness?.cwd ? { cwd: harness.cwd, sessionPath: harness.sessionPath, forkEntryId: harness.forkEntryId } : undefined, harness?.nodeId);
   }
   images = await imagesForModel(modelId, images);
 

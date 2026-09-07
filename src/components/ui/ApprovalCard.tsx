@@ -23,7 +23,7 @@ export function ApprovalCard({ nodeId, request, compact }: { nodeId: string; req
         ? { ...n, data: { ...n.data, pendingApproval: { ...n.data.pendingApproval, answered: outcome } } }
         : n),
     }));
-    const ok = await answerApproval(request.id, outcome);
+    const ok = await answerApproval(request, outcome);
     if (!ok) {
       // nothing was waiting: the runtime withdrew the question or the turn ended
       useStore.setState((s) => ({

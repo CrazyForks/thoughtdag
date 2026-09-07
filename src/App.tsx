@@ -74,6 +74,7 @@ import SearchToggles from './components/ui/SearchToggles';
 import Tutorial from './components/Tutorial';
 import WhatsNewDialog from './components/ui/WhatsNewDialog';
 import ReleaseNotesDialog from './components/ui/ReleaseNotesDialog';
+import AgentCwdChip from './components/ui/AgentCwdChip';
 import { useT, t as ti, fmt, useI18n } from './i18n';
 import { isViewerMode, buildViewerLink } from './lib/viewer';
 import { useModels } from './lib/use-models';
@@ -1588,6 +1589,7 @@ function Canvas() {
             </button>
           </>
         )}
+        {!isParadigm && <AgentCwdChip />}
         {!isParadigm && <ModelPicker />}
         {/* Landing convenience only: inside the canvas the picker's own
             empty state (Connect a model) is the door — no twin key icon */}

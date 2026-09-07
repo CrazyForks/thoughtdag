@@ -112,6 +112,12 @@ interface DesktopAgentsBridge {
   abort(runId: string): Promise<boolean>;
   /** the shell-managed working directory of a canvas, created on demand */
   workspace(canvasId: string): Promise<string>;
+  /** the person's answer to a runtime's confirm question during a run */
+  answer(runId: string, requestId: string, confirmed: boolean): Promise<boolean>;
+  /** a folder picked in the system dialog, or null */
+  pickCwd(): Promise<string | null>;
+  /** the canvas's materials written under <cwd>/.thoughtdag/materials */
+  writeMaterials(cwd: string, files: { name: string; content: string; encoding?: 'utf8' | 'base64' }[]): Promise<{ dir: string | null; written: string[] }>;
   onEvent(cb: (payload: { runId: string; event: Record<string, unknown> & { type: string } }) => void): void;
 }
 

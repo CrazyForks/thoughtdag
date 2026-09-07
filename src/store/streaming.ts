@@ -5,7 +5,7 @@ import { sha256Hex, canonicalStringify } from '../lib/context-bundle';
 import { pruneHighlights } from '../lib/highlight-match';
 import { llmCall, llmCallStream, type ContextMessage, type ImageAttachment } from '../lib/api';
 import { harnessOutbound, claimHarnessTurn, stampHarnessTurn } from '../lib/atlas/dsh-bridge';
-import { agentOutbound } from '../lib/agents/pi-runtime';
+import { agentOutbound, adoptPiTurn } from '../lib/agents/pi-runtime';
 import { countTokens, activeSummary } from '../utils';
 import { toast, useUiStore } from '../lib/ui-store';
 import { getModelsOnce, reconcileModelId } from '../lib/use-models';
@@ -201,7 +201,7 @@ export async function runNodeGeneration(
         const reasonings = [...kept.map(({ rs }) => rs), n.data.reasoning || undefined];
         const generatedAts = [...kept.map(({ at }) => at), now];
         const editedAts = [...kept.map(({ ed }) => ed), undefined];
-        return { ...n, data: { ...n.data, response, responses, questions, generatedBy, gatewaySearches, reasonings, generatedAts, editedAts, reasoning: undefined, restreaming: undefined, pendingApproval: undefined, responseIndex: responses.length - 1, isLoading: false, tokenCount, generationFailed: failed || undefined, references, highlights: pruneHighlights(n.data.highlights, response), lastContextHash: contextHash, lastGeneratedAt: now } };
+        return { ...n, data: { ...n.data, response, responses, questions, generatedBy, gatewaySearches, reasonings, generatedAts, editedAts, reasoning: undefined, restreaming: undefined, pendingApproval: undefined, agentTrace: undefined, responseIndex: responses.length - 1, isLoading: false, tokenCount, generationFailed: failed || undefined, references, highlights: pruneHighlights(n.data.highlights, response), lastContextHash: contextHash, lastGeneratedAt: now } };
       }),
     }));
   };
@@ -318,6 +318,19 @@ export async function runNodeGeneration(
       },
       onSources: (sources) => { references = sources; },
       onHarnessSession: (session) => { harnessSession = session; },
+      onAgentTool: (call) => {
+        if (!isCurrent()) return;
+        const now = new Date().toISOString();
+        set((state) => ({
+          nodes: state.nodes.map((n) => {
+            if (n.id !== nodeId) return n;
+            const trace = [...(n.data.agentTrace ?? [])];
+            if (call.phase === 'start') trace.push({ id: call.id || `${trace.length}`, name: call.name, query: call.query, status: 'running', startedAt: now });
+            else { const i = trace.findIndex((e) => e.id === call.id && e.status === 'running'); if (i >= 0) trace[i] = { ...trace[i], status: call.isError ? 'error' : 'ok', endedAt: now }; }
+            return { ...n, data: { ...n.data, agentTrace: trace } };
+          }),
+        }));
+      },
       onAgentSession: (session) => {
         if (!isCurrent()) return;
         set((state) => ({ nodes: state.nodes.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, agentSession: session } } : n) }));
@@ -362,7 +375,7 @@ export async function runNodeGeneration(
         scholar: selfData?.scholarSearch ?? useUiStore.getState().scholarSearchEnabled,
         mcp: useUiStore.getState().mcpEnabled,
       };
-    })(), pinnedModel, harnessRoute ?? agentRoute);
+    })(), pinnedModel, harnessRoute ?? (agentRoute ? { ...agentRoute, nodeId } : undefined));
     flushStream();
     if (!isCurrent()) return; // superseded while finishing: drop everything
     activeAbortControllers.delete(nodeId);
@@ -377,6 +390,11 @@ export async function runNodeGeneration(
     // this node is the mirror of the dsh turn it just ran: stamp provenance,
     // and on a tail follow-up advance the mirror's ledger so the live sweep
     // does not append the same turn a second time
+    if (agentRoute) {
+      // the node becomes the mirror of the Pi turn it ran; the canvas subscribes
+      const session = get().nodes.find((n) => n.id === nodeId)?.data.agentSession;
+      if (session) await adoptPiTurn(nodeId, session, question).catch(() => false);
+    }
     if (harnessRoute) {
       const ledgerAdvanced = harnessClaim ? await harnessClaim : false;
       await stampHarnessTurn(set, get, nodeId, { question, response }, harnessRoute, harnessSession, harnessTurn, ledgerAdvanced);

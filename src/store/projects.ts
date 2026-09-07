@@ -39,6 +39,10 @@ export interface ProjectMeta {
     chapters?: { sessionId: string; runner: string; importedCount: number; tailNodeId: string }[];
     branches?: { sessionId: string; runner: string; importedCount: number; tailNodeId: string; anchorNodeId: string }[];
   };
+  /** The working directory this canvas hands to agent runtimes, when the
+      person chose one; absent = the mirrored project, else the canvas's
+      own workspace. */
+  agentCwd?: string;
   /** Archived = hidden from the dropdown and Recent work, data untouched.
       Tidying and destroying are different verbs. */
   archived?: boolean;
@@ -262,6 +266,13 @@ export async function createProject(name = 'Untitled', kind: 'chat' | 'paradigm'
   await saveMeta();
   await switchProject(id); // empty key rehydrates to an empty canvas
   return id;
+}
+
+export async function setProjectAgentCwd(id: string, cwd: string | undefined): Promise<void> {
+  useProjects.setState((s) => ({
+    projects: s.projects.map((p) => (p.id === id ? { ...p, agentCwd: cwd } : p)),
+  }));
+  await saveMeta();
 }
 
 export async function renameProject(id: string, name: string): Promise<void> {

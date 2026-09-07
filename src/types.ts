@@ -53,6 +53,18 @@ export interface ApprovalRequest {
   askedAt: string;
   /** set the moment the person clicks, before the runtime confirms */
   answered?: ApprovalOutcome;
+  /** where the answer goes: a desktop runtime's run, else the harness bridge */
+  channel?: { runId: string };
+}
+
+/** One tool call of a running agent turn, as the node shows it live. */
+export interface AgentTraceEntry {
+  id: string;
+  name: string;
+  query: string;
+  status: 'running' | 'ok' | 'error';
+  startedAt: string;
+  endedAt?: string;
 }
 
 export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable';
@@ -96,6 +108,8 @@ export interface ThoughtData extends Record<string, unknown> {
   restreaming?: boolean;
   /** The runtime session this node's last agent turn ran in (desktop agent lanes). */
   agentSession?: { runtime: 'pi'; sessionId: string | null; sessionFile: string | null; cwd: string };
+  /** Transient: the tool calls of the agent turn running now, in order. */
+  agentTrace?: AgentTraceEntry[];
   /** Transient: an agent runtime is waiting for the person's decision on one action. */
   pendingApproval?: ApprovalRequest;
   /** Every approval decided during this turn's generations, oldest first. */

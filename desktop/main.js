@@ -575,6 +575,7 @@ function setupSessionAtlas() {
   const PROGRAMS = {
     'claude-code': (id) => `claude --resume ${shq(id)}`,
     codex: (id) => `codex resume ${shq(id)}`,
+    pi: (id) => `pi --session ${shq(id)}`,
   };
   // mode is the user's explicit per-click choice ('app' | 'terminal') —
   // no stored preference decides between the two roads.
@@ -789,6 +790,30 @@ function setupAgents() {
   });
   ipcMain.handle('agents:abort', async (_e, runId) => agentsRuntime().abort(String(runId)));
   ipcMain.handle('agents:workspace', async (_e, canvasId) => workspaceFor(canvasId));
+  ipcMain.handle('agents:answer', async (_e, runId, requestId, confirmed) => agentsRuntime().answer(String(runId), String(requestId), !!confirmed));
+  // a folder the person picks as a canvas's working directory
+  ipcMain.handle('agents:pick-cwd', async () => {
+    const r = await dialog.showOpenDialog(win ?? undefined, { properties: ['openDirectory', 'createDirectory'] });
+    return r.canceled || !r.filePaths?.[0] ? null : r.filePaths[0];
+  });
+  // the canvas's materials, written where the agent can read them:
+  // <cwd>/.thoughtdag/materials/<name> (text as-is, binaries from base64)
+  ipcMain.handle('agents:write-materials', async (_e, cwd, files) => {
+    if (typeof cwd !== 'string' || !path.isAbsolute(cwd) || !Array.isArray(files)) return { dir: null, written: [] };
+    const dir = path.join(cwd, '.thoughtdag', 'materials');
+    await fsp.mkdir(dir, { recursive: true });
+    const written = [];
+    for (const f of files.slice(0, 40)) {
+      const name = String(f?.name ?? '').replace(/[\/\\:*?"<>|]/g, '_').slice(0, 120);
+      if (!name || typeof f.content !== 'string') continue;
+      const target = path.join(dir, name);
+      try {
+        await fsp.writeFile(target, f.encoding === 'base64' ? Buffer.from(f.content, 'base64') : f.content);
+        written.push(target);
+      } catch { /* one bad file does not stop the rest */ }
+    }
+    return { dir, written };
+  });
 }
 
 function codexAppServer() {

@@ -20,6 +20,7 @@ const os = require('node:os');
 const { randomUUID } = require('node:crypto');
 
 const fsp = fs.promises;
+const GUARD = path.join(__dirname, 'pi-guard.mjs');
 const IDLE_MS = 10 * 60 * 1000;
 const RESPONSE_MS = 30 * 1000;
 const CANDIDATE_DIRS = [
@@ -61,7 +62,7 @@ class PiProcess {
     this.busy = Promise.resolve();
     this.listener = null;       // the run currently receiving events
     this.idleTimer = null;
-    const args = ['--mode', 'rpc', ...(opts.noSession ? ['--no-session'] : [])];
+    const args = ['--mode', 'rpc', ...(opts.noSession ? ['--no-session'] : ['-e', GUARD])];
     this.proc = spawn(bin, args, { cwd, env: childEnv(), stdio: ['pipe', 'pipe', 'pipe'] });
     this.proc.stdout.on('data', (d) => this.feed(d.toString()));
     this.proc.stderr.on('data', (d) => this.log('[pi stderr] ' + d.toString().trim().slice(0, 400)));
@@ -94,8 +95,13 @@ class PiProcess {
       return;
     }
     if (msg.type === 'extension_ui_request') {
-      // an extension asked the person something; nobody is at that
-      // terminal, so the question is withdrawn and the run hears about it
+      // a confirm question goes to the run (the canvas shows it as an
+      // approval and answers through `answer`); any other dialog has
+      // nobody at the terminal, so it is withdrawn and the run hears about it
+      if (msg.method === 'confirm' && this.listener) {
+        this.listener({ type: 'approval', id: msg.id, title: msg.title ?? '', message: msg.message ?? '' });
+        return;
+      }
       this.write({ type: 'extension_ui_response', id: msg.id, cancelled: true });
       this.listener?.({ type: 'extension_ui_cancelled', method: msg.method, title: msg.title ?? null });
       return;
@@ -250,6 +256,15 @@ function createPiRuntime({ log } = {}) {
       if (!r) return false;
       r.abort();
       return true;
+    },
+
+    /** The person's answer to a confirm question of a running turn. */
+    answer(runId, requestId, confirmed) {
+      const r = runs.get(runId);
+      if (!r) return false;
+      const ok = r.proc.write({ type: 'extension_ui_response', id: String(requestId), confirmed: !!confirmed });
+      if (ok) r.proc.listener?.({ type: 'approval_decided', id: String(requestId), outcome: confirmed ? 'allowed-once' : 'rejected' });
+      return ok;
     },
 
     shutdown() {

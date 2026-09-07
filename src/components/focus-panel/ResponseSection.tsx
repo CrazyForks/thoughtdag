@@ -10,6 +10,7 @@ import { isViewerMode } from '../../lib/viewer';
 import { collectExploreMarksKey, type ExploreMark } from '../../lib/explore-marks';
 import ReasoningDisclosure from '../ui/ReasoningDisclosure';
 import { ApprovalCard, ApprovalRecords } from '../ui/ApprovalCard';
+import { AgentTrace } from '../ui/AgentTrace';
 import type { ThoughtData } from '../../types';
 
 export default function ResponseSection({
@@ -162,6 +163,8 @@ export default function ResponseSection({
 
       {data.isLoading && data.pendingApproval ? (
         <div className="py-1"><ApprovalCard nodeId={nodeId} request={data.pendingApproval} /></div>
+      ) : data.isLoading && data.agentTrace && data.agentTrace.length > 0 && (!data.response || data.restreaming) ? (
+        <div className="py-1"><AgentTrace entries={data.agentTrace} /></div>
       ) : data.isLoading && (!data.response || data.restreaming) ? (
         data.reasoning ? (
           <div className="py-1">
