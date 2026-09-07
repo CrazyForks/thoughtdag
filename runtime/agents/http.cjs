@@ -12,6 +12,7 @@ const terminal = require('../terminal.cjs');
 const RUNTIME_FACTORIES = {
   pi: (log) => require('./pi.cjs').createPiRuntime({ log }),
   codex: (log) => require('./codex.cjs').createCodexRuntime({ log }),
+  'claude-code': (log) => require('./claude.cjs').createClaudeRuntime({ log }),
 };
 
 function createAgentsHttp({ workspaceRoot = path.join(os.homedir(), '.thoughtdag', 'workspaces'), log = () => {} } = {}) {

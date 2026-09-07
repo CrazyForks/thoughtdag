@@ -40,9 +40,11 @@ async function policyFor(cwd) {
   return { approvalPolicy: 'on-request', sandbox: 'workspace-write' };
 }
 
+// the thread id is in the rollout's file name; take the LAST UUID in the
+// path in case a directory carries one of its own
 const threadIdOf = (sessionPath) => {
-  const m = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(String(sessionPath ?? ''));
-  return m ? m[1] : null;
+  const all = String(sessionPath ?? '').match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi);
+  return all && all.length ? all[all.length - 1] : null;
 };
 
 function createCodexRuntime({ log } = {}) {

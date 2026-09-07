@@ -392,15 +392,17 @@ export async function runNodeGeneration(
       writeFinal(t('node.emptyResponse'), true);
       return;
     }
+    // an agent turn is adopted from its session file BEFORE the node is marked
+    // done: footprints, provenance and the ledger land in the same step as the
+    // answer, so a follow-up asked right away already continues the session
+    if (agentRoute) {
+      const session = get().nodes.find((n) => n.id === nodeId)?.data.agentSession;
+      if (session) await adoptAgentTurn(nodeId, session, question).catch(() => false);
+    }
     writeFinal(response);
     // this node is the mirror of the dsh turn it just ran: stamp provenance,
     // and on a tail follow-up advance the mirror's ledger so the live sweep
     // does not append the same turn a second time
-    if (agentRoute) {
-      // the node becomes the mirror of the Pi turn it ran; the canvas subscribes
-      const session = get().nodes.find((n) => n.id === nodeId)?.data.agentSession;
-      if (session) await adoptAgentTurn(nodeId, session, question).catch(() => false);
-    }
     if (harnessRoute) {
       const ledgerAdvanced = harnessClaim ? await harnessClaim : false;
       await stampHarnessTurn(set, get, nodeId, { question, response }, harnessRoute, harnessSession, harnessTurn, ledgerAdvanced);

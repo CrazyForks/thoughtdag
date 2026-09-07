@@ -765,6 +765,7 @@ const agentOps = require(path.join(RUNTIME_DIR, 'agents', 'ops.cjs'));
 const RUNTIME_FACTORIES = {
   pi: () => require(path.join(RUNTIME_DIR, 'agents', 'pi.cjs')).createPiRuntime({ log: (line) => console.log(line) }),
   codex: () => require(path.join(RUNTIME_DIR, 'agents', 'codex.cjs')).createCodexRuntime({ log: (line) => console.log(line) }),
+  'claude-code': () => require(path.join(RUNTIME_DIR, 'agents', 'claude.cjs')).createClaudeRuntime({ log: (line) => console.log(line) }),
 };
 const runtimes = new Map();
 function agentsRuntime(name = 'pi') {

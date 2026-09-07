@@ -27,7 +27,7 @@ export const AGENT_RUNTIMES: Record<AgentRuntime, { prefix: string; label: strin
   'claude-code': { prefix: 'claude/', label: 'Claude Code', rootKey: 'claude-projects' },
 };
 /** The runtimes the shell implements today. */
-export const LIVE_RUNTIMES: AgentRuntime[] = ['pi', 'codex'];
+export const LIVE_RUNTIMES: AgentRuntime[] = ['pi', 'codex', 'claude-code'];
 
 
 /** The provider key the picker groups every agent-run model under. */
@@ -406,23 +406,24 @@ export async function agentCallStream(
  *  append here. The live sweep never appends this turn a second time: the
  *  ledger records it as imported with this node as the tail. */
 export async function adoptAgentTurn(nodeId: string, session: { runtime: AgentRuntime; sessionFile: string | null; sessionId: string | null; cwd: string }, question: string): Promise<boolean> {
+  const why = (reason: string): false => { console.warn('[agent] turn not adopted:', reason, session.runtime, session.sessionFile); return false; };
   const bridge = window.desktopSessions;
-  if (!bridge || !session.sessionFile) return false;
+  if (!bridge || !session.sessionFile) return why(!bridge ? 'no sessions bridge' : 'no session file');
   const rootKey = AGENT_RUNTIMES[session.runtime].rootKey;
   try {
     const roots = await bridge.roots();
     const root = roots.find((x) => x.key === rootKey);
-    if (!root) return false;
+    if (!root) return why('no root ' + rootKey);
     const base = root.path.replace(/\/$/, '') + '/';
-    if (!session.sessionFile.startsWith(base)) return false;
+    if (!session.sessionFile.startsWith(base)) return why('file outside root ' + base);
     const rel = session.sessionFile.slice(base.length);
     const { anyRunnerSessionConversation } = await import('../adapters');
     const { useStore } = await import('../../store');
     const { useProjects, registerLedgerEntry, updateSourceSession, subscribedSessionIds } = await import('../../store/projects');
     const text = await bridge.read(rootKey, rel);
-    if (!text) return false;
+    if (!text) return why('empty file');
     const conv = await anyRunnerSessionConversation(text);
-    if (!conv?.sessionId) return false;
+    if (!conv?.sessionId) return why('no conversation recognized');
     const built = conv.build();
     const qa = built.nodes.filter((n) => n.data.importSource);
     const q = question.trim();
@@ -432,7 +433,7 @@ export async function adoptAgentTurn(nodeId: string, session: { runtime: AgentRu
       if (qq === q || qq.endsWith(q) || q.endsWith(qq)) { idx = i; break; }
     }
     if (idx < 0) idx = qa.length - 1;
-    if (idx < 0) return false;
+    if (idx < 0) return why('no turn in file yet');
     const turn = qa[idx];
     const toolAtts = turn.data.attachments ?? [];
     // what the file system saw change, beyond what the tools declared:
@@ -475,8 +476,8 @@ export async function adoptAgentTurn(nodeId: string, session: { runtime: AgentRu
       await registerLedgerEntry(activeId!, 'chapter', entry);
     }
     return true;
-  } catch {
-    return false;
+  } catch (e) {
+    return why('threw: ' + (e instanceof Error ? e.message : String(e)));
   }
 }
 
