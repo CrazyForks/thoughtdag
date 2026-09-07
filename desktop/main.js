@@ -758,14 +758,16 @@ let codexRpc = null; // null=not started, 'dead'=CLI absent, else client
 // agents/pi.js; here it is created on first use, its events are relayed to
 // the renderer tagged by run, and the per-canvas workspace directories the
 // runs default to are handed out under userData.
-let piRuntime = null;
-function agentsRuntime() {
-  if (!piRuntime) {
-    const { createPiRuntime } = require('./agents/pi');
-    piRuntime = createPiRuntime({ log: (line) => console.log(line) });
-  }
-  return piRuntime;
+// One module per runtime under agents/, created on first use. A run is
+// addressed by its id: abort and answer find the runtime that owns it.
+const RUNTIME_FACTORIES = { pi: () => require('./agents/pi').createPiRuntime({ log: (line) => console.log(line) }) };
+const runtimes = new Map();
+function agentsRuntime(name = 'pi') {
+  const key = RUNTIME_FACTORIES[name] ? name : 'pi';
+  if (!runtimes.has(key)) runtimes.set(key, RUNTIME_FACTORIES[key]());
+  return runtimes.get(key);
 }
+const runOwners = new Map(); // runId → runtime name
 
 const WORKSPACE_ID = /^[\w.-]{1,80}$/;
 async function workspaceFor(canvasId) {
@@ -780,17 +782,24 @@ async function workspaceFor(canvasId) {
 }
 
 function setupAgents() {
-  ipcMain.handle('agents:available', async () => ({ pi: await agentsRuntime().available() }));
-  ipcMain.handle('agents:models', async () => {
-    try { return await agentsRuntime().models(); } catch (e) { return { installed: false, models: [], default: null, error: e instanceof Error ? e.message : String(e) }; }
+  ipcMain.handle('agents:available', async () => {
+    const out = {};
+    for (const name of Object.keys(RUNTIME_FACTORIES)) out[name] = await agentsRuntime(name).available().catch(() => null);
+    return out;
+  });
+  ipcMain.handle('agents:models', async (_e, runtime) => {
+    try { return await agentsRuntime(runtime).models(); } catch (e) { return { installed: false, models: [], default: null, error: e instanceof Error ? e.message : String(e) }; }
   });
   ipcMain.handle('agents:run', async (_e, req) => {
     const r = req && typeof req === 'object' ? req : {};
-    return agentsRuntime().run(r, (payload) => { if (win && !win.isDestroyed()) win.webContents.send('agents:event', payload); });
+    const name = RUNTIME_FACTORIES[r.runtime] ? r.runtime : 'pi';
+    const runId = await agentsRuntime(name).run(r, (payload) => { if (win && !win.isDestroyed()) win.webContents.send('agents:event', payload); });
+    runOwners.set(runId, name);
+    return runId;
   });
-  ipcMain.handle('agents:abort', async (_e, runId) => agentsRuntime().abort(String(runId)));
+  ipcMain.handle('agents:abort', async (_e, runId) => agentsRuntime(runOwners.get(String(runId))).abort(String(runId)));
   ipcMain.handle('agents:workspace', async (_e, canvasId) => workspaceFor(canvasId));
-  ipcMain.handle('agents:answer', async (_e, runId, requestId, response) => agentsRuntime().answer(String(runId), String(requestId), response));
+  ipcMain.handle('agents:answer', async (_e, runId, requestId, response) => agentsRuntime(runOwners.get(String(runId))).answer(String(runId), String(requestId), response));
   // the guard's tuning for a working directory: <cwd>/.thoughtdag/guard.json
   ipcMain.handle('agents:guard-write', async (_e, cwd, config) => {
     if (typeof cwd !== 'string' || !path.isAbsolute(cwd)) return false;
@@ -927,5 +936,5 @@ if (!lock) {
   });
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) boot(); });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-  app.on('will-quit', () => { serverProc?.kill(); if (codexRpc && codexRpc !== 'dead') codexRpc.proc.kill(); piRuntime?.shutdown(); });
+  app.on('will-quit', () => { serverProc?.kill(); if (codexRpc && codexRpc !== 'dead') codexRpc.proc.kill(); for (const r of runtimes.values()) r.shutdown(); });
 }

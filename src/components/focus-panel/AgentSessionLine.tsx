@@ -36,8 +36,8 @@ export default function AgentSessionLine({ data }: { data: ThoughtData }) {
           <FolderOpen size={14} strokeWidth={1.75} />
         </button>
       )}
-      {runner === 'pi' && sessionId && window.desktopSessions && (
-        <button onClick={() => void window.desktopSessions!.openInCli('pi', cwd, sessionId, 'terminal')} className="text-ink-faint hover:text-accent shrink-0" title={t('agent.openInTerminal')}>
+      {sessionId && window.desktopSessions && (
+        <button onClick={() => void window.desktopSessions!.openInCli(runner, cwd, sessionId, 'terminal')} className="text-ink-faint hover:text-accent shrink-0" title={t('agent.openInTerminal')}>
           <SquareTerminal size={14} strokeWidth={1.75} />
         </button>
       )}

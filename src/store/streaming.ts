@@ -5,7 +5,7 @@ import { sha256Hex, canonicalStringify } from '../lib/context-bundle';
 import { pruneHighlights } from '../lib/highlight-match';
 import { llmCall, llmCallStream, type ContextMessage, type ImageAttachment } from '../lib/api';
 import { harnessOutbound, claimHarnessTurn, stampHarnessTurn } from '../lib/atlas/dsh-bridge';
-import { agentOutbound, adoptPiTurn, claimPiTurn } from '../lib/agents/pi-runtime';
+import { agentOutbound, adoptAgentTurn, claimAgentTurn } from '../lib/agents/agent-runtime';
 import { countTokens, activeSummary } from '../utils';
 import { toast, useUiStore } from '../lib/ui-store';
 import { getModelsOnce, reconcileModelId } from '../lib/use-models';
@@ -335,7 +335,7 @@ export async function runNodeGeneration(
         if (!isCurrent()) return;
         const continued = !!agentRoute?.continue;
         set((state) => ({ nodes: state.nodes.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, agentSession: { ...session, continued } } } : n) }));
-        if (continued && session.sessionId) void claimPiTurn(nodeId, session.sessionId, session.cwd);
+        if (continued && session.sessionId) void claimAgentTurn(session.runtime, nodeId, session.sessionId, session.cwd);
       },
       onAgentChanges: (changes) => {
         if (!isCurrent()) return;
@@ -399,7 +399,7 @@ export async function runNodeGeneration(
     if (agentRoute) {
       // the node becomes the mirror of the Pi turn it ran; the canvas subscribes
       const session = get().nodes.find((n) => n.id === nodeId)?.data.agentSession;
-      if (session) await adoptPiTurn(nodeId, session, question).catch(() => false);
+      if (session) await adoptAgentTurn(nodeId, session, question).catch(() => false);
     }
     if (harnessRoute) {
       const ledgerAdvanced = harnessClaim ? await harnessClaim : false;

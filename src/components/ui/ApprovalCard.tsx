@@ -3,7 +3,7 @@ import { ShieldAlert, MessageCircleQuestion, ChevronDown, ChevronRight } from 'l
 import { useT } from '../../i18n';
 import { useStore } from '../../store';
 import { answerApproval, type QuestionAnswer } from '../../lib/api';
-import { allowLocation } from '../../lib/agents/pi-runtime';
+import { allowLocation } from '../../lib/agents/agent-runtime';
 import type { ApprovalRequest, ApprovalRecord } from '../../types';
 
 // What an agent asks the person mid-turn, answered where the turn is shown:

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { API_BASE } from './constants';
 import { storedProviders, pushProviders } from './runtime-providers';
-import { agentModels, AGENT_PROVIDER } from './agents/pi-runtime';
+import { agentModels, AGENT_PROVIDER } from './agents/agent-runtime';
 
 export interface ModelInfo {
   id: string;

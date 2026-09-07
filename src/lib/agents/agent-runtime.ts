@@ -1,46 +1,70 @@
-// Pi as a model the canvas can pick: the desktop shell runs `pi --mode rpc`
-// (window.desktopAgents), the canvas compiles what it wired in and hands
-// over one prompt, Pi answers with its own tools in a working directory,
-// and its events come back as the same callbacks a streamed model call
-// uses. Pi keeps the session file, the keys and the catalog; the canvas
-// keeps the context. Same shape as the harness lane inside DeepSeek
-// Harness, one runtime further.
+// Agent runtimes as models the canvas can pick. The desktop shell runs the
+// agent (window.desktopAgents), the canvas compiles what it wired in and
+// hands over one prompt, the agent answers with its own tools in a working
+// directory, and its events come back as the same callbacks a streamed
+// model call uses. The runtime keeps the session file, the keys and the
+// catalog; the canvas keeps the context.
+//
+// THE CONTRACT — the only things this file asks of a runtime, whichever it
+// is (Pi today; Codex and Claude Code follow the same shape):
+//   1. start a run on a working directory with one prompt; abort it
+//   2. an event stream carrying eight kinds, nothing else is read:
+//        session · text · reasoning · tool_start · tool_end · question ·
+//        end · error  (plus fs_changes, which the shell produces itself)
+//   3. a session file on disk the atlas already knows how to read — the
+//      finished turn is adopted from it, never rebuilt from the stream
+//   4. a model list
+// Everything runtime-specific lives in desktop/agents/<runtime>.js.
 
 import type { ContextMessage, ImageAttachment, StreamCallbacks } from '../api';
 import type { ModelInfo } from '../use-models';
+import type { AgentRuntime } from '../../types';
 
-/** Picker ids of agent-run models: `pi/<provider>/<model>`. */
-export const PI_MODEL_PREFIX = 'pi/';
+/** The runtimes the shell can run, keyed by the prefix of their picker ids. */
+export const AGENT_RUNTIMES: Record<AgentRuntime, { prefix: string; label: string; rootKey: string }> = {
+  pi: { prefix: 'pi/', label: 'Pi', rootKey: 'pi-sessions' },
+  codex: { prefix: 'codex/', label: 'Codex', rootKey: 'codex-sessions' },
+  'claude-code': { prefix: 'claude/', label: 'Claude Code', rootKey: 'claude-projects' },
+};
+/** The runtimes the shell implements today. */
+export const LIVE_RUNTIMES: AgentRuntime[] = ['pi'];
+
+
 /** The provider key the picker groups every agent-run model under. */
 export const AGENT_PROVIDER = '__agent__';
 
-export const isAgentModel = (id: string | undefined | null): boolean => !!id && id.startsWith(PI_MODEL_PREFIX);
+export const runtimeOf = (id: string | undefined | null): AgentRuntime | null => {
+  if (!id) return null;
+  for (const [rt, def] of Object.entries(AGENT_RUNTIMES)) if (id.startsWith(def.prefix)) return rt as AgentRuntime;
+  return null;
+};
+export const isAgentModel = (id: string | undefined | null): boolean => runtimeOf(id) !== null;
 
-/** `pi/<provider>/<model>` → Pi's own coordinates, or null. */
-export function piTarget(id: string): { provider: string; id: string } | null {
-  if (!isAgentModel(id)) return null;
-  const rest = id.slice(PI_MODEL_PREFIX.length);
+/** `<runtime prefix><provider>/<model>` → the runtime and its own coordinates, or null. */
+export function agentTarget(id: string): { runtime: AgentRuntime; provider: string; id: string } | null {
+  const runtime = runtimeOf(id);
+  if (!runtime) return null;
+  const rest = id.slice(AGENT_RUNTIMES[runtime].prefix.length);
   const i = rest.indexOf('/');
   if (i <= 0 || i === rest.length - 1) return null;
-  return { provider: rest.slice(0, i), id: rest.slice(i + 1) };
+  return { runtime, provider: rest.slice(0, i), id: rest.slice(i + 1) };
 }
 
-/** Pi's configured models as picker entries, or none when Pi is not around. */
+/** Every live runtime's configured models as picker entries; a runtime
+ *  that is not installed contributes nothing. */
 export async function agentModels(): Promise<ModelInfo[]> {
   const bridge = window.desktopAgents;
   if (!bridge) return [];
-  try {
-    const r = await bridge.models();
-    if (!r?.installed) return [];
-    return r.models.map((m) => ({
-      id: `${PI_MODEL_PREFIX}${m.provider}/${m.id}`,
-      name: `Pi · ${m.name}`,
-      provider: AGENT_PROVIDER,
-      vision: m.vision,
-    }));
-  } catch {
-    return [];
+  const out: ModelInfo[] = [];
+  for (const runtime of LIVE_RUNTIMES) {
+    const def = AGENT_RUNTIMES[runtime];
+    try {
+      const r = await bridge.models(runtime);
+      if (!r?.installed) continue;
+      for (const m of r.models) out.push({ id: `${def.prefix}${m.provider}/${m.id}`, name: `${def.label} · ${m.name}`, provider: AGENT_PROVIDER, vision: m.vision });
+    } catch { /* this runtime stays out of the list */ }
   }
+  return out;
 }
 
 export type AgentRoute = { cwd: string; sessionPath?: string; forkEntryId?: string; continue?: boolean };
@@ -90,18 +114,19 @@ export async function mirroredCwd(): Promise<string | null> {
   } catch { return null; }
 }
 
-/** The Pi session file for a session id: the tail node's own record, else
- *  the file under the Pi root whose name carries the id. */
-async function piSessionFile(sessionId: string, tail: { data: { agentSession?: { sessionId: string | null; sessionFile: string | null } } } | undefined): Promise<string | null> {
+/** The session file for a session id: the tail node's own record, else the
+ *  file under the runtime's root whose name carries the id. */
+async function agentSessionFile(runtime: AgentRuntime, sessionId: string, tail: { data: { agentSession?: { sessionId: string | null; sessionFile: string | null } } } | undefined): Promise<string | null> {
   const own = tail?.data.agentSession;
   if (own?.sessionId === sessionId && own.sessionFile) return own.sessionFile;
   const bridge = window.desktopSessions;
   if (!bridge) return null;
   try {
+    const rootKey = AGENT_RUNTIMES[runtime].rootKey;
     const roots = await bridge.roots();
-    const root = roots.find((x) => x.key === 'pi-sessions');
+    const root = roots.find((x) => x.key === rootKey);
     if (!root) return null;
-    const files = await bridge.list('pi-sessions');
+    const files = await bridge.list(rootKey);
     const hit = files.find((f) => f.rel.includes(sessionId));
     return hit ? `${root.path.replace(/\/$/, '')}/${hit.rel}` : null;
   } catch { return null; }
@@ -116,7 +141,8 @@ async function piSessionFile(sessionId: string, tail: { data: { agentSession?: {
  * the compiled context.
  */
 export async function agentOutbound(model: string | undefined, nodeId?: string): Promise<AgentRoute | undefined> {
-  if (!window.desktopAgents || !isAgentModel(model)) return undefined;
+  const runtime = runtimeOf(model);
+  if (!window.desktopAgents || !runtime) return undefined;
   const choice = await resolveAgentCwd();
   if (!choice) return undefined;
   if (!nodeId) return { cwd: choice.cwd };
@@ -130,13 +156,13 @@ export async function agentOutbound(model: string | undefined, nodeId?: string):
     const incoming = edges.filter((e) => e.target === nodeId);
     if (incoming.length !== 1) return { cwd: choice.cwd };
     const parentId = incoming[0].source;
-    const entries = [ss, ...(ss.chapters ?? []), ...(ss.branches ?? [])].filter((e) => e.runner === 'pi' && e.sessionId);
+    const entries = [ss, ...(ss.chapters ?? []), ...(ss.branches ?? [])].filter((e) => e.runner === runtime && e.sessionId);
     const entry = entries.find((e) => e.tailNodeId === parentId);
     if (!entry) return { cwd: choice.cwd };
     const tail = nodes.find((n) => n.id === parentId);
     const sessionCwd = tail?.data.agentSession?.cwd ?? tail?.data.importSource?.cwd ?? null;
     if (sessionCwd && sessionCwd !== choice.cwd) return { cwd: choice.cwd };
-    const sessionPath = await piSessionFile(entry.sessionId, tail);
+    const sessionPath = await agentSessionFile(runtime, entry.sessionId, tail);
     if (!sessionPath) return { cwd: choice.cwd };
     return { cwd: sessionCwd ?? choice.cwd, sessionPath, continue: true };
   } catch {
@@ -150,7 +176,7 @@ export async function agentOutbound(model: string | undefined, nodeId?: string):
  * sweep, which polls the file every few seconds, does not append the
  * in-progress turn a second time. The completion stamp fills in the rest.
  */
-export async function claimPiTurn(nodeId: string, sessionId: string, cwd: string): Promise<void> {
+export async function claimAgentTurn(runtime: AgentRuntime, nodeId: string, sessionId: string, cwd: string): Promise<void> {
   try {
     const { useStore } = await import('../../store');
     const { useProjects, patchLedgerEntry, subscribedSessionIds } = await import('../../store/projects');
@@ -161,7 +187,7 @@ export async function claimPiTurn(nodeId: string, sessionId: string, cwd: string
     const entry = [ss, ...(ss.chapters ?? []), ...(ss.branches ?? [])].find((e) => e.sessionId === sessionId);
     if (!entry) return;
     useStore.setState((st) => ({
-      nodes: st.nodes.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, importSource: { runner: 'pi', sessionId, itemIds: [], cwd } } } : n),
+      nodes: st.nodes.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, importSource: { runner: runtime, sessionId, itemIds: [], cwd } } } : n),
     }));
     await patchLedgerEntry(activeId, sessionId, { importedCount: entry.importedCount + 1, tailNodeId: nodeId });
   } catch { /* the completion stamp still lands */ }
@@ -268,7 +294,7 @@ export async function agentCallStream(
 ): Promise<string> {
   const bridge = window.desktopAgents;
   if (!bridge) throw new Error('agent runtimes need the desktop app');
-  const target = piTarget(modelId);
+  const target = agentTarget(modelId);
   if (!target) throw new Error('not an agent model: ' + modelId);
   const cwd = route?.cwd ?? (await agentOutbound(modelId))?.cwd;
   if (!cwd) throw new Error('no working directory for this canvas');
@@ -285,11 +311,11 @@ export async function agentCallStream(
   let finalText = '';
   const done = new Promise<{ how: string; error?: string }>((resolve) => {
     void bridge.run({
-      cwd, prompt,
+      runtime: target.runtime, cwd, prompt,
       ...(route?.sessionPath ? { sessionPath: route.sessionPath } : {}),
       ...(route?.forkEntryId ? { forkEntryId: route.forkEntryId } : {}),
       images: (images ?? []).map((img) => ({ type: 'image' as const, data: img.data, mimeType: img.mimeType })),
-      model: target,
+      model: { provider: target.provider, id: target.id },
     }).then((runId) => {
       const stop = () => { void bridge.abort(runId); };
       if (signal?.aborted) { stop(); }
@@ -298,7 +324,7 @@ export async function agentCallStream(
         switch (event.type) {
           case 'session':
             callbacks?.onAgentSession?.({
-              runtime: 'pi',
+              runtime: target.runtime,
               sessionId: (event.sessionId as string | null) ?? null,
               sessionFile: (event.sessionFile as string | null) ?? null,
               cwd: (event.cwd as string) ?? cwd,
@@ -335,7 +361,7 @@ export async function agentCallStream(
           case 'question':
             callbacks?.onApproval?.({
               id: String(event.id), kind: (event.kind as 'confirm' | 'select' | 'input' | 'editor') ?? 'confirm',
-              toolName: 'pi', callId: null, reason: null,
+              toolName: target.runtime, callId: null, reason: null,
               name: String(event.title ?? ''), query: String(event.message ?? ''), arguments: null,
               options: Array.isArray(event.options) ? (event.options as string[]) : [],
               placeholder: typeof event.placeholder === 'string' ? event.placeholder : null,
@@ -377,20 +403,23 @@ export async function agentCallStream(
  *  subscribes to the session so turns added later, from the terminal,
  *  append here. The live sweep never appends this turn a second time: the
  *  ledger records it as imported with this node as the tail. */
-export async function adoptPiTurn(nodeId: string, session: { sessionFile: string | null; sessionId: string | null; cwd: string }, question: string): Promise<boolean> {
+export async function adoptAgentTurn(nodeId: string, session: { runtime: AgentRuntime; sessionFile: string | null; sessionId: string | null; cwd: string }, question: string): Promise<boolean> {
   const bridge = window.desktopSessions;
   if (!bridge || !session.sessionFile) return false;
-  const marker = '/agent/sessions/';
-  const at = session.sessionFile.indexOf(marker);
-  if (at < 0) return false;
-  const rel = session.sessionFile.slice(at + marker.length);
+  const rootKey = AGENT_RUNTIMES[session.runtime].rootKey;
   try {
-    const { piSessionConversation } = await import('../adapters/pi-session');
+    const roots = await bridge.roots();
+    const root = roots.find((x) => x.key === rootKey);
+    if (!root) return false;
+    const base = root.path.replace(/\/$/, '') + '/';
+    if (!session.sessionFile.startsWith(base)) return false;
+    const rel = session.sessionFile.slice(base.length);
+    const { anyRunnerSessionConversation } = await import('../adapters');
     const { useStore } = await import('../../store');
     const { useProjects, registerLedgerEntry, updateSourceSession, subscribedSessionIds } = await import('../../store/projects');
-    const text = await bridge.read('pi-sessions', rel);
+    const text = await bridge.read(rootKey, rel);
     if (!text) return false;
-    const conv = piSessionConversation(text);
+    const conv = await anyRunnerSessionConversation(text);
     if (!conv?.sessionId) return false;
     const built = conv.build();
     const qa = built.nodes.filter((n) => n.data.importSource);
@@ -428,7 +457,7 @@ export async function adoptPiTurn(nodeId: string, session: { sessionFile: string
     const { projects, activeId } = useProjects.getState();
     const meta = activeId ? projects.find((p) => p.id === activeId) : undefined;
     if (!meta) return true;
-    const entry = { sessionId: conv.sessionId, runner: 'pi', importedCount: idx + 1, tailNodeId: nodeId };
+    const entry = { sessionId: conv.sessionId, runner: session.runtime, importedCount: idx + 1, tailNodeId: nodeId };
     if (subscribedSessionIds(meta).includes(conv.sessionId)) {
       const { patchLedgerEntry } = await import('../../store/projects');
       await patchLedgerEntry(activeId!, conv.sessionId, { importedCount: idx + 1, tailNodeId: nodeId });

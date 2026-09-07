@@ -45,7 +45,7 @@ contextBridge.exposeInMainWorld('desktopSessions', {
 // with that id, ending with `run_end`.
 contextBridge.exposeInMainWorld('desktopAgents', {
   available: () => ipcRenderer.invoke('agents:available'),
-  models: () => ipcRenderer.invoke('agents:models'),
+  models: (runtime) => ipcRenderer.invoke('agents:models', runtime),
   run: (request) => ipcRenderer.invoke('agents:run', request),
   abort: (runId) => ipcRenderer.invoke('agents:abort', runId),
   workspace: (canvasId) => ipcRenderer.invoke('agents:workspace', canvasId),

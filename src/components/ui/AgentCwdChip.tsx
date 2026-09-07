@@ -4,7 +4,7 @@ import { useT } from '../../i18n';
 import { useUiStore } from '../../lib/ui-store';
 import { useProjects, setProjectAgentCwd } from '../../store/projects';
 import { useStore } from '../../store';
-import { isAgentModel, resolveAgentCwd, mirroredCwd, setGuardMode, allowLocation, type CwdChoice } from '../../lib/agents/pi-runtime';
+import { isAgentModel, resolveAgentCwd, mirroredCwd, setGuardMode, allowLocation, type CwdChoice } from '../../lib/agents/agent-runtime';
 
 // Where the agent works, on the toolbar, whenever an agent model is the
 // pick: the chosen folder, the mirrored project, or the canvas's own

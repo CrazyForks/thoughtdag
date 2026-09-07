@@ -91,6 +91,8 @@ interface DesktopAgentModel {
 }
 
 interface DesktopAgentRunRequest {
+  /** which runtime runs the turn (default: pi) */
+  runtime?: 'pi' | 'codex' | 'claude-code';
   /** absolute working directory the agent runs in */
   cwd: string;
   prompt: string;
@@ -105,8 +107,8 @@ interface DesktopAgentRunRequest {
 
 interface DesktopAgentsBridge {
   /** where the runtime's binary is, or null when not installed */
-  available(): Promise<{ pi: string | null }>;
-  models(): Promise<{ installed: boolean; models: DesktopAgentModel[]; default: string | null; thinkingLevel?: string | null; error?: string }>;
+  available(): Promise<Record<string, string | null>>;
+  models(runtime?: 'pi' | 'codex' | 'claude-code'): Promise<{ installed: boolean; models: DesktopAgentModel[]; default: string | null; thinkingLevel?: string | null; error?: string }>;
   /** resolves with the run id at once; events follow through onEvent */
   run(request: DesktopAgentRunRequest): Promise<string>;
   abort(runId: string): Promise<boolean>;

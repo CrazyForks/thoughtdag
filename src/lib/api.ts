@@ -1,5 +1,5 @@
 import { API_BASE } from './constants';
-import { isAgentModel, agentCallStream } from './agents/pi-runtime';
+import { isAgentModel, agentCallStream } from './agents/agent-runtime';
 import { toast, useUiStore } from './ui-store';
 import { getModelsOnce } from './use-models';
 import { t, fmt } from '../i18n';
@@ -195,7 +195,7 @@ export interface StreamCallbacks {
   /** An agent runtime in the desktop app: what changed on disk during the turn. */
   onAgentChanges?: (changes: { changed: string[]; added: string[]; removed: string[]; truncated?: boolean }) => void;
   /** An agent runtime in the desktop app: which session this turn ran in. */
-  onAgentSession?: (session: { runtime: 'pi'; sessionId: string | null; sessionFile: string | null; cwd: string }) => void;
+  onAgentSession?: (session: { runtime: import('../types').AgentRuntime; sessionId: string | null; sessionFile: string | null; cwd: string }) => void;
   /** Inside DeepSeek Harness: the harness session this generation ran in
       (a fresh one, or the mirrored session it continued). */
   onHarnessSession?: (session: string, continued: boolean) => void;

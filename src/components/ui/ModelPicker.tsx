@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Cpu, KeyRound, RefreshCw } from 'lucide-react';
 import { toast, useUiStore } from '../../lib/ui-store';
 import { useModels, setModelsCache } from '../../lib/use-models';
-import { AGENT_PROVIDER } from '../../lib/agents/pi-runtime';
+import { AGENT_PROVIDER } from '../../lib/agents/agent-runtime';
 import { refreshStoredProviders, pushProviders, storedProviders } from '../../lib/runtime-providers';
 import { fmt } from '../../i18n';
 import { useT } from '../../i18n';
