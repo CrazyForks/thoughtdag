@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld('desktopSessions', {
 // with a run id at once; the run's events arrive through onEvent tagged
 // with that id, ending with `run_end`.
 contextBridge.exposeInMainWorld('desktopAgents', {
+  capabilities: { nativePicker: true },
   available: () => ipcRenderer.invoke('agents:available'),
   models: (runtime) => ipcRenderer.invoke('agents:models', runtime),
   run: (request) => ipcRenderer.invoke('agents:run', request),

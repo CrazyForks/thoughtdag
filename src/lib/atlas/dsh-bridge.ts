@@ -198,10 +198,14 @@ export function installDshSessionsBridge(apiBase: string): void {
     },
     // a harness session opens in the chat; another agent's session has no
     // terminal to open from a browser — the atlas hears "not opened"
-    openInCli: async (runner, _cwd, sessionId) => {
-      if (runner !== 'dsh') return { opened: false, via: 'app' as const, command: '' };
-      select(sessionId);
-      return { opened: true, via: 'app' as const, command: '' };
+    openInCli: async (runner, cwd, sessionId) => {
+      if (runner === 'dsh') { select(sessionId); return { opened: true, via: 'app' as const, command: '' }; }
+      // another runner's session opens in a terminal on the host's machine
+      try {
+        const r = await fetch(api + '/agents/open-in-cli', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ runner, cwd, sessionId }) });
+        if (r.ok) { const j = await r.json() as { opened: boolean; command: string }; return { opened: !!j.opened, via: 'terminal' as const, command: j.command ?? '' }; }
+      } catch { /* no host for it */ }
+      return { opened: false, via: 'app' as const, command: '' };
     },
     openTargets: async () => ({ terminals: [], apps: [{ runner: 'dsh', name: 'DeepSeek Harness' }], prefs: { terminal: '' }, canAddCustom: false }),
     setOpenPrefs: async (prefs) => prefs,

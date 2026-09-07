@@ -71,6 +71,12 @@ async function withAgents(d: ModelData): Promise<ModelData> {
   return extra.length ? { ...d, models: [...d.models, ...extra] } : d;
 }
 
+// an HTTP agents bridge installs after boot; when it lands, the agent group joins the list
+window.addEventListener('td:agents-ready', () => {
+  if (!cache) return;
+  void withAgents(cache).then((merged) => { if (merged !== cache) setModelsCache(merged); });
+});
+
 /** Replace the shared cache (after a runtime-key change) and notify every subscribed picker. */
 export function setModelsCache(d: ModelData): void {
   cache = d;

@@ -760,7 +760,9 @@ let codexRpc = null; // null=not started, 'dead'=CLI absent, else client
 // runs default to are handed out under userData.
 // One module per runtime under agents/, created on first use. A run is
 // addressed by its id: abort and answer find the runtime that owns it.
-const RUNTIME_FACTORIES = { pi: () => require('./agents/pi').createPiRuntime({ log: (line) => console.log(line) }) };
+const RUNTIME_DIR = app.isPackaged ? path.join(process.resourcesPath, 'payload', 'runtime') : path.join(__dirname, '..', 'runtime');
+const agentOps = require(path.join(RUNTIME_DIR, 'agents', 'ops.cjs'));
+const RUNTIME_FACTORIES = { pi: () => require(path.join(RUNTIME_DIR, 'agents', 'pi.cjs')).createPiRuntime({ log: (line) => console.log(line) }) };
 const runtimes = new Map();
 function agentsRuntime(name = 'pi') {
   const key = RUNTIME_FACTORIES[name] ? name : 'pi';
@@ -769,17 +771,7 @@ function agentsRuntime(name = 'pi') {
 }
 const runOwners = new Map(); // runId → runtime name
 
-const WORKSPACE_ID = /^[\w.-]{1,80}$/;
-async function workspaceFor(canvasId) {
-  if (!WORKSPACE_ID.test(String(canvasId))) throw new Error('bad canvas id');
-  const dir = path.join(app.getPath('userData'), 'workspaces', String(canvasId));
-  await fsp.mkdir(dir, { recursive: true });
-  const readme = path.join(dir, 'README.md');
-  if (!(await fileExists(readme))) {
-    await fsp.writeFile(readme, `# ThoughtDAG workspace\n\nThis folder is the working directory of one ThoughtDAG canvas (id ${canvasId}).\nAgents launched from that canvas read, write and run commands here unless the\ncanvas mirrors a session that already has a working directory of its own.\n`);
-  }
-  return dir;
-}
+const workspaceFor = (canvasId) => agentOps.workspaceFor(path.join(app.getPath('userData'), 'workspaces'), canvasId);
 
 function setupAgents() {
   ipcMain.handle('agents:available', async () => {
@@ -800,39 +792,13 @@ function setupAgents() {
   ipcMain.handle('agents:abort', async (_e, runId) => agentsRuntime(runOwners.get(String(runId))).abort(String(runId)));
   ipcMain.handle('agents:workspace', async (_e, canvasId) => workspaceFor(canvasId));
   ipcMain.handle('agents:answer', async (_e, runId, requestId, response) => agentsRuntime(runOwners.get(String(runId))).answer(String(runId), String(requestId), response));
-  // the guard's tuning for a working directory: <cwd>/.thoughtdag/guard.json
-  ipcMain.handle('agents:guard-write', async (_e, cwd, config) => {
-    if (typeof cwd !== 'string' || !path.isAbsolute(cwd)) return false;
-    const dir = path.join(cwd, '.thoughtdag');
-    await fsp.mkdir(dir, { recursive: true });
-    const mode = config?.mode === 'allow' ? 'allow' : 'ask';
-    const allow = Array.isArray(config?.allow) ? config.allow.filter((x) => typeof x === 'string' && path.isAbsolute(x)).slice(0, 100) : [];
-    await fsp.writeFile(path.join(dir, 'guard.json'), JSON.stringify({ mode, allow }, null, 2));
-    return true;
-  });
+  ipcMain.handle('agents:guard-write', async (_e, cwd, config) => agentOps.writeGuard(cwd, config));
   // a folder the person picks as a canvas's working directory
   ipcMain.handle('agents:pick-cwd', async () => {
     const r = await dialog.showOpenDialog(win ?? undefined, { properties: ['openDirectory', 'createDirectory'] });
     return r.canceled || !r.filePaths?.[0] ? null : r.filePaths[0];
   });
-  // the canvas's materials, written where the agent can read them:
-  // <cwd>/.thoughtdag/materials/<name> (text as-is, binaries from base64)
-  ipcMain.handle('agents:write-materials', async (_e, cwd, files) => {
-    if (typeof cwd !== 'string' || !path.isAbsolute(cwd) || !Array.isArray(files)) return { dir: null, written: [] };
-    const dir = path.join(cwd, '.thoughtdag', 'materials');
-    await fsp.mkdir(dir, { recursive: true });
-    const written = [];
-    for (const f of files.slice(0, 40)) {
-      const name = String(f?.name ?? '').replace(/[\/\\:*?"<>|]/g, '_').slice(0, 120);
-      if (!name || typeof f.content !== 'string') continue;
-      const target = path.join(dir, name);
-      try {
-        await fsp.writeFile(target, f.encoding === 'base64' ? Buffer.from(f.content, 'base64') : f.content);
-        written.push(target);
-      } catch { /* one bad file does not stop the rest */ }
-    }
-    return { dir, written };
-  });
+  ipcMain.handle('agents:write-materials', async (_e, cwd, files) => agentOps.writeMaterials(cwd, files));
 }
 
 function codexAppServer() {

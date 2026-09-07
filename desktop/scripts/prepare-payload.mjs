@@ -54,6 +54,8 @@ for (const name of SERVER_DEPS) {
 rmSync(payload, { recursive: true, force: true });
 mkdirSync(payload, { recursive: true });
 cpSync(path.join(root, 'server.mjs'), path.join(payload, 'server.mjs'));
+// the shared agent runtime (Pi today), used by the shell's main process
+cpSync(path.join(root, 'runtime'), path.join(payload, 'runtime'), { recursive: true });
 // the one-command handoff files the app can install into agents
 mkdirSync(path.join(payload, 'commands'), { recursive: true });
 cpSync(path.join(root, 'protocol', 'adapters', 'claude-code', 'thoughtdag.md'), path.join(payload, 'commands', 'claude-code-thoughtdag.md'));

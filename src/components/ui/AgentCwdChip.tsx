@@ -22,6 +22,7 @@ export default function AgentCwdChip() {
   const [choice, setChoice] = useState<CwdChoice | null>(null);
   const [mirrored, setMirrored] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
   const visible = !!window.desktopAgents && isAgentModel(selectedModel);
 
@@ -51,9 +52,14 @@ export default function AgentCwdChip() {
     await setProjectAgentCwd(activeId, cwd);
     setOpen(false);
   };
+  const nativePicker = window.desktopAgents?.capabilities?.nativePicker !== false;
   const pick = async () => {
     const dir = await window.desktopAgents!.pickCwd();
     if (dir) await choose(dir);
+  };
+  const submitTyped = async () => {
+    const v = typed.trim();
+    if (v.startsWith('/')) await choose(v);
   };
 
   return (
@@ -91,9 +97,23 @@ export default function AgentCwdChip() {
             </button>
           ))}
           <div className="border-t border-line/60 my-1" />
-          <button onClick={() => void pick()} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-wash flex items-center gap-2" data-agent-cwd-pick>
-            <FolderOpen size={14} strokeWidth={1.75} className="text-ink-faint shrink-0" /> {t('agent.cwdPick')}
-          </button>
+          {nativePicker ? (
+            <button onClick={() => void pick()} className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-wash flex items-center gap-2" data-agent-cwd-pick>
+              <FolderOpen size={14} strokeWidth={1.75} className="text-ink-faint shrink-0" /> {t('agent.cwdPick')}
+            </button>
+          ) : (
+            <div className="px-3 py-2 flex items-center gap-2">
+              <input
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') void submitTyped(); }}
+                placeholder={t('agent.cwdType')}
+                className="flex-1 min-w-0 text-xs font-mono bg-wash border border-line rounded-md px-2 py-1 focus:outline-none focus:border-accent/60"
+                data-agent-cwd-input
+              />
+              <button onClick={() => void submitTyped()} className="text-xs text-accent hover:underline shrink-0">{t('agent.cwdUse')}</button>
+            </div>
+          )}
           <div className="border-t border-line/60 my-1" />
           <p className="text-2xs text-ink-faint uppercase tracking-wider font-medium px-3 pt-1 pb-1">{t('agent.guard')}</p>
           <button onClick={() => { void setGuardMode('ask'); setOpen(false); }} className="w-full text-left px-3 py-1.5 text-xs hover:bg-wash flex items-center gap-2" data-agent-guard="ask">

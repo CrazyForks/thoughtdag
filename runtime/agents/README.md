@@ -1,6 +1,6 @@
 # Agent runtimes
 
-One file per runtime. Each exports a factory returning the same surface:
+One file per runtime (CommonJS, `.cjs`, so it loads the same under any package type). Each exports a factory returning the same surface:
 
 - `available()` → where the binary is, or null
 - `models()` → `{ installed, models: [{ provider, id, name, reasoning, vision }], default }`

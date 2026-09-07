@@ -209,6 +209,8 @@ export const en = {
   'agent.cwdMirrored': 'Mirrored project',
   'agent.cwdRecent': 'Recent',
   'agent.cwdPick': 'Choose a folder…',
+  'agent.cwdType': 'Type the full path of a folder…',
+  'agent.cwdUse': 'Use',
   'agent.guard': 'Steps outside the working directory',
   'agent.continued': 'continued',
   'agent.openDir': 'Open the directory',

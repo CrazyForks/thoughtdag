@@ -536,6 +536,22 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '50mb' })); // Support image uploads
 
+// ── agent runtimes and the other agents' session files, when this server
+// runs on the person's machine (the desktop shell has its own road; the
+// hosted deployment has neither, and answers 404) ──
+import { createRequire } from 'node:module';
+const localRequire = createRequire(import.meta.url);
+let agentsHttp = null;
+app.all(/^\/api\/agents\/.*/, async (req, res) => {
+  if (!agentsHttp) agentsHttp = localRequire('./runtime/agents/http.cjs').createAgentsHttp({ log: (line) => console.log(line) });
+  const handled = await agentsHttp.handle(req, res, req.path.replace(/^\/api/, ''), req.body ?? null);
+  if (!handled) res.status(404).json({ error: 'not found' });
+});
+app.get(/^\/api\/roots(\/.*)?$/, async (req, res) => {
+  const handled = await localRequire('./runtime/sessions-fs.cjs').handleSessions(req, res, req.path.replace(/^\/api/, ''));
+  if (!handled) res.status(404).json({ error: 'not found' });
+});
+
 // PDF text extraction (pdfjs-dist) + page rendering (pdftoppm/poppler)
 app.post('/api/pdf-extract', async (req, res) => {
   try {

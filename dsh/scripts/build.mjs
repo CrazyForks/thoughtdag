@@ -39,3 +39,10 @@ const esbuild = resolve(repo, 'node_modules/.bin/esbuild')
 const whyOut = resolve(__dirname, '../lib/why.mjs')
 execFileSync(esbuild, [resolve(repo, 'cli/src/lib.ts'), '--bundle', '--platform=node', '--format=esm', '--target=node22', '--define:import.meta.env={}', '--outfile=' + whyOut, '--log-level=warning'], { stdio: 'inherit' })
 console.log('why layer written to', whyOut)
+
+// The shared agent runtime (plain Node): the host serves it over HTTP so the
+// canvas inside the harness runs agents exactly as the desktop shell does
+const runtimeOut = resolve(__dirname, '../lib/runtime')
+rmSync(runtimeOut, { recursive: true, force: true })
+cpSync(resolve(repo, 'runtime'), runtimeOut, { recursive: true })
+console.log('agent runtime written to', runtimeOut)

@@ -209,6 +209,8 @@ export const zh: Record<keyof typeof en, string> = {
   'agent.cwdMirrored': '镜像的项目',
   'agent.cwdRecent': '最近用过',
   'agent.cwdPick': '选择文件夹…',
+  'agent.cwdType': '输入目录的完整路径…',
+  'agent.cwdUse': '使用',
   'agent.guard': '工作目录之外的操作',
   'agent.continued': '续接',
   'agent.openDir': '打开目录',

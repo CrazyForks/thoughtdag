@@ -70,6 +70,7 @@
 import { randomUUID } from 'node:crypto'
 import { open, readFile, readdir, stat } from 'node:fs/promises'
 import { extname, join, normalize, resolve, sep } from 'node:path'
+import { createRequire } from 'node:module'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { zstdDecompressSync } from 'node:zlib'
@@ -78,7 +79,17 @@ export const name = 'thoughtdag'
 export const inject = ['webServer', 'sessions', 'sessionController', 'agents', 'llm', 'attachments', 'web', 'tools', 'commands', 'systemPrompt', 'approval']
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
+const require = createRequire(import.meta.url)
 const APP_DIR = resolve(__dirname, '../dist-app')
+// the shared runtime, copied under lib/runtime by the build (Node code, no harness dependency)
+let agentsHttpInstance = null
+function agentsHttp() {
+  if (!agentsHttpInstance) {
+    const { createAgentsHttp } = require(resolve(__dirname, 'runtime', 'agents', 'http.cjs'))
+    agentsHttpInstance = createAgentsHttp({ log: (line) => console.error(line) })
+  }
+  return agentsHttpInstance
+}
 
 const MAX_BODY_BYTES = 32 * 1024
 // a compiled canvas context can be long; the write endpoints take up to this
@@ -869,6 +880,11 @@ export async function apply(ctx, config) {
           ? html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+\n/g, '\n').replace(/[ \t]+/g, ' ').trim()
           : String(r.body?.content ?? '')
         return sendJson(res, 200, { title, text, fetchedAt: new Date().toISOString(), ...(html ? { html } : {}), url: r.url ?? target, truncated: !!r.truncated })
+      }
+      // ── agent runtimes on this machine (Pi today), the same surface the desktop shell has ──
+      if (path.startsWith('/agents/')) {
+        const body = req.method === 'POST' ? await readJson(req, MAX_WRITE_BODY_BYTES).catch(() => null) : null
+        if (await agentsHttp().handle(req, res, path, body)) return
       }
       // ── model connection (the SPA's proxy protocol, on the harness's providers) ──
       if (path === '/models' && req.method === 'GET') return sendJson(res, 200, await modelsPayload(ctx))

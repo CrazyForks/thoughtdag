@@ -106,6 +106,8 @@ interface DesktopAgentRunRequest {
 }
 
 interface DesktopAgentsBridge {
+  /** what this host can do beyond the calls: a native folder dialog */
+  capabilities?: { nativePicker: boolean };
   /** where the runtime's binary is, or null when not installed */
   available(): Promise<Record<string, string | null>>;
   models(runtime?: 'pi' | 'codex' | 'claude-code'): Promise<{ installed: boolean; models: DesktopAgentModel[]; default: string | null; thinkingLevel?: string | null; error?: string }>;
