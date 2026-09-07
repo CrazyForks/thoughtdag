@@ -1,4 +1,5 @@
 import { API_BASE } from './constants';
+import { isAgentModel, agentCallStream } from './agents/pi-runtime';
 import { toast, useUiStore } from './ui-store';
 import { getModelsOnce } from './use-models';
 import { t, fmt } from '../i18n';
@@ -180,6 +181,8 @@ export interface StreamCallbacks {
   onSources?: (sources: import('../types').Reference[]) => void;
   /** Reasoning/thinking tokens (models that emit them; never enters context). */
   onReasoning?: (chunk: string, fullSoFar: string) => void;
+  /** An agent runtime in the desktop app: which session this turn ran in. */
+  onAgentSession?: (session: { runtime: 'pi'; sessionId: string | null; sessionFile: string | null; cwd: string }) => void;
   /** Inside DeepSeek Harness: the harness session this generation ran in
       (a fresh one, or the mirrored session it continued). */
   onHarnessSession?: (session: string, continued: boolean) => void;
@@ -215,15 +218,22 @@ export async function llmCallStream(
   callbacks?: StreamCallbacks,
   toolPrefs?: ToolPrefs,
   modelOverride?: string,
-  /** Inside DeepSeek Harness only: which working directory a harness-agent
-      turn runs in, and which mirrored session it continues (a tail
-      follow-up). Ignored by every other backend. */
-  harness?: { cwd?: string; session?: string },
+  /** Agent lanes only: which working directory the turn runs in, and which
+      session it continues (a tail follow-up) — the harness's inside
+      DeepSeek Harness, the desktop runtime's (Pi) in the app. Ignored by
+      every model backend. */
+  harness?: { cwd?: string; session?: string; sessionPath?: string; forkEntryId?: string },
 ): Promise<string> {
   // On the Workers deployment, OpenRouter models stream straight from the
   // browser — the proxy's CPU allowance can't survive big contexts + heavy
   // thinking models, and the key staying local is a feature in itself.
   const modelId = modelOverride || useUiStore.getState().selectedModel || undefined;
+  // An agent runtime in the desktop app: Pi runs the turn with its own
+  // tools; the canvas's compiled context rides ahead of the question.
+  if (modelId && isAgentModel(modelId) && window.desktopAgents) {
+    callbacks?.onDispatch?.({ messages: contextMessages, images: images ?? [], model: modelId, toolPrefs: toolPrefs ?? {}, lane: 'proxy' });
+    return agentCallStream(contextMessages, onChunk, signal, images, callbacks, modelId, harness?.cwd ? { cwd: harness.cwd, sessionPath: harness.sessionPath, forkEntryId: harness.forkEntryId } : undefined);
+  }
   images = await imagesForModel(modelId, images);
 
   // The proxy substituting a vision stand-in is a verdict on the model's

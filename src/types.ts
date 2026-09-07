@@ -94,6 +94,8 @@ export interface ThoughtData extends Record<string, unknown> {
       the OLD text (cleared on the first new chunk) — display shows the live
       thinking, not the stale answer. */
   restreaming?: boolean;
+  /** The runtime session this node's last agent turn ran in (desktop agent lanes). */
+  agentSession?: { runtime: 'pi'; sessionId: string | null; sessionFile: string | null; cwd: string };
   /** Transient: an agent runtime is waiting for the person's decision on one action. */
   pendingApproval?: ApprovalRequest;
   /** Every approval decided during this turn's generations, oldest first. */

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Cpu, KeyRound, RefreshCw } from 'lucide-react';
 import { toast, useUiStore } from '../../lib/ui-store';
 import { useModels, setModelsCache } from '../../lib/use-models';
+import { AGENT_PROVIDER } from '../../lib/agents/pi-runtime';
 import { refreshStoredProviders, pushProviders, storedProviders } from '../../lib/runtime-providers';
 import { fmt } from '../../i18n';
 import { useT } from '../../i18n';
@@ -111,7 +112,7 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
           )}
           {providers.map((provider) => (
             <div key={provider}>
-              <p className="text-2xs text-ink-faint uppercase tracking-wider font-medium px-3 pt-2 pb-1">{provider}</p>
+              <p className="text-2xs text-ink-faint uppercase tracking-wider font-medium px-3 pt-2 pb-1">{provider === AGENT_PROVIDER ? t('model.agentGroup') : provider}</p>
               {models.filter((m) => m.provider === provider).map((m) => (
                 <button
                   key={m.id}

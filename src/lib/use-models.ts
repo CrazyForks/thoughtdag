@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { API_BASE } from './constants';
 import { storedProviders, pushProviders } from './runtime-providers';
+import { agentModels, AGENT_PROVIDER } from './agents/pi-runtime';
 
 export interface ModelInfo {
   id: string;
@@ -34,12 +35,12 @@ export function getModelsOnce(): Promise<ModelData | null> {
     const stored = storedProviders();
     if (stored.length > 0) {
       try {
-        return (cache = await pushProviders(stored));
+        return (cache = await withAgents(await pushProviders(stored)));
       } catch { /* proxy down or bad config: fall through to the plain list */ }
     }
     return fetch(`${API_BASE}/api/models`)
       .then((r) => r.json())
-      .then((d) => (cache = { models: d.models ?? [], default: d.default ?? null, capabilities: d.capabilities }))
+      .then(async (d) => (cache = await withAgents({ models: d.models ?? [], default: d.default ?? null, capabilities: d.capabilities })))
       .catch(() => null);
   })();
   return inflight;
@@ -62,11 +63,25 @@ export function reconcileModelId(pinned: string, models: ModelInfo[]): string | 
   return match ? match.id : null;
 }
 
+/** The agent runtimes' models (Pi, in the desktop app) appended to a list;
+    a list that already carries them is left alone. */
+async function withAgents(d: ModelData): Promise<ModelData> {
+  if (d.models.some((m) => m.provider === AGENT_PROVIDER)) return d;
+  const extra = await agentModels();
+  return extra.length ? { ...d, models: [...d.models, ...extra] } : d;
+}
+
 /** Replace the shared cache (after a runtime-key change) and notify every subscribed picker. */
 export function setModelsCache(d: ModelData): void {
   cache = d;
   inflight = Promise.resolve(d);
   for (const fn of listeners) fn(d);
+  void withAgents(d).then((merged) => {
+    if (merged === d || cache !== d) return;
+    cache = merged;
+    inflight = Promise.resolve(merged);
+    for (const fn of listeners) fn(merged);
+  });
 }
 
 export function useModels(): ModelData | null {
