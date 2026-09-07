@@ -80,9 +80,45 @@ interface DesktopCanvasBridge {
   remove(projectId: string): Promise<{ ok: boolean }>;
 }
 
+/** An agent runtime the shell can hand a turn to (Pi today): its models,
+ *  a run on a working directory, the run's events, an abort. */
+interface DesktopAgentModel {
+  provider: string;
+  id: string;
+  name: string;
+  reasoning: boolean;
+  vision: boolean;
+}
+
+interface DesktopAgentRunRequest {
+  /** absolute working directory the agent runs in */
+  cwd: string;
+  prompt: string;
+  images?: { type: 'image'; data: string; mimeType: string }[];
+  /** continue this session file (absolute path) instead of opening a fresh one */
+  sessionPath?: string;
+  /** branch the current session at this entry (with sessionPath) */
+  forkEntryId?: string;
+  model?: { provider: string; id: string };
+  thinkingLevel?: string;
+}
+
+interface DesktopAgentsBridge {
+  /** where the runtime's binary is, or null when not installed */
+  available(): Promise<{ pi: string | null }>;
+  models(): Promise<{ installed: boolean; models: DesktopAgentModel[]; default: string | null; thinkingLevel?: string | null; error?: string }>;
+  /** resolves with the run id at once; events follow through onEvent */
+  run(request: DesktopAgentRunRequest): Promise<string>;
+  abort(runId: string): Promise<boolean>;
+  /** the shell-managed working directory of a canvas, created on demand */
+  workspace(canvasId: string): Promise<string>;
+  onEvent(cb: (payload: { runId: string; event: Record<string, unknown> & { type: string } }) => void): void;
+}
+
 interface Window {
   desktop?: DesktopBridge;
   desktopSessions?: DesktopSessionsBridge;
   desktopLocal?: DesktopLocalBridge;
   desktopCanvas?: DesktopCanvasBridge;
+  desktopAgents?: DesktopAgentsBridge;
 }

@@ -40,6 +40,18 @@ contextBridge.exposeInMainWorld('desktopSessions', {
 // Local paths mentioned in responses: open here, on this machine (folder
 // or file in Finder, image/PDF in its viewer), and images inline as data
 // URLs. Nothing executable is ever launched.
+// Agent runtimes the shell can hand a turn to (Pi today). `run` resolves
+// with a run id at once; the run's events arrive through onEvent tagged
+// with that id, ending with `run_end`.
+contextBridge.exposeInMainWorld('desktopAgents', {
+  available: () => ipcRenderer.invoke('agents:available'),
+  models: () => ipcRenderer.invoke('agents:models'),
+  run: (request) => ipcRenderer.invoke('agents:run', request),
+  abort: (runId) => ipcRenderer.invoke('agents:abort', runId),
+  workspace: (canvasId) => ipcRenderer.invoke('agents:workspace', canvasId),
+  onEvent: (cb) => { ipcRenderer.on('agents:event', (_e, payload) => cb(payload)); },
+});
+
 contextBridge.exposeInMainWorld('desktopLocal', {
   open: (p) => ipcRenderer.invoke('local:open', p),
   image: (p) => ipcRenderer.invoke('local:image', p),

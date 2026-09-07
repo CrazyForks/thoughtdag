@@ -752,6 +752,45 @@ ipcMain.handle('commands:remove', (_e, runner) => {
 // File mirroring (Tier 1) stays the import truth; this layer only
 // reads. No codex CLI → every call answers null, the UI stays Tier 1.
 let codexRpc = null; // null=not started, 'dead'=CLI absent, else client
+// ── agent runtimes ─────────────────────────────────────────────────────
+// Pi as an agent the canvas can hand a turn to. The runtime lives in
+// agents/pi.js; here it is created on first use, its events are relayed to
+// the renderer tagged by run, and the per-canvas workspace directories the
+// runs default to are handed out under userData.
+let piRuntime = null;
+function agentsRuntime() {
+  if (!piRuntime) {
+    const { createPiRuntime } = require('./agents/pi');
+    piRuntime = createPiRuntime({ log: (line) => console.log(line) });
+  }
+  return piRuntime;
+}
+
+const WORKSPACE_ID = /^[\w.-]{1,80}$/;
+async function workspaceFor(canvasId) {
+  if (!WORKSPACE_ID.test(String(canvasId))) throw new Error('bad canvas id');
+  const dir = path.join(app.getPath('userData'), 'workspaces', String(canvasId));
+  await fsp.mkdir(dir, { recursive: true });
+  const readme = path.join(dir, 'README.md');
+  if (!(await fileExists(readme))) {
+    await fsp.writeFile(readme, `# ThoughtDAG workspace\n\nThis folder is the working directory of one ThoughtDAG canvas (id ${canvasId}).\nAgents launched from that canvas read, write and run commands here unless the\ncanvas mirrors a session that already has a working directory of its own.\n`);
+  }
+  return dir;
+}
+
+function setupAgents() {
+  ipcMain.handle('agents:available', async () => ({ pi: await agentsRuntime().available() }));
+  ipcMain.handle('agents:models', async () => {
+    try { return await agentsRuntime().models(); } catch (e) { return { installed: false, models: [], default: null, error: e instanceof Error ? e.message : String(e) }; }
+  });
+  ipcMain.handle('agents:run', async (_e, req) => {
+    const r = req && typeof req === 'object' ? req : {};
+    return agentsRuntime().run(r, (payload) => { if (win && !win.isDestroyed()) win.webContents.send('agents:event', payload); });
+  });
+  ipcMain.handle('agents:abort', async (_e, runId) => agentsRuntime().abort(String(runId)));
+  ipcMain.handle('agents:workspace', async (_e, canvasId) => workspaceFor(canvasId));
+}
+
 function codexAppServer() {
   if (codexRpc === 'dead') return null;
   if (codexRpc) return codexRpc;
@@ -843,6 +882,7 @@ if (!lock) {
   app.whenReady().then(() => {
     void boot();
     setupSessionAtlas();
+    setupAgents();
     if (app.isPackaged) {
       setupAutoUpdate();
     } else {
@@ -852,5 +892,5 @@ if (!lock) {
   });
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) boot(); });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-  app.on('will-quit', () => { serverProc?.kill(); if (codexRpc && codexRpc !== 'dead') codexRpc.proc.kill(); });
+  app.on('will-quit', () => { serverProc?.kill(); if (codexRpc && codexRpc !== 'dead') codexRpc.proc.kill(); piRuntime?.shutdown(); });
 }
