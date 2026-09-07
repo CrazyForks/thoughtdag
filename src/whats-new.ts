@@ -32,6 +32,16 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.4.8',
+    date: '2026-09-07',
+    announce: false,
+    lead: {
+      zh: 'DeepSeek Harness 插件在 Windows 上能打开了：静态资源和会话目录的路径守卫此前只认正斜杠，Windows 用户看到的是一片 403。感谢 GitHub 上的报告（#23）。桌面版本次只同步版本号。',
+      en: 'The DeepSeek Harness plugin now opens on Windows: the path guards for static assets and session directories only accepted forward slashes, so Windows users saw nothing but 403s. Thanks to the report on GitHub (#23). The desktop app only moves its version number this time.',
+    },
+    items: [],
+  },
+  {
     version: '0.4.7',
     date: '2026-09-07',
     announce: false,

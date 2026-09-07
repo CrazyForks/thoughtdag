@@ -69,7 +69,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { open, readFile, readdir, stat } from 'node:fs/promises'
-import { extname, join, normalize, resolve } from 'node:path'
+import { extname, join, normalize, resolve, sep } from 'node:path'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { zstdDecompressSync } from 'node:zlib'
@@ -138,7 +138,9 @@ function sendFile(res, contentType, body) {
 function assetPath(rel) {
   const normalized = normalize(rel)
   const abs = resolve(APP_DIR, normalized)
-  if (abs !== APP_DIR && !abs.startsWith(APP_DIR + '/')) return null
+  // the platform's separator: resolve() hands back backslashes on Windows,
+  // and a check against '/' there rejects every path (issue #23)
+  if (abs !== APP_DIR && !abs.startsWith(APP_DIR + sep)) return null
   return abs
 }
 
@@ -378,7 +380,7 @@ function fileInRoot(rootKey, rel) {
   if (!root) throw new HttpError(404, 'no such root')
   if (typeof rel !== 'string' || !rel) throw new HttpError(400, 'rel required')
   const abs = resolve(root, rel)
-  if (abs !== root && !abs.startsWith(root + '/')) throw new HttpError(400, 'rel escapes its root')
+  if (abs !== root && !abs.startsWith(root + sep)) throw new HttpError(400, 'rel escapes its root')
   return abs
 }
 
