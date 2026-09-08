@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Cpu, KeyRound, RefreshCw, Info, Loader2 } from 'lucide-react';
 import { toast, useUiStore } from '../../lib/ui-store';
-import { useModels, setModelsCache } from '../../lib/use-models';
-import { AGENT_PROVIDER } from '../../lib/agents/agent-runtime';
+import { useModels, setModelsCache, ensureAgentsFresh, type ModelInfo } from '../../lib/use-models';
+import { AGENT_PROVIDER, isAgentModel } from '../../lib/agents/agent-runtime';
 import { refreshStoredProviders, pushProviders, storedProviders } from '../../lib/runtime-providers';
 import { fmt } from '../../i18n';
 import { useT } from '../../i18n';
@@ -27,7 +27,15 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
   const data = useModels();
   const [open, setOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // the effort step unfolded under a just-picked agent model (see pick); closes with the menu
+  const [effortStepFor, setEffortStepFor] = useState<string | null>(null);
+  const agentEffort = useUiStore((s) => s.agentEffort);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  // the runtimes are asked for their catalogs the first time a picker
+  // opens, not at launch: a CLI to start is seconds and memory the launch
+  // should not pay for
+  useEffect(() => { if (open) ensureAgentsFresh(); }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -67,15 +75,30 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
   // picker has somewhere to say so
   if (data?.agentsPending && !providers.includes(AGENT_PROVIDER)) providers.push(AGENT_PROVIDER);
 
-  const label = nodeMode
-    ? (active ? active.name : t('model.inherit'))
-    : (active?.name ?? activeId ?? (models.length === 0 ? t('model.none') : null));
 
+  // Picking an agent model that reports effort levels keeps the menu open and
+  // unfolds the effort step right under the entry: the level is a decision the
+  // person should see being made, not a row to discover later. OK closes.
   const pick = (id: string | null) => {
     if (nodeMode) onChange!(id ?? undefined);
     else setSelectedModel(id === data?.default ? null : id);
+    const m = id ? models.find((x) => x.id === id) : null;
+    if (m && isAgentModel(m.id) && (m.efforts?.length ?? 0) > 0) { setEffortStepFor(m.id); return; }
     setOpen(false);
   };
+  // the level the next turn will run at, as far as the runtime told us
+  const effortWord = (m: ModelInfo | null | undefined): string => {
+    if (!m || !isAgentModel(m.id) || !m.efforts?.length) return '';
+    return m.efforts.includes(agentEffort) ? agentEffort : (m.defaultEffort ?? '');
+  };
+  const withEffort = (m: ModelInfo) => (effortWord(m) ? `${m.name} · ${effortWord(m)}` : m.name);
+
+  // a node without its own choice follows the global one: the button still
+  // names that model in full (agent · model · effort), the tint says it is inherited
+  const globalActive = globalId ? models.find((m) => m.id === globalId) : null;
+  const label = nodeMode
+    ? (active ? withEffort(active) : (globalActive ? withEffort(globalActive) : t('model.inherit')))
+    : (active ? withEffort(active) : (activeId ?? (models.length === 0 ? t('model.none') : null)));
 
   return (
     <div ref={rootRef} className="relative">
@@ -83,14 +106,14 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
         onClick={(e) => {
           e.stopPropagation();
           if (noModels) useUiStore.getState().setApiKeyModalOpen(true);
-          else setOpen((v) => !v);
+          else { setEffortStepFor(null); setOpen((v) => !v); }
         }}
         className={compact
           ? `text-xs px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 max-w-[200px] ${value ? 'bg-accent/10 text-accent' : 'bg-wash hover:bg-line text-ink-muted'}`
           : noModels
             ? 'bg-accent/10 backdrop-blur border border-accent/40 rounded-lg h-8 px-2.5 flex items-center gap-1.5 shadow-sm hover:bg-accent/20 transition-colors text-accent max-w-[190px]'
             : 'bg-card/90 backdrop-blur border border-line rounded-lg h-8 px-2.5 flex items-center gap-1.5 shadow-sm hover:bg-wash transition-colors text-ink-muted max-w-[190px]'}
-        title={noModels ? t('apikey.entryTitle') : t('toolbar.model')}
+        title={noModels ? t('apikey.entryTitle') : nodeMode && !value ? t('model.inherit') : t('toolbar.model')}
         data-apikey-entry={noModels || undefined}
       >
         {noModels
@@ -124,8 +147,8 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
                 <p className="text-2xs text-ink-faint px-3 pb-1.5">{t('model.agentGroupLoading')}</p>
               )}
               {models.filter((m) => m.provider === provider).map((m) => (
+                <div key={m.id}>
                 <button
-                  key={m.id}
                   onClick={() => pick(m.id)}
                   className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors hover:bg-wash ${
                     m.id === activeId ? 'text-accent font-medium' : 'text-ink'
@@ -135,6 +158,8 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
                   {m.vision && <span className="text-2xs text-ink-faint shrink-0">{t('model.vision')}</span>}
                   {m.id === activeId && <Check size={13} strokeWidth={2} className="shrink-0" />}
                 </button>
+                {effortStepFor === m.id && <EffortStep model={m} onDone={() => { setEffortStepFor(null); setOpen(false); }} />}
+              </div>
               ))}
             </div>
           ))}
@@ -168,6 +193,35 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
           {!nodeMode && <GlobalCapabilities />}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Effort step: unfolds under the agent model just picked ──
+// The runtime's own levels, in its own words (read from the CLI, never
+// translated). The first option is its default, named when it says. The
+// choice is global like the model choice; OK closes the menu.
+function EffortStep({ model, onDone }: { model: ModelInfo; onDone: () => void }) {
+  const t = useT();
+  const effort = useUiStore((s) => s.agentEffort);
+  const setEffort = useUiStore((s) => s.setAgentEffort);
+  const levels = model.efforts ?? [];
+  const value = levels.includes(effort) ? effort : '';
+  return (
+    <div className="mx-3 mb-1.5 mt-0.5 rounded-lg bg-wash/70 border border-line px-2 py-1.5 flex items-center gap-2" title={t('model.effortHint')} data-agent-effort>
+      <span className="text-2xs text-ink-faint uppercase tracking-wider font-medium shrink-0">{t('model.effort')}</span>
+      <select
+        value={value}
+        onChange={(e) => setEffort(e.target.value)}
+        onClick={(e) => e.stopPropagation()}
+        autoFocus
+        className="flex-1 min-w-0 text-2xs text-ink bg-card border border-line rounded-md px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-accent/40"
+        data-agent-effort-select
+      >
+        <option value="">{model.defaultEffort ? fmt(t('model.effortDefaultKnown'), { level: model.defaultEffort }) : t('model.effortDefault')}</option>
+        {levels.map((l) => <option key={l} value={l}>{l}</option>)}
+      </select>
+      <button onClick={(e) => { e.stopPropagation(); onDone(); }} className="text-2xs px-2 py-1 rounded-md bg-accent text-white hover:bg-accent/90 transition-colors shrink-0" data-agent-effort-ok>{t('model.effortConfirm')}</button>
     </div>
   );
 }

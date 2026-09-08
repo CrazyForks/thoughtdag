@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { describeModel } from '../lib/use-models';
 import { toolFingerprint, turnComposition, footprint, conclusionOf } from '../lib/turn-insight';
 import { Handle, Position, useReactFlow, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import { AlertTriangle, Archive, BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, GitBranch, Globe, Hourglass, Minimize2, Paperclip, RefreshCw, Send, Split, Square, Star, Trash2, UserRound, X, Pencil } from 'lucide-react';
@@ -713,8 +714,10 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
               <Hourglass size={13} strokeWidth={1.75} /> {t('paradigm.waitingUpstream')}
             </div>
           ) : data.isLoading ? (
-            data.pendingApproval ? (
-              <ApprovalCard nodeId={id} request={data.pendingApproval} compact />
+            data.pendingApprovals?.length ? (
+              <div className="flex flex-col gap-1.5">
+                {data.pendingApprovals.map((req) => <ApprovalCard key={req.id} nodeId={id} request={req} compact />)}
+              </div>
             ) : data.agentTrace && data.agentTrace.length > 0 && (!data.response || data.restreaming) ? (
               <AgentTrace entries={data.agentTrace} compact />
             ) : data.response && !data.restreaming ? (
@@ -861,10 +864,10 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
               )}
               {(data.generatedBy?.[data.responseIndex]) && (
                 <span
-                  className="text-2xs text-ink-faint font-mono ml-1 truncate max-w-[150px]"
-                  title={t('node.generatedByTitle')}
+                  className="text-2xs text-ink-faint font-mono ml-1 truncate flex-1 min-w-0 max-w-[260px]"
+                  title={`${t('node.generatedByTitle')} · ${describeModel(data.generatedBy[data.responseIndex], data.generatedEfforts?.[data.responseIndex])}`}
                 >
-                  {data.generatedBy[data.responseIndex]!.split('/').pop()}
+                  {describeModel(data.generatedBy[data.responseIndex], data.generatedEfforts?.[data.responseIndex], { compact: true })}
                 </span>
               )}
               {data.agentSession?.continued && (

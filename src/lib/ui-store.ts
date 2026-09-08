@@ -23,6 +23,9 @@ interface ConfirmRequest {
 const WEB_SEARCH_KEY = 'thoughtdag.webSearch';
 const SCHOLAR_SEARCH_KEY = 'thoughtdag.scholarSearch';
 const MODEL_KEY = 'thoughtdag.model';
+const EFFORT_KEY = 'thoughtdag.agentEffort';
+/** The effort level for the next agent turn, in that runtime's own words; '' = the runtime's own default. */
+export type AgentEffort = string;
 const MCP_KEY = 'thoughtdag.mcpTools';
 const AUTO_PAUSE_KEY = 'thoughtdag.autoRefreshPaused';
 const HIDE_ANNOTATIONS_KEY = 'thoughtdag.hideAnnotations';
@@ -54,6 +57,7 @@ interface UiState {
   readerJump: { page?: number; threadId?: string } | null;
   /** Selected LLM id; null = server default. */
   selectedModel: string | null;
+  agentEffort: AgentEffort;
   dismissToast: (id: string) => void;
   resolveConfirm: (ok: boolean) => void;
   setTutorialOpen: (open: boolean) => void;
@@ -162,6 +166,7 @@ interface UiState {
   setReaderNodeId: (id: string | null, jump?: { page?: number; threadId?: string }) => void;
   setPanelOpen: (open: boolean) => void;
   setSelectedModel: (model: string | null) => void;
+  setAgentEffort: (level: AgentEffort) => void;
 }
 
 export const useUiStore = create<UiState>((set, get) => ({
@@ -178,6 +183,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   panelOpen: false,
   panelWidth: (() => { const raw = localStorage.getItem('thoughtdag.panelWidth'); const n = raw ? parseInt(raw, 10) : NaN; return Number.isFinite(n) ? n : 520; })(),
   selectedModel: localStorage.getItem(MODEL_KEY) || null,
+  agentEffort: localStorage.getItem(EFFORT_KEY) || '',
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   resolveConfirm: (ok) => {
     get().confirmRequest?.resolve(ok);
@@ -321,6 +327,11 @@ export const useUiStore = create<UiState>((set, get) => ({
     if (model) localStorage.setItem(MODEL_KEY, model);
     else localStorage.removeItem(MODEL_KEY);
     set({ selectedModel: model });
+  },
+  setAgentEffort: (level) => {
+    if (level) localStorage.setItem(EFFORT_KEY, level);
+    else localStorage.removeItem(EFFORT_KEY);
+    set({ agentEffort: level });
   },
 }));
 

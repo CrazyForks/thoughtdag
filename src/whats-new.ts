@@ -32,6 +32,16 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.4.11',
+    date: '2026-09-08',
+    announce: false,
+    lead: {
+      zh: '性能优化：启动更快，后台更省，多个工具调用并行时更稳；300 节点以上的画布实测流畅。ThoughtDAG 现在可以用 Claude Code、Codex、Pi 作为节点的 Agent 运行时，处于测试阶段。',
+      en: 'Performance: faster launch, lighter in the background, steadier when several tool calls run in parallel; canvases past 300 nodes measured smooth. ThoughtDAG can now run a node through Claude Code, Codex or Pi as its agent runtime, in testing.',
+    },
+    items: [],
+  },
+  {
     version: '0.4.10',
     date: '2026-09-07',
     announce: false,

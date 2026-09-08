@@ -8,7 +8,7 @@
 // aliases; the shell only asks. Same event kinds as the other runtimes.
 'use strict';
 
-const { spawn } = require('node:child_process');
+const { spawn, execFile } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -31,14 +31,53 @@ function childEnv() {
 }
 
 /** Claude Code has no model list; its aliases resolve to the newest model
- *  of each family inside the CLI, so they never go stale. `default` is the
- *  CLI's own configured model. */
+ *  of each family inside the CLI, so they never go stale. The CLI's own
+ *  "default" is not offered: which model it means lives in the CLI's settings
+ *  and can change under the person, so the picker names families only. */
+/** The effort levels this CLI accepts, in its own words, read from its own
+ *  `--help` (the `--effort <level>` entry lists them in parentheses) — so a
+ *  CLI that adds a level shows it without a change here. Empty when the
+ *  CLI has no such flag. Read once per launch. */
+let effortsPromise = null;
+function effortsOf(bin) {
+  if (!effortsPromise) effortsPromise = new Promise((resolve) => {
+    execFile(bin, ['--help'], { env: childEnv(), timeout: 8000, maxBuffer: 1 << 20 }, (_err, stdout) => {
+      const help = String(stdout || '');
+      const at = help.indexOf('--effort');
+      if (at < 0) return resolve([]);
+      const next = help.indexOf('\n  --', at + 1);
+      const m = help.slice(at, next > 0 ? next : undefined).match(/\(([a-z0-9_, \n-]+)\)/i);
+      resolve(m ? m[1].split(',').map((s) => s.trim()).filter(Boolean) : []);
+    });
+  });
+  return effortsPromise;
+}
+
 const MODELS = [
-  { provider: 'claude-code', id: 'default', name: 'Default model', reasoning: true, vision: true },
+  { provider: 'claude-code', id: 'fable', name: 'Fable', reasoning: true, vision: true },
   { provider: 'claude-code', id: 'opus', name: 'Opus', reasoning: true, vision: true },
   { provider: 'claude-code', id: 'sonnet', name: 'Sonnet', reasoning: true, vision: true },
   { provider: 'claude-code', id: 'haiku', name: 'Haiku', reasoning: true, vision: true },
 ];
+
+/** The effort a turn ran at, as the transcript records it on every
+ *  assistant entry (`effort`) — the CLI's own setting when the canvas named none. */
+async function turnEffortOf(file) {
+  if (!file) return null;
+  try {
+    const lines = (await fsp.readFile(file, 'utf8')).split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (!lines[i].includes('"effort"')) continue;
+      try { const o = JSON.parse(lines[i]); if (o.type === 'assistant' && typeof o.effort === 'string') return o.effort; } catch { /* torn line */ }
+    }
+  } catch { /* no file */ }
+  return null;
+}
+
+/** The CLI's configured effort (`effortLevel` in ~/.claude/settings.json), when set. */
+async function configuredEffort() {
+  try { const s = JSON.parse(await fsp.readFile(path.join(os.homedir(), '.claude', 'settings.json'), 'utf8')); return typeof s.effortLevel === 'string' ? s.effortLevel : null; } catch { return null; }
+}
 
 /** ~/.claude/projects/<slug>/<sessionId>.jsonl. The slug is the cwd with
  *  '/' and '.' turned into '-', but a long path is cut and given a short
@@ -83,7 +122,8 @@ function createClaudeRuntime({ log } = {}) {
     async models() {
       const b = await bin();
       if (!b) return { installed: false, models: [], default: null };
-      return { installed: true, models: MODELS, default: 'claude/claude-code/default' };
+      const [efforts, defaultEffort] = await Promise.all([effortsOf(b), configuredEffort()]);
+      return { installed: true, models: MODELS.map((m) => ({ ...m, efforts, defaultEffort })), default: 'claude/claude-code/opus' };
     },
 
     async run(req, onEvent) {
@@ -94,7 +134,9 @@ function createClaudeRuntime({ log } = {}) {
       if (!b) throw new Error('claude is not installed (no `claude` on PATH or in the usual places)');
       const runId = randomUUID();
       const emit = (event) => { try { onEvent({ runId, event }); } catch { /* renderer gone */ } };
-      const state = { runId, proc: null, asks: new Map(), text: '', final: null, sessionId: null, waiting: false, ended: false, aborted: false };
+      const state = { runId, proc: null, asks: new Map(), text: '', final: null, sessionId: null, waiting: false, ended: false, aborted: false,
+        // what this conversation already allowed for good (see README: `rule`)
+        allowRules: new Set(Array.isArray(req.allowRules) ? req.allowRules.filter((s) => typeof s === 'string' && s.startsWith('claude:')) : []) };
       runs.set(runId, state);
 
       void (async () => {
@@ -110,6 +152,8 @@ function createClaudeRuntime({ log } = {}) {
           const args = ['-p', '--output-format', 'stream-json', '--input-format', 'stream-json', '--verbose', '--include-partial-messages', '--permission-mode', mode];
           if (mode !== 'bypassPermissions') args.push('--permission-prompt-tool', 'stdio');
           if (model) args.push('--model', model);
+          // only a level the CLI itself lists; anything else means its default
+          if (req.effort && (await effortsOf(b)).includes(req.effort)) args.push('--effort', req.effort);
           if (resumeId) { args.push('--resume', resumeId); if (req.forkEntryId) args.push('--fork-session'); }
           const proc = spawn(b, args, { cwd, env: childEnv(), stdio: ['pipe', 'pipe', 'pipe'] });
           state.proc = proc;
@@ -158,6 +202,8 @@ function createClaudeRuntime({ log } = {}) {
                 break;
               }
               case 'assistant':
+                // the alias resolved to a real model inside the CLI; the final session event carries it
+                if (!state.resolvedModel && typeof m.message?.model === 'string') state.resolvedModel = m.message.model;
                 for (const b of m.message?.content ?? []) if (b.type === 'tool_use') mark({ type: 'tool_execution_start', toolCallId: b.id, toolName: b.name, args: b.input ?? {} });
                 break;
               case 'user':
@@ -169,12 +215,25 @@ function createClaudeRuntime({ log } = {}) {
                 const id = `q-${m.request_id}`;
                 const input = r.input ?? {};
                 const line = typeof input.command === 'string' ? input.command : (input.file_path ?? input.path ?? JSON.stringify(input).slice(0, 200));
+                // the CLI's own "don't ask again" suggestion names what a standing
+                // allowance covers; sent back scoped to the session, never to settings
+                const suggest = (Array.isArray(r.permission_suggestions) ? r.permission_suggestions : []).find((s) => s && s.type === 'addRules' && Array.isArray(s.rules) && s.rules.length);
+                const rule = suggest ? 'claude:' + JSON.stringify(suggest.rules.map((x) => ({ toolName: x.toolName, ...(x.ruleContent ? { ruleContent: x.ruleContent } : {}) }))) : null;
+                const allow = (forSession) => write(proc, { type: 'control_response', response: { subtype: 'success', request_id: m.request_id, response: { behavior: 'allow', updatedInput: input, ...(forSession && suggest ? { updatedPermissions: [{ ...suggest, destination: 'session' }] } : {}) } } });
+                const title = `${r.tool_name ?? 'tool'} needs approval`;
+                if (rule && state.allowRules.has(rule)) {
+                  allow(true);
+                  mark({ type: 'question_answered', id, outcome: 'allowed-session', value: null, auto: true, title, message: line, rule });
+                  break;
+                }
                 state.asks.set(id, (answer) => {
                   const yes = !!answer?.confirmed;
-                  write(proc, { type: 'control_response', response: { subtype: 'success', request_id: m.request_id, response: yes ? { behavior: 'allow', updatedInput: input } : { behavior: 'deny', message: 'the person did not allow this step' } } });
-                  mark({ type: 'question_answered', id, outcome: yes ? 'allowed-once' : 'rejected', value: null });
+                  const forSession = yes && answer?.scope === 'session' && !!rule;
+                  if (forSession) state.allowRules.add(rule);
+                  if (yes) allow(forSession); else write(proc, { type: 'control_response', response: { subtype: 'success', request_id: m.request_id, response: { behavior: 'deny', message: 'the person did not allow this step' } } });
+                  mark({ type: 'question_answered', id, outcome: yes ? (forSession ? 'allowed-session' : 'allowed-once') : 'rejected', value: null, ...(forSession ? { rule } : {}) });
                 });
-                mark({ type: 'question', kind: 'confirm', id, title: `${r.tool_name ?? 'tool'} needs approval`, message: [line, r.description].filter(Boolean).join('\n'), options: [], placeholder: null, prefill: null, paths: [], suggest: null });
+                mark({ type: 'question', kind: 'confirm', id, rule, title, message: [line, r.description].filter(Boolean).join('\n'), options: [], placeholder: null, prefill: null, paths: [], suggest: null });
                 break;
               }
               case 'result':
@@ -197,7 +256,8 @@ function createClaudeRuntime({ log } = {}) {
           await new Promise((resolve) => { if (proc.exitCode !== null || proc.signalCode) return resolve(); const t = setTimeout(() => { try { proc.kill(); } catch { /* gone */ } resolve(); }, 8000); proc.once('exit', () => { clearTimeout(t); resolve(); }); });
           if (state.sessionId) {
             const file = await sessionFileFor(cwd, state.sessionId);
-            mark({ type: 'session', sessionId: state.sessionId, sessionFile: file, model: model ? { provider: 'claude-code', id: model, name: model } : null, cwd });
+            const ran = await turnEffortOf(file);
+            mark({ type: 'session', effort: ran, sessionId: state.sessionId, sessionFile: file, model: { provider: 'claude-code', id: model ?? 'default', name: model ?? 'default', ...(state.resolvedModel ? { resolved: state.resolvedModel } : {}) }, cwd });
           }
           if (before) {
             const after = await snapshotDir(cwd).catch(() => null);

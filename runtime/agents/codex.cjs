@@ -63,11 +63,25 @@ function createCodexRuntime({ log } = {}) {
   const write = (obj) => { try { proc.stdin.write(JSON.stringify(obj) + '\n'); return true; } catch { return false; } };
   const send = (method, params, timeoutMs = RESPONSE_MS) => new Promise((resolve, reject) => {
     if (!proc) return reject(new Error('codex app-server is not running'));
+    lastUse = Date.now();
     const id = nextId++;
     const timer = setTimeout(() => { pending.delete(id); reject(new Error(`codex did not answer ${method} in ${timeoutMs / 1000}s`)); }, timeoutMs);
     pending.set(id, (msg) => { clearTimeout(timer); if (msg.error) reject(new Error(msg.error.message || `codex refused ${method}`)); else resolve(msg.result); });
     if (!write({ jsonrpc: '2.0', id, method, params })) { clearTimeout(timer); pending.delete(id); reject(new Error('codex stdin closed')); }
   });
+
+  // The app-server retires after SERVER_IDLE_MS without a run or a request:
+  // a catalog read at picker time must not pin a hundred megabytes for the
+  // rest of the launch. The next run starts it again.
+  const SERVER_IDLE_MS = Number(process.env.TD_AGENT_IDLE_MS) || 10 * 60 * 1000;
+  let lastUse = Date.now();
+  const retire = setInterval(() => {
+    if (!proc || runs.size || pending.size || Date.now() - lastUse < SERVER_IDLE_MS) return;
+    say('codex app-server idle; stopping it');
+    try { proc.kill(); } catch { /* gone */ }
+    proc = null; ready = null;
+  }, 30 * 1000);
+  retire.unref?.();
 
   const die = (reason) => {
     for (const p of pending.values()) p({ error: { message: reason } });
@@ -100,10 +114,35 @@ function createCodexRuntime({ log } = {}) {
     return ready;
   }
 
+  // the effort a turn ran at, as the rollout records it (turn_context.effort):
+  // the model's own default when the canvas named none
+  async function turnEffortOf(file) {
+    if (!file) return null;
+    try {
+      const lines = (await fsp.readFile(file, 'utf8')).split('\n');
+      for (let i = lines.length - 1; i >= 0; i--) {
+        if (!lines[i].includes('"turn_context"')) continue;
+        try { const o = JSON.parse(lines[i]); if (o.type === 'turn_context' && typeof o.payload?.effort === 'string') return o.payload.effort; } catch { /* torn line */ }
+      }
+    } catch { /* no file yet */ }
+    return null;
+  }
+
+  // ~/.codex/config.toml `model_reasoning_effort` overrides every model's own
+  // default; the picker's 'default' must name what a turn will actually use
+  async function configuredEffort() {
+    try {
+      const home = process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
+      const m = (await fsp.readFile(path.join(home, 'config.toml'), 'utf8')).match(/^\s*model_reasoning_effort\s*=\s*"([^"]+)"/m);
+      return m ? m[1] : null;
+    } catch { return null; }
+  }
+
   const runOf = (threadId) => { const id = byThread.get(threadId); return id ? runs.get(id) : undefined; };
 
   // ── the server speaks: responses, notifications, and its own requests ──
   function dispatch(msg) {
+    lastUse = Date.now();
     if (msg.id !== undefined && msg.method === undefined) { const p = pending.get(msg.id); if (p) { pending.delete(msg.id); p(msg); } return; }
     const params = msg.params ?? {};
     const run = runOf(params.threadId);
@@ -169,14 +208,37 @@ function createCodexRuntime({ log } = {}) {
       run.waiting = true;
       run.emit({ type: 'question', id, ...question });
     };
-    const decided = (id, outcome, value) => { run.waiting = false; run.emit({ type: 'question_answered', id, outcome, value: value ?? null }); };
+    const decided = (id, outcome, value, extra) => { run.waiting = false; run.emit({ type: 'question_answered', id, outcome, value: value ?? null, ...(extra ?? {}) }); };
+    // a yes/no the conversation may have settled already: `rule` names what a
+    // standing allowance covers; a match is accepted for the session without asking
+    const settle = (rule, title, message, respondYes) => {
+      if (rule && run.allowRules?.has(rule)) { respondYes(true); run.emit({ type: 'question_answered', id: `auto-${msg.id}`, outcome: 'allowed-session', value: null, auto: true, title, message, rule }); return true; }
+      return false;
+    };
+    const yesNo = (rule, respondYes, respondNo) => (a, id) => {
+      const yes = !!a?.confirmed; const forSession = yes && a?.scope === 'session' && !!rule;
+      if (forSession) run.allowRules?.add(rule);
+      if (yes) respondYes(forSession); else respondNo();
+      decided(id, yes ? (forSession ? 'allowed-session' : 'allowed-once') : 'rejected', null, forSession ? { rule } : undefined);
+    };
     switch (msg.method) {
-      case 'item/commandExecution/requestApproval':
-        return ask({ kind: 'confirm', title: 'command needs approval', message: [params.command, params.reason].filter(Boolean).join('\n'), options: [], placeholder: null, prefill: null, paths: [], suggest: null },
-          (a, id) => { const yes = !!a?.confirmed; reply({ decision: yes ? 'accept' : 'decline' }); decided(id, yes ? 'allowed-once' : 'rejected'); });
-      case 'item/fileChange/requestApproval':
-        return ask({ kind: 'confirm', title: 'file change needs approval', message: [params.reason, params.grantRoot].filter(Boolean).join('\n') || 'apply the proposed file changes', options: [], placeholder: null, prefill: null, paths: [], suggest: null },
-          (a, id) => { const yes = !!a?.confirmed; reply({ decision: yes ? 'accept' : 'decline' }); decided(id, yes ? 'allowed-once' : 'rejected'); });
+      case 'item/commandExecution/requestApproval': {
+        const cmd = Array.isArray(params.command) ? params.command.join(' ') : String(params.command ?? '');
+        const rule = cmd ? 'codex:cmd:' + cmd : null;
+        const title = 'command needs approval'; const message = [params.command, params.reason].filter(Boolean).join('\n');
+        const respondYes = (forSession) => reply({ decision: forSession ? 'acceptForSession' : 'accept' });
+        if (settle(rule, title, message, respondYes)) return;
+        return ask({ kind: 'confirm', title, message, rule, options: [], placeholder: null, prefill: null, paths: [], suggest: null },
+          yesNo(rule, respondYes, () => reply({ decision: 'decline' })));
+      }
+      case 'item/fileChange/requestApproval': {
+        const rule = 'codex:fileChange';
+        const title = 'file change needs approval'; const message = [params.reason, params.grantRoot].filter(Boolean).join('\n') || 'apply the proposed file changes';
+        const respondYes = (forSession) => reply({ decision: forSession ? 'acceptForSession' : 'accept' });
+        if (settle(rule, title, message, respondYes)) return;
+        return ask({ kind: 'confirm', title, message, rule, options: [], placeholder: null, prefill: null, paths: [], suggest: null },
+          yesNo(rule, respondYes, () => reply({ decision: 'decline' })));
+      }
       case 'item/permissions/requestApproval':
         return ask({ kind: 'confirm', title: 'more permissions requested', message: [params.reason, JSON.stringify(params.permissions ?? {})].filter(Boolean).join('\n'), options: [], placeholder: null, prefill: null, paths: [], suggest: null },
           (a, id) => { const yes = !!a?.confirmed; reply({ permissions: yes ? (params.permissions ?? {}) : {}, scope: 'turn' }); decided(id, yes ? 'allowed-once' : 'rejected'); });
@@ -198,14 +260,21 @@ function createCodexRuntime({ log } = {}) {
     }
   }
 
-  const modelEntry = (m) => ({ provider: 'codex', id: m.model ?? m.id, name: m.displayName ?? m.model ?? m.id, reasoning: true, vision: true });
+  const effortsIn = (m) => (m.supportedReasoningEfforts ?? []).map((e) => (e && typeof e === 'object' ? e.reasoningEffort : e)).filter((e) => typeof e === 'string');
+  const modelEntry = (m) => ({ provider: 'codex', id: m.model ?? m.id, name: m.displayName ?? m.model ?? m.id, reasoning: true, vision: true, efforts: effortsIn(m), defaultEffort: typeof m.defaultReasoningEffort === 'string' ? m.defaultReasoningEffort : null });
+  // model id → the reasoning efforts it advertises, from model/list
+  const effortsByModel = new Map();
+  const noteEfforts = (r) => { for (const m of r?.data ?? []) effortsByModel.set(m.model ?? m.id, effortsIn(m)); };
+  // only a level the model itself advertises, in Codex's own words; anything
+  // else means the model's default
+  const effortFor = (model, word) => { const offered = effortsByModel.get(model); return word && offered && offered.includes(word) ? word : null; };
   // the model a run uses when the canvas named none: the server's own
   // default from model/list, not the config file's — a config can name a
   // model this CLI version cannot run, and the list only carries runnable ones
   let defaultModel = null;
   async function defaultModelId() {
     if (defaultModel) return defaultModel;
-    try { const r = await send('model/list', {}); const d = (r?.data ?? []).find((m) => m.isDefault) ?? (r?.data ?? [])[0]; defaultModel = d ? (d.model ?? d.id) : null; } catch { /* leave it to the config */ }
+    try { const r = await send('model/list', {}); noteEfforts(r); const d = (r?.data ?? []).find((m) => m.isDefault) ?? (r?.data ?? [])[0]; defaultModel = d ? (d.model ?? d.id) : null; } catch { /* leave it to the config */ }
     return defaultModel;
   }
 
@@ -217,7 +286,9 @@ function createCodexRuntime({ log } = {}) {
       if (!b) return { installed: false, models: [], default: null };
       await ensureServer();
       const r = await send('model/list', {});
-      const models = (r?.data ?? []).filter((m) => !m.hidden).map(modelEntry);
+      noteEfforts(r);
+      const configured = await configuredEffort();
+      const models = (r?.data ?? []).filter((m) => !m.hidden).map(modelEntry).map((m) => (configured && m.efforts.includes(configured) ? { ...m, defaultEffort: configured } : m));
       const def = (r?.data ?? []).find((m) => m.isDefault);
       defaultModel = def ? (def.model ?? def.id) : defaultModel;
       return { installed: true, models, default: def ? `codex/${def.model ?? def.id}` : (models[0] ? `codex/${models[0].id}` : null) };
@@ -230,7 +301,9 @@ function createCodexRuntime({ log } = {}) {
       await ensureServer();
       const runId = randomUUID();
       const emit = (event) => { try { onEvent({ runId, event }); } catch { /* renderer gone */ } };
-      const state = { runId, threadId: null, turnId: null, text: '', final: null, waiting: false, emit, end: null, done: null };
+      const state = { runId, threadId: null, turnId: null, text: '', final: null, waiting: false, emit, end: null, done: null,
+        // what this conversation already allowed for good (see README: `rule`)
+        allowRules: new Set(Array.isArray(req.allowRules) ? req.allowRules.filter((s) => typeof s === 'string' && s.startsWith('codex:')) : []) };
       state.done = new Promise((resolve) => { state.end = (how) => { if (state.ended) return; state.ended = true; resolve(how); }; });
       runs.set(runId, state);
       void (async () => {
@@ -258,9 +331,12 @@ function createCodexRuntime({ log } = {}) {
           const before = await snapshotDir(cwd).catch(() => null);
           const input = [{ type: 'text', text: String(req.prompt ?? ''), text_elements: [] }];
           for (const img of Array.isArray(req.images) ? req.images : []) if (img && typeof img.data === 'string') input.push({ type: 'image', url: `data:${img.mimeType};base64,${img.data}` });
-          const started = await send('turn/start', { threadId: thread.id, input, ...(model ? { model } : {}) }, 60 * 1000);
+          const effort = req.effort && model ? effortFor(model, req.effort) : null;
+          const started = await send('turn/start', { threadId: thread.id, input, ...(model ? { model } : {}), ...(effort ? { effort } : {}) }, 60 * 1000);
           state.turnId = started?.turn?.id ?? null;
           const how = await state.done;
+          const ran = await turnEffortOf(thread.path);
+          if (ran) state.emit({ type: 'session', sessionId: thread.id, sessionFile: thread.path ?? null, model: model ? { provider: 'codex', id: model, name: model } : null, cwd, effort: ran });
           if (before) {
             const after = await snapshotDir(cwd).catch(() => null);
             if (after) { const d = diffSnapshots(before, after); if (d.changed.length || d.added.length || d.removed.length || d.truncated) state.emit({ type: 'fs_changes', ...d }); }
@@ -297,7 +373,7 @@ function createCodexRuntime({ log } = {}) {
       return true;
     },
 
-    shutdown() { try { proc?.kill(); } catch { /* gone */ } proc = null; ready = null; },
+    shutdown() { clearInterval(retire); try { proc?.kill(); } catch { /* gone */ } proc = null; ready = null; },
   };
 }
 

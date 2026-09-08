@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
 import { API_BASE } from './constants';
 import { storedProviders, pushProviders } from './runtime-providers';
-import { agentModels, AGENT_PROVIDER } from './agents/agent-runtime';
+import { agentModels, AGENT_PROVIDER, AGENT_RUNTIMES, agentTarget } from './agents/agent-runtime';
 
 export interface ModelInfo {
   id: string;
   name: string;
   provider: string;
   vision: boolean;
+  /** agent models: the effort levels this runtime accepts for the model, in its own words (read from the CLI) */
+  efforts?: string[];
+  /** the runtime's own default among them, when it says */
+  defaultEffort?: string | null;
 }
 
 export interface Capabilities {
@@ -19,7 +23,7 @@ export interface Capabilities {
   vision: boolean;
 }
 
-export type ModelData = { models: ModelInfo[]; default: string | null; capabilities?: Capabilities; /** the agent runtimes are still being asked */ agentsPending?: boolean };
+export type ModelData = { models: ModelInfo[]; default: string | null; capabilities?: Capabilities; /** the agent runtimes are being asked right now */ agentsPending?: boolean };
 
 // Model list is fetched once per session and shared by every picker
 let cache: ModelData | null = null;
@@ -44,11 +48,12 @@ export function getModelsOnce(): Promise<ModelData | null> {
         .catch(() => null);
     }
     if (!base) return null;
-    // the API models show at once; the agent runtimes answer in their own
-    // time (a CLI to start, a catalog to read) — last launch's agent list
-    // fills the gap, then the fresh one replaces it
+    // The API models show at once. The agent runtimes are NOT asked at
+    // launch: asking means starting their CLIs (a catalog process, an app
+    // server — seconds and a hundred megabytes each), which a launch that
+    // never touches an agent should not pay. Last launch's agent list stands
+    // in; the runtimes are asked the first time a picker opens (ensureAgentsFresh).
     cache = withRemembered(base);
-    void refreshAgents(cache);
     return cache;
   })();
   return inflight;
@@ -72,24 +77,95 @@ export function reconcileModelId(pinned: string, models: ModelInfo[]): string | 
 }
 
 const AGENT_CACHE_KEY = 'thoughtdag.agentModels';
+const AGENT_NAMES_KEY = 'thoughtdag.agentModelNames';
 const hasAgentsBridge = () => typeof window !== 'undefined' && !!window.desktopAgents;
 
-/** Last launch's agent models, so the picker is whole while the runtimes answer. */
+/** Picker id → the model name the runtime actually ran under it (an alias
+ *  like `opus` resolves inside the CLI; the first turn tells us to what). */
+function resolvedNames(): Record<string, string> {
+  try { const v = JSON.parse(localStorage.getItem(AGENT_NAMES_KEY) ?? '{}'); return v && typeof v === 'object' ? v : {}; } catch { return {}; }
+}
+
+/** An alias entry shows the model it resolved to, once a turn has told us. */
+function withResolvedNames(models: ModelInfo[]): ModelInfo[] {
+  const names = resolvedNames();
+  return models.map((m) => {
+    const r = m.provider === AGENT_PROVIDER ? names[m.id] : undefined;
+    if (!r || m.id.endsWith('/' + r) || m.name.includes(r)) return m;
+    return { ...m, name: `${m.name} · ${r}` };
+  });
+}
+
+/** A model id as the record should read: an agent model in full (runtime ·
+ *  model, the resolved name once known, the effort the version ran at); an
+ *  API model by its bare name. Pure: reads only the local caches. */
+export function describeModel(id: string | null | undefined, effort?: string | null, opts?: { /** the card form: runtime · model · effort, without the resolved name */ compact?: boolean }): string {
+  if (!id) return '';
+  const target = agentTarget(id);
+  if (!target) return id.split('/').pop() ?? id;
+  let remembered: ModelInfo[] = [];
+  try { remembered = JSON.parse(localStorage.getItem(AGENT_CACHE_KEY) ?? '[]'); } catch { remembered = []; }
+  const entry = remembered.find((m) => m && m.id === id);
+  const base = entry?.name ?? `${AGENT_RUNTIMES[target.runtime].label} · ${target.id}`;
+  const resolved = opts?.compact ? undefined : resolvedNames()[id];
+  const withName = resolved && !base.includes(resolved) ? `${base} · ${resolved}` : base;
+  return effort ? `${withName} · ${effort}` : withName;
+}
+
+/** Last launch's agent models, so the picker is whole without asking anyone. */
 function withRemembered(d: ModelData): ModelData {
   if (!hasAgentsBridge()) return d;
   let remembered: ModelInfo[] = [];
   try { remembered = JSON.parse(localStorage.getItem(AGENT_CACHE_KEY) ?? '[]'); } catch { remembered = []; }
   const own = d.models.filter((m) => m.provider !== AGENT_PROVIDER);
-  return { ...d, models: [...own, ...remembered.filter((m) => m && m.provider === AGENT_PROVIDER)], agentsPending: true };
+  return { ...d, models: [...own, ...withResolvedNames(remembered.filter((m) => m && m.provider === AGENT_PROVIDER))], agentsPending: false };
 }
 
+let agentsAsked = false;
+let agentsRefreshing: Promise<void> | null = null;
+
 /** Ask the runtimes and replace the agent group when they answer. */
-async function refreshAgents(base: ModelData): Promise<void> {
-  if (!hasAgentsBridge()) return;
-  const extra = await agentModels().catch(() => [] as ModelInfo[]);
-  try { localStorage.setItem(AGENT_CACHE_KEY, JSON.stringify(extra)); } catch { /* ignore */ }
-  const own = (cache ?? base).models.filter((m) => m.provider !== AGENT_PROVIDER);
-  setModelsCache({ ...(cache ?? base), models: [...own, ...extra], agentsPending: false });
+async function refreshAgents(): Promise<void> {
+  if (!hasAgentsBridge() || !cache) return;
+  if (agentsRefreshing) return agentsRefreshing;
+  agentsRefreshing = (async () => {
+    const before = cache!;
+    setModelsCache({ ...before, agentsPending: true });
+    const extra = await agentModels().catch(() => [] as ModelInfo[]);
+    try { localStorage.setItem(AGENT_CACHE_KEY, JSON.stringify(extra)); } catch { /* ignore */ }
+    const own = (cache ?? before).models.filter((m) => m.provider !== AGENT_PROVIDER);
+    setModelsCache({ ...(cache ?? before), models: [...own, ...withResolvedNames(extra)], agentsPending: false });
+  })().finally(() => { agentsRefreshing = null; });
+  return agentsRefreshing;
+}
+
+/** The first picker to open in this launch asks the runtimes for their
+ *  catalogs (the spinner in the agent group covers the wait); later opens
+ *  reuse the answer. Harmless when there is no agents bridge. */
+export function ensureAgentsFresh(): void {
+  if (agentsAsked || !hasAgentsBridge()) return;
+  agentsAsked = true;
+  void getModelsOnce().then(() => refreshAgents());
+}
+
+/** A turn reported which model an agent alias resolved to: remember it
+ *  and rename the entry in place, so the picker reads `Opus · claude-opus-5`. */
+export function noteAgentModelName(id: string, resolved: string): void {
+  if (!id || !resolved) return;
+  const names = resolvedNames();
+  if (names[id] === resolved) return;
+  names[id] = resolved;
+  try { localStorage.setItem(AGENT_NAMES_KEY, JSON.stringify(names)); } catch { /* ignore */ }
+  if (!cache) return;
+  const own = cache.models.filter((m) => m.provider !== AGENT_PROVIDER);
+  const agents = cache.models.filter((m) => m.provider === AGENT_PROVIDER).map((m) => ({ ...m, name: m.name.split(' · ').slice(0, 2).join(' · ') }));
+  setModelsCache({ ...cache, models: [...own, ...withResolvedNames(agents)] });
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('td:agent-model-resolved', (ev) => {
+    const d = (ev as CustomEvent<{ id?: string; resolved?: string }>).detail;
+    if (d?.id && d?.resolved) noteAgentModelName(d.id, d.resolved);
+  });
 }
 
 /** Replace the shared cache (after a runtime-key change) and notify every subscribed picker. */
@@ -97,11 +173,13 @@ export function setModelsCache(d: ModelData): void {
   cache = d;
   inflight = Promise.resolve(d);
   for (const fn of listeners) fn(d);
-  // a list rebuilt from a runtime-key change carries no agent group yet
+  // a list rebuilt from a runtime-key change carries no agent group yet:
+  // last launch's entries come back, and a fresh answer only if this
+  // launch already asked (the runtimes are then alive anyway)
   if (d.agentsPending === undefined && hasAgentsBridge() && !d.models.some((m) => m.provider === AGENT_PROVIDER)) {
     cache = withRemembered(d);
     for (const fn of listeners) fn(cache);
-    void refreshAgents(cache);
+    if (agentsAsked) void refreshAgents();
   }
 }
 

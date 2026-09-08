@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { describeModel } from '../../lib/use-models';
 import { AlertTriangle, ChevronLeft, ChevronRight, Copy, GitBranch, Maximize2, RefreshCw, Star, Trash2, Pencil } from 'lucide-react';
 import { useStore } from '../../store';
 import { useUiStore } from '../../lib/ui-store';
@@ -161,8 +162,8 @@ export default function ResponseSection({
         )}
       </div>
 
-      {data.isLoading && data.pendingApproval ? (
-        <div className="py-1"><ApprovalCard nodeId={nodeId} request={data.pendingApproval} /></div>
+      {data.isLoading && data.pendingApprovals?.length ? (
+        <div className="py-1 flex flex-col gap-1.5">{data.pendingApprovals.map((req) => <ApprovalCard key={req.id} nodeId={nodeId} request={req} />)}</div>
       ) : data.isLoading && data.agentTrace && data.agentTrace.length > 0 && (!data.response || data.restreaming) ? (
         <div className="py-1"><AgentTrace entries={data.agentTrace} /></div>
       ) : data.isLoading && (!data.response || data.restreaming) ? (
@@ -274,10 +275,10 @@ export default function ResponseSection({
           )}
           {(data.generatedBy?.[data.responseIndex]) && (
             <span
-              className="text-2xs text-ink-faint font-mono ml-1 truncate max-w-[170px]"
-              title={t('node.generatedByTitle')}
+              className="text-2xs text-ink-faint font-mono ml-1 truncate flex-1 min-w-0 max-w-[420px]"
+              title={`${t('node.generatedByTitle')} · ${describeModel(data.generatedBy[data.responseIndex], data.generatedEfforts?.[data.responseIndex])}`}
             >
-              {data.generatedBy[data.responseIndex]!.split('/').pop()}
+              {describeModel(data.generatedBy[data.responseIndex], data.generatedEfforts?.[data.responseIndex])}
             </span>
           )}
           {hasMultipleVersions && (

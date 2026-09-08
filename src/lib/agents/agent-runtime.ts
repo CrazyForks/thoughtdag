@@ -7,7 +7,8 @@
 //
 // THE CONTRACT — the only things this file asks of a runtime, whichever it
 // is (Pi today; Codex and Claude Code follow the same shape):
-//   1. start a run on a working directory with one prompt; abort it
+//   1. start a run on a working directory with one prompt (and, if the
+//      person chose one, an effort level in the runtime's own words); abort it
 //   2. an event stream carrying eight kinds, nothing else is read:
 //        session · text · reasoning · tool_start · tool_end · question ·
 //        end · error  (plus fs_changes, which the shell produces itself)
@@ -19,6 +20,8 @@
 import type { ContextMessage, ImageAttachment, StreamCallbacks } from '../api';
 import type { ModelInfo } from '../use-models';
 import type { AgentRuntime } from '../../types';
+import { useUiStore } from '../ui-store';
+import { useStore } from '../../store';
 
 /** The runtimes the shell can run, keyed by the prefix of their picker ids. */
 export const AGENT_RUNTIMES: Record<AgentRuntime, { prefix: string; label: string; rootKey: string }> = {
@@ -57,15 +60,15 @@ export function agentTarget(id: string): { runtime: AgentRuntime; provider: stri
 export async function agentModels(): Promise<ModelInfo[]> {
   const bridge = window.desktopAgents;
   if (!bridge) return [];
+  // the runtimes answer side by side: one slow catalog does not queue the others
+  const answers = await Promise.all(LIVE_RUNTIMES.map((runtime) => bridge.models(runtime).catch(() => null)));
   const out: ModelInfo[] = [];
-  for (const runtime of LIVE_RUNTIMES) {
+  LIVE_RUNTIMES.forEach((runtime, i) => {
     const def = AGENT_RUNTIMES[runtime];
-    try {
-      const r = await bridge.models(runtime);
-      if (!r?.installed) continue;
-      for (const m of r.models) out.push({ id: `${def.prefix}${m.provider}/${m.id}`, name: `${def.label} · ${m.name}`, provider: AGENT_PROVIDER, vision: m.vision });
-    } catch { /* this runtime stays out of the list */ }
-  }
+    const r = answers[i];
+    if (!r?.installed) return; // not installed, or it did not answer: it stays out of the list
+    for (const m of r.models) out.push({ id: `${def.prefix}${m.provider}/${m.id}`, name: `${def.label} · ${m.name}`, provider: AGENT_PROVIDER, vision: m.vision, efforts: m.efforts ?? [], defaultEffort: m.defaultEffort ?? null });
+  });
   return out;
 }
 
@@ -306,6 +309,10 @@ export async function agentCallStream(
   const materials = continuing ? '' : await materialsToDisk(nodeId, cwd);
   const ahead = continuing ? '' : [context, materials].filter(Boolean).join('\n\n');
   const prompt = ahead ? `${ahead}\n\n---\n\n${question}` : question;
+  const effort = useUiStore.getState().agentEffort || undefined;
+  // what this conversation already allowed for good: every 'allowed-session'
+  // decision on this canvas whose rule belongs to this runtime
+  const allowRules = [...new Set(useStore.getState().nodes.flatMap((n) => (n.data.approvals ?? []).filter((a) => a.outcome === 'allowed-session' && typeof a.rule === 'string' && a.rule.startsWith(target.runtime === 'claude-code' ? 'claude:' : target.runtime + ':')).map((a) => a.rule as string)))];
   subscribe();
 
   let full = '';
@@ -318,20 +325,27 @@ export async function agentCallStream(
       ...(route?.forkEntryId ? { forkEntryId: route.forkEntryId } : {}),
       images: (images ?? []).map((img) => ({ type: 'image' as const, data: img.data, mimeType: img.mimeType })),
       model: { provider: target.provider, id: target.id },
+      ...(effort ? { effort } : {}),
+      ...(allowRules.length ? { allowRules } : {}),
     }).then((runId) => {
       const stop = () => { void bridge.abort(runId); };
       if (signal?.aborted) { stop(); }
       signal?.addEventListener('abort', stop, { once: true });
       handlers.set(runId, (event) => {
         switch (event.type) {
-          case 'session':
+          case 'session': {
+            // an alias (`opus`) resolved inside the CLI: the picker learns the real name
+            const resolved = (event.model as { resolved?: string } | null | undefined)?.resolved;
+            if (resolved) window.dispatchEvent(new CustomEvent('td:agent-model-resolved', { detail: { id: modelId, resolved } }));
             callbacks?.onAgentSession?.({
               runtime: target.runtime,
               sessionId: (event.sessionId as string | null) ?? null,
               sessionFile: (event.sessionFile as string | null) ?? null,
               cwd: (event.cwd as string) ?? cwd,
+              ...(typeof event.effort === 'string' && event.effort ? { effort: event.effort } : {}),
             });
             break;
+          }
           case 'message_update': {
             const ev = event.assistantMessageEvent as { type?: string; delta?: string } | undefined;
             if (ev?.type === 'text_delta' && ev.delta) { full += ev.delta; onChunk(ev.delta, full); }
@@ -358,7 +372,7 @@ export async function agentCallStream(
             break;
           }
           case 'question_answered':
-            callbacks?.onApprovalDecided?.({ id: String(event.id), outcome: (event.outcome as import('../../types').ApprovalOutcome) ?? 'cancelled', value: typeof event.value === 'string' ? event.value : null });
+            callbacks?.onApprovalDecided?.({ ...(event.auto ? { auto: true, name: String(event.title ?? ''), query: String(event.message ?? ''), rule: typeof event.rule === 'string' ? event.rule : null } : {}), id: String(event.id), outcome: (event.outcome as import('../../types').ApprovalOutcome) ?? 'cancelled', value: typeof event.value === 'string' ? event.value : null });
             break;
           case 'question':
             callbacks?.onApproval?.({
@@ -371,6 +385,7 @@ export async function agentCallStream(
               channel: { runId },
               paths: Array.isArray(event.paths) ? (event.paths as string[]) : [],
               suggest: typeof event.suggest === 'string' ? event.suggest : null,
+              rule: typeof event.rule === 'string' ? event.rule : null,
             });
             break;
           case 'fs_changes':

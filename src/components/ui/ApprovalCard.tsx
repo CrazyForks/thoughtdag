@@ -27,17 +27,19 @@ export function ApprovalCard({ nodeId, request, compact }: { nodeId: string; req
     if (busy) return;
     if (allowDir) await allowLocation(allowDir);
     useStore.setState((s) => ({
-      nodes: s.nodes.map((n) => n.id === nodeId && n.data.pendingApproval?.id === request.id
-        ? { ...n, data: { ...n.data, pendingApproval: { ...n.data.pendingApproval, answered: mark } } }
+      nodes: s.nodes.map((n) => n.id === nodeId
+        ? { ...n, data: { ...n.data, pendingApprovals: (n.data.pendingApprovals ?? []).map((p) => p.id === request.id ? { ...p, answered: mark } : p) } }
         : n),
     }));
     const ok = await answerApproval(request, answer);
     if (!ok) {
       // nothing was waiting: the runtime withdrew the question or the turn ended
       useStore.setState((s) => ({
-        nodes: s.nodes.map((n) => n.id === nodeId && n.data.pendingApproval?.id === request.id
-          ? { ...n, data: { ...n.data, pendingApproval: undefined } }
-          : n),
+        nodes: s.nodes.map((n) => {
+          if (n.id !== nodeId) return n;
+          const rest = (n.data.pendingApprovals ?? []).filter((p) => p.id !== request.id);
+          return { ...n, data: { ...n.data, pendingApprovals: rest.length ? rest : undefined } };
+        }),
       }));
     }
   };
@@ -103,6 +105,9 @@ export function ApprovalCard({ nodeId, request, compact }: { nodeId: string; req
       {isApproval && (
         <div className={`mt-2.5 flex flex-wrap items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
           <button onClick={() => void send({ confirmed: true }, 'allowed-once')} disabled={busy} className={primary} data-approval-allow>{t('approval.allowOnce')}</button>
+          {request.rule && request.channel && (
+            <button onClick={() => void send({ confirmed: true, scope: 'session' }, 'allowed-session')} disabled={busy} className={`${btn} text-accent rounded-lg border border-accent/40 hover:bg-accent/10 transition-colors disabled:opacity-50 whitespace-nowrap`} title={t('approval.allowSessionTitle')} data-approval-allow-session>{t('approval.allowSession')}</button>
+          )}
           {request.suggest && request.channel && (
             <button
               onClick={() => void send({ confirmed: true }, 'allowed-once', request.suggest!)}
@@ -129,12 +134,12 @@ export function ApprovalCard({ nodeId, request, compact }: { nodeId: string; req
 export function ApprovalRecords({ records }: { records: ApprovalRecord[] }) {
   const t = useT();
   if (records.length === 0) return null;
-  const label = (r: ApprovalRecord) => r.outcome === 'allowed-once' ? t('approval.allowed') : r.outcome === 'rejected' ? t('approval.rejected') : r.outcome === 'answered' ? t('approval.answered') : r.outcome === 'cancelled' ? t('approval.cancelled') : t('approval.unavailable');
+  const label = (r: ApprovalRecord) => r.outcome === 'allowed-once' ? t('approval.allowed') : r.outcome === 'allowed-session' ? (r.auto ? t('approval.autoAllowed') : t('approval.allowedSession')) : r.outcome === 'rejected' ? t('approval.rejected') : r.outcome === 'answered' ? t('approval.answered') : r.outcome === 'cancelled' ? t('approval.cancelled') : t('approval.unavailable');
   return (
     <ul className="mt-2 space-y-1" data-approval-records>
       {records.map((r) => (
         <li key={r.id} className="text-2xs text-ink-faint flex items-baseline gap-1.5 min-w-0">
-          <span className="shrink-0">{r.outcome === 'allowed-once' || r.outcome === 'answered' ? '✅' : '⛔'}</span>
+          <span className="shrink-0">{r.outcome === 'allowed-once' || r.outcome === 'allowed-session' || r.outcome === 'answered' ? '✅' : '⛔'}</span>
           <span className="shrink-0">{label(r)}</span>
           <span className="font-mono text-ink-muted truncate">{r.name}{r.value ? ` → ${r.value}` : r.query ? ` · ${r.query}` : ''}</span>
         </li>
@@ -148,7 +153,7 @@ export function ApprovalRecords({ records }: { records: ApprovalRecord[] }) {
 export function DecisionsDisclosure({ records }: { records: ApprovalRecord[] }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const good = records.filter((r) => r.outcome === 'allowed-once' || r.outcome === 'answered').length;
+  const good = records.filter((r) => r.outcome === 'allowed-once' || r.outcome === 'allowed-session' || r.outcome === 'answered').length;
   return (
     <div className="mb-2 nopan">
       <button

@@ -88,6 +88,10 @@ interface DesktopAgentModel {
   name: string;
   reasoning: boolean;
   vision: boolean;
+  /** the effort levels the runtime accepts for this model, in its own words (read from the CLI); empty = none */
+  efforts?: string[];
+  /** the runtime's own default among them, when it says */
+  defaultEffort?: string | null;
 }
 
 interface DesktopAgentRunRequest {
@@ -102,7 +106,11 @@ interface DesktopAgentRunRequest {
   /** branch the current session at this entry (with sessionPath) */
   forkEntryId?: string;
   model?: { provider: string; id: string };
+  /** an effort level in the runtime's own words (one it listed for the model); absent or unknown = the runtime's default */
+  effort?: string;
   thinkingLevel?: string;
+  /** rules this conversation already allowed for good (the `rule` of earlier approvals): a matching ask is allowed without asking, on the record */
+  allowRules?: string[];
 }
 
 interface DesktopAgentsBridge {
@@ -117,7 +125,7 @@ interface DesktopAgentsBridge {
   /** the shell-managed working directory of a canvas, created on demand */
   workspace(canvasId: string): Promise<string>;
   /** the person's answer to a runtime's question during a run */
-  answer(runId: string, requestId: string, response: { confirmed: boolean } | { value: string } | { cancelled: true }): Promise<boolean>;
+  answer(runId: string, requestId: string, response: { confirmed: boolean; scope?: 'session' } | { value: string } | { cancelled: true }): Promise<boolean>;
   /** a folder picked in the system dialog, or null */
   pickCwd(): Promise<string | null>;
   /** the boundary guard's tuning for a working directory */

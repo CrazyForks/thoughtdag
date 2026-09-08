@@ -5,7 +5,7 @@ import { sha256Hex, canonicalStringify } from '../lib/context-bundle';
 import { pruneHighlights } from '../lib/highlight-match';
 import { llmCall, llmCallStream, type ContextMessage, type ImageAttachment } from '../lib/api';
 import { harnessOutbound, claimHarnessTurn, stampHarnessTurn } from '../lib/atlas/dsh-bridge';
-import { agentOutbound, adoptAgentTurn, claimAgentTurn } from '../lib/agents/agent-runtime';
+import { agentOutbound, adoptAgentTurn, claimAgentTurn, isAgentModel } from '../lib/agents/agent-runtime';
 import { countTokens, activeSummary } from '../utils';
 import { toast, useUiStore } from '../lib/ui-store';
 import { getModelsOnce, reconcileModelId } from '../lib/use-models';
@@ -189,7 +189,7 @@ export async function runNodeGeneration(
         // so repeated retries don't stack failure entries.
         const failText = new Set([t('node.failedPlaceholder'), t('node.emptyResponse')]);
         const kept = versionMode === 'append' || failed
-          ? n.data.responses.map((r, i) => ({ r, q: n.data.questions?.[i], by: n.data.generatedBy?.[i], rs: n.data.reasonings?.[i], at: n.data.generatedAts?.[i], ed: n.data.editedAts?.[i], gw: n.data.gatewaySearches?.[i] })).filter(({ r }) => r && !(failed && failText.has(r)))
+          ? n.data.responses.map((r, i) => ({ r, q: n.data.questions?.[i], by: n.data.generatedBy?.[i], rs: n.data.reasonings?.[i], at: n.data.generatedAts?.[i], ed: n.data.editedAts?.[i], gw: n.data.gatewaySearches?.[i], ef: n.data.generatedEfforts?.[i] })).filter(({ r }) => r && !(failed && failText.has(r)))
           : [];
         const now = new Date().toISOString();
         const responses = [...kept.map(({ r }) => r), response];
@@ -198,10 +198,12 @@ export async function runNodeGeneration(
         const questions = [...kept.map(({ q }) => q ?? n.data.question), n.data.question];
         const generatedBy = [...kept.map(({ by }) => by), modelUsed];
         const gatewaySearches = [...kept.map(({ gw }) => gw), gatewaySearched || undefined];
+        // the effort this version ran at: only an agent turn has one, from the run's own record
+        const generatedEfforts = [...kept.map(({ ef }) => ef), (isAgentModel(modelUsed) && n.data.agentSession?.effort) || undefined];
         const reasonings = [...kept.map(({ rs }) => rs), n.data.reasoning || undefined];
         const generatedAts = [...kept.map(({ at }) => at), now];
         const editedAts = [...kept.map(({ ed }) => ed), undefined];
-        return { ...n, data: { ...n.data, response, responses, questions, generatedBy, gatewaySearches, reasonings, generatedAts, editedAts, reasoning: undefined, restreaming: undefined, pendingApproval: undefined, agentTrace: undefined, responseIndex: responses.length - 1, isLoading: false, tokenCount, generationFailed: failed || undefined, references, highlights: pruneHighlights(n.data.highlights, response), lastContextHash: contextHash, lastGeneratedAt: now } };
+        return { ...n, data: { ...n.data, response, responses, questions, generatedBy, gatewaySearches, generatedEfforts, reasonings, generatedAts, editedAts, reasoning: undefined, restreaming: undefined, pendingApprovals: undefined, agentTrace: undefined, responseIndex: responses.length - 1, isLoading: false, tokenCount, generationFailed: failed || undefined, references, highlights: pruneHighlights(n.data.highlights, response), lastContextHash: contextHash, lastGeneratedAt: now } };
       }),
     }));
   };
@@ -334,7 +336,8 @@ export async function runNodeGeneration(
       onAgentSession: (session) => {
         if (!isCurrent()) return;
         const continued = !!agentRoute?.continue;
-        set((state) => ({ nodes: state.nodes.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, agentSession: { ...session, continued } } } : n) }));
+        // a later session event (the file found, the effort read) adds to the record, never wipes it
+        set((state) => ({ nodes: state.nodes.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, agentSession: { ...n.data.agentSession, ...session, continued } } } : n) }));
         if (continued && session.sessionId) void claimAgentTurn(session.runtime, nodeId, session.sessionId, session.cwd);
       },
       onAgentChanges: (changes) => {
@@ -348,22 +351,35 @@ export async function runNodeGeneration(
       onApproval: (request) => {
         if (!isCurrent()) return;
         const askedAt = new Date().toISOString();
+        // append, never replace: a second parallel tool call must not evict the
+        // first one's card (that stranded the first approval and hung the turn)
         set((state) => ({
-          nodes: state.nodes.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, pendingApproval: { ...request, askedAt } } } : n),
+          nodes: state.nodes.map((n) => {
+            if (n.id !== nodeId) return n;
+            const cur = n.data.pendingApprovals ?? [];
+            if (cur.some((p) => p.id === request.id)) return n;
+            return { ...n, data: { ...n.data, pendingApprovals: [...cur, { ...request, askedAt }] } };
+          }),
         }));
         toast('info', t('approval.toast'), 8000);
       },
-      onApprovalDecided: ({ id, outcome, value }) => {
+      onApprovalDecided: ({ id, outcome, value, auto, name, query, rule }) => {
         if (!isCurrent()) return;
         const decidedAt = new Date().toISOString();
         set((state) => ({
           nodes: state.nodes.map((n) => {
             if (n.id !== nodeId) return n;
-            const pending = n.data.pendingApproval;
-            if (!pending || pending.id !== id) return { ...n, data: { ...n.data, pendingApproval: undefined } };
+            const cur = n.data.pendingApprovals ?? [];
+            const pending = cur.find((p) => p.id === id);
+            const rest = cur.filter((p) => p.id !== id);
+            const nextPending = rest.length ? rest : undefined;
+            // a decision made from a standing rule of this conversation: nobody was
+            // asked, but the record shows it like any other
+            if (!pending && auto) return { ...n, data: { ...n.data, pendingApprovals: nextPending, approvals: [...(n.data.approvals ?? []), { id, kind: 'confirm', toolName: n.data.agentSession?.runtime ?? 'agent', callId: null, reason: null, name: name ?? '', query: query ?? '', arguments: null, askedAt: decidedAt, decidedAt, outcome, auto: true, ...(rule ? { rule } : {}) }] } };
+            if (!pending) return { ...n, data: { ...n.data, pendingApprovals: nextPending } };
             const asked = { ...pending };
             delete asked.answered;
-            return { ...n, data: { ...n.data, pendingApproval: undefined, approvals: [...(n.data.approvals ?? []), { ...asked, outcome, decidedAt, ...(value ? { value } : {}) }] } };
+            return { ...n, data: { ...n.data, pendingApprovals: nextPending, approvals: [...(n.data.approvals ?? []), { ...asked, outcome, decidedAt, ...(value ? { value } : {}) }] } };
           }),
         }));
       },

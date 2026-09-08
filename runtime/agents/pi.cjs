@@ -13,7 +13,7 @@
 
 'use strict';
 
-const { spawn } = require('node:child_process');
+const { spawn, execFile } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -21,7 +21,7 @@ const { randomUUID } = require('node:crypto');
 
 const fsp = fs.promises;
 const GUARD = path.join(__dirname, 'pi-guard.mjs');
-const IDLE_MS = 10 * 60 * 1000;
+const IDLE_MS = Number(process.env.TD_AGENT_IDLE_MS) || 10 * 60 * 1000; // a Pi process (session or catalog) retires after this long without a listener
 const RESPONSE_MS = 30 * 1000;
 const CANDIDATE_DIRS = [
   '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin',
@@ -192,6 +192,18 @@ function createPiRuntime({ log } = {}) {
   let binPromise = null;
 
   const bin = () => { if (!binPromise) binPromise = findPi(); return binPromise; };
+  // Pi's thinking levels in its own words, from its own `--help`
+  // (`--thinking <level>  Set thinking level: off, minimal, …`); read once
+  let levelsPromise = null;
+  const levelsOf = (b) => {
+    if (!levelsPromise) levelsPromise = new Promise((resolve) => {
+      execFile(b, ['--help'], { env: childEnv(), timeout: 8000, maxBuffer: 1 << 20 }, (_err, stdout) => {
+        const m = String(stdout || '').match(/--thinking[^\n]*?level:\s*([a-z0-9_, -]+)/i);
+        resolve(m ? m[1].split(',').map((s) => s.trim()).filter(Boolean) : []);
+      });
+    });
+    return levelsPromise;
+  };
 
   async function processFor(cwd) {
     const live = procs.get(cwd);
@@ -221,8 +233,9 @@ function createPiRuntime({ log } = {}) {
       let p = procs.get(key);
       if (!p || p.dead) { p = new PiProcess(b, os.homedir(), { log: say, noSession: true, onExit: (d) => { if (procs.get(key) === d) procs.delete(key); } }); procs.set(key, p); }
       return p.exclusive(async () => {
-        const [cat, state] = await Promise.all([p.send({ type: 'get_available_models' }), p.send({ type: 'get_state' })]);
-        const models = (cat?.models ?? []).map(modelEntry);
+        const [cat, state, levels] = await Promise.all([p.send({ type: 'get_available_models' }), p.send({ type: 'get_state' }), levelsOf(b)]);
+        const defaultEffort = typeof state?.thinkingLevel === 'string' ? state.thinkingLevel : null;
+        const models = (cat?.models ?? []).map((m) => ({ ...modelEntry(m), efforts: m.reasoning ? levels : [], defaultEffort: m.reasoning ? defaultEffort : null }));
         const cur = state?.model ? `${state.model.provider}/${state.model.id}` : null;
         return { installed: true, models, default: cur && models.some((m) => `${m.provider}/${m.id}` === cur) ? cur : (models[0] ? `${models[0].provider}/${models[0].id}` : null), thinkingLevel: state?.thinkingLevel ?? null };
       });
@@ -275,9 +288,11 @@ function createPiRuntime({ log } = {}) {
           if (req.forkEntryId) await proc.send({ type: 'fork', entryId: String(req.forkEntryId) });
           else if (!req.sessionPath) await proc.send({ type: 'new_session' });
           if (req.model && typeof req.model === 'object' && req.model.provider && req.model.id) await proc.send({ type: 'set_model', provider: req.model.provider, modelId: req.model.id });
-          if (req.thinkingLevel) await proc.send({ type: 'set_thinking_level', level: req.thinkingLevel });
+          // only a level Pi itself lists; an explicit thinkingLevel still wins
+          const level = req.thinkingLevel || (req.effort && (await levelsOf(await bin())).includes(req.effort) ? req.effort : null);
+          if (level) await proc.send({ type: 'set_thinking_level', level });
           const state = await proc.send({ type: 'get_state' });
-          emit({ type: 'session', sessionId: state?.sessionId ?? null, sessionFile: state?.sessionFile ?? null, model: state?.model ? { provider: state.model.provider, id: state.model.id, name: state.model.name } : null, cwd });
+          emit({ type: 'session', effort: typeof state?.thinkingLevel === 'string' ? state.thinkingLevel : null, sessionId: state?.sessionId ?? null, sessionFile: state?.sessionFile ?? null, model: state?.model ? { provider: state.model.provider, id: state.model.id, name: state.model.name } : null, cwd });
           const before = await snapshotDir(cwd).catch(() => null);
           if (aborter.aborted) { ended('aborted'); }
           else {

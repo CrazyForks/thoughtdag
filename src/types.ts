@@ -67,6 +67,12 @@ export interface ApprovalRequest {
   paths?: string[];
   /** a directory the person can allow from now on, instead of once */
   suggest?: string | null;
+  /** what "allow for this conversation" would cover, as the runtime names it
+      (opaque; a later turn with the same rule is allowed without asking).
+      Absent when the runtime offers no standing allowance for this ask. */
+  rule?: string | null;
+  /** the runtime decided from a standing rule of this conversation; nobody was asked */
+  auto?: boolean;
 }
 
 /** One tool call of a running agent turn, as the node shows it live. */
@@ -79,7 +85,7 @@ export interface AgentTraceEntry {
   endedAt?: string;
 }
 
-export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable' | 'answered';
+export type ApprovalOutcome = 'allowed-once' | 'allowed-session' | 'rejected' | 'cancelled' | 'unavailable' | 'answered';
 
 /** A decided approval: part of the turn's record, like a tool footprint. */
 export interface ApprovalRecord extends ApprovalRequest {
@@ -123,6 +129,8 @@ export interface ThoughtData extends Record<string, unknown> {
   /** The runtime session this node's last agent turn ran in (desktop agent lanes). */
   agentSession?: {
     runtime: AgentRuntime; sessionId: string | null; sessionFile: string | null; cwd: string;
+    /** the effort level the turn actually ran at, in the runtime's own words, from its own record */
+    effort?: string;
     /** the turn continued the mirrored session instead of opening a fresh one */
     continued?: boolean;
     /** what changed on disk during the turn, by the file system's account */
@@ -131,7 +139,10 @@ export interface ThoughtData extends Record<string, unknown> {
   /** Transient: the tool calls of the agent turn running now, in order. */
   agentTrace?: AgentTraceEntry[];
   /** Transient: an agent runtime is waiting for the person's decision on one action. */
-  pendingApproval?: ApprovalRequest;
+  /** Transient: approvals the agent is waiting on, oldest first. A model can
+      ask for several at once (parallel tool calls); each is answered on its
+      own card and the turn resumes only when all are answered. */
+  pendingApprovals?: ApprovalRequest[];
   /** Every approval decided during this turn's generations, oldest first. */
   approvals?: ApprovalRecord[];
   archived?: boolean; // pruned-but-kept: dimmed on canvas, EXCLUDED from every context walk
@@ -200,6 +211,8 @@ export interface ThoughtData extends Record<string, unknown> {
   /** Per version: this answer used the model gateway's built-in web search
       (no tool pings from the proxy, so the stream flags it once instead). */
   gatewaySearches?: (boolean | undefined)[];
+  /** per version: the effort level an agent turn actually ran at (its own record); absent for API models */
+  generatedEfforts?: (string | undefined | null)[];
   /** Epistemic move per version: insight (default, unmarked) | ruleout |
       decision | pivot | open. Auto-labeled by the takeaway judge; display
       layer only. */
