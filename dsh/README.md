@@ -112,6 +112,13 @@ dsh plugin --profile web add /abs/path/to/thoughtdag/dsh
 # 3. restart the profile's web app; open the view switch in the GUI
 ```
 
+The script drives `tsc`, `vite` and `esbuild` through Node directly, so the
+same code path builds on Windows, macOS and Linux. Always run it as
+`npm run dsh:build` instead of passing the flags through Git Bash by hand:
+MSYS path conversion rewrites `--base=/thoughtdag/` into a Git-install path,
+which bakes a broken base into `dist-app` — every asset request then falls
+through to the SPA fallback HTML and the canvas mounts as a blank white page.
+
 While developing, the profile keeps a pnpm *link* to this directory, so edits
 to `lib/` apply on the next restart without reinstalling.
 

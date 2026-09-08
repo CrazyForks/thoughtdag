@@ -23,7 +23,13 @@ rmSync(tmp, { recursive: true, force: true })
 // this host, which answers them on the harness's providers.
 // VITE_DSH_BRIDGE tells the SPA where the plugin's session bridge answers, so
 // it installs the harness-backed window.desktopSessions at boot
-execFileSync('npm', ['run', 'build', '--', '--base=/thoughtdag/', '--outDir=' + tmp], { cwd: repo, stdio: 'inherit', env: { ...process.env, VITE_DSH_BRIDGE: '/thoughtdag/api', VITE_API_BASE: '/thoughtdag' } })
+// The type gate the root `npm run build` has, then vite itself. Every tool is
+// run as a node script through this process's own node binary: execFileSync
+// cannot spawn `npm` (a .cmd needing a shell on Windows) nor the extensionless
+// .bin shims, while a JS entry takes argv verbatim — no shell, no quoting, one
+// code path on every platform.
+execFileSync(process.execPath, [resolve(repo, 'node_modules/typescript/bin/tsc'), '-b'], { cwd: repo, stdio: 'inherit' })
+execFileSync(process.execPath, [resolve(repo, 'node_modules/vite/bin/vite.js'), 'build', '--base=/thoughtdag/', '--outDir=' + tmp], { cwd: repo, stdio: 'inherit', env: { ...process.env, VITE_DSH_BRIDGE: '/thoughtdag/api', VITE_API_BASE: '/thoughtdag' } })
 // keep only what the embedded SPA needs; landing-page covers are not served
 rmSync(resolve(tmp, 'covers'), { recursive: true, force: true })
 // the tutorial's gifs stay: a first-time visitor inside the harness sees the same walkthrough
@@ -35,9 +41,8 @@ console.log('plugin SPA written to', outDir)
 
 // The why layer: the CLI's library, bundled for the host (Node), so the plugin
 // registers the same four questions as native harness tools and a /why command
-const esbuild = resolve(repo, 'node_modules/.bin/esbuild')
 const whyOut = resolve(__dirname, '../lib/why.mjs')
-execFileSync(esbuild, [resolve(repo, 'cli/src/lib.ts'), '--bundle', '--platform=node', '--format=esm', '--target=node22', '--define:import.meta.env={}', '--outfile=' + whyOut, '--log-level=warning'], { stdio: 'inherit' })
+execFileSync(process.execPath, [resolve(repo, 'node_modules/esbuild/bin/esbuild'), resolve(repo, 'cli/src/lib.ts'), '--bundle', '--platform=node', '--format=esm', '--target=node22', '--define:import.meta.env={}', '--outfile=' + whyOut, '--log-level=warning'], { stdio: 'inherit' })
 console.log('why layer written to', whyOut)
 
 // The shared agent runtime (plain Node): the host serves it over HTTP so the
