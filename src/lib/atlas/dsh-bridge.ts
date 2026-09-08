@@ -27,6 +27,11 @@ const ROOT_KEY = 'dsh-sessions';
 const REL_SUFFIX = '/session.jsonl.zstd';
 const CACHE_MS = 1500;
 const POLL_MS = 2500;
+/** the cadence while the canvas is hidden (the overlay closed, or the tab in the background) */
+const HIDDEN_POLL_MS = 60000;
+/** a full walk of every root and the disk sessions, at most this often; in between only files that changed lately are stat'd */
+const LIST_EVERY_MS = 60000;
+const HOT_WINDOW_MS = 10 * 60 * 1000;
 
 interface Entry { id: string; live: boolean; size: number; mtime: number; seq: number | null; cwd: string | null }
 
@@ -79,19 +84,26 @@ export function installDshSessionsBridge(apiBase: string): void {
       const prev = index.get(s.id);
       index.set(s.id, { id: s.id, live: false, size: s.size, mtime: s.mtime, seq: prev?.seq ?? null, cwd: s.cwd ?? prev?.cwd ?? null });
     }
-    for (const s of live) {
-      seen.add(s.id);
-      const prev = index.get(s.id);
-      // a live session's file grows behind its log; a seq step is the honest
-      // "it changed" signal, so mtime follows the seq we observe
-      const seq = typeof s.seq === 'number' ? s.seq : null;
-      const moved = seq !== null && prev?.seq !== null && prev?.seq !== undefined && seq > prev.seq;
-      index.set(s.id, {
-        id: s.id, live: true, size: prev?.size ?? 0,
-        mtime: moved || !prev ? Date.now() : prev.mtime, seq, cwd: prev?.cwd ?? null,
-      });
-    }
+    for (const s of live) { seen.add(s.id); mergeLive(s); }
     for (const id of [...index.keys()]) if (!seen.has(id)) index.delete(id);
+    return [...index.values()];
+  };
+  // a live session's file grows behind its log; a seq step is the honest
+  // "it changed" signal, so mtime follows the seq we observe
+  const mergeLive = (s: LiveSession): void => {
+    const prev = index.get(s.id);
+    const seq = typeof s.seq === 'number' ? s.seq : null;
+    const moved = seq !== null && prev?.seq !== null && prev?.seq !== undefined && seq > prev.seq;
+    index.set(s.id, {
+      id: s.id, live: true, size: prev?.size ?? 0,
+      mtime: moved || !prev ? Date.now() : prev.mtime, seq, cwd: prev?.cwd ?? null,
+    });
+  };
+  /** The live sessions only — the small list a tick can afford; disk
+   *  entries stay as the last full pass left them. */
+  const refreshLive = async (): Promise<Entry[]> => {
+    const live = await json<{ sessions: LiveSession[] }>('/sessions').then((d) => d.sessions).catch(() => [] as LiveSession[]);
+    for (const s of live) mergeLive(s);
     return [...index.values()];
   };
 
@@ -103,8 +115,16 @@ export function installDshSessionsBridge(apiBase: string): void {
     if (!e) return '';
     const hit = cache.get(id);
     if (hit && Date.now() - hit.at < CACHE_MS && hit.seq === e.seq) return hit.text;
-    let t = await text(e.live ? `/sessions/${encodeURIComponent(id)}/log` : `/disksessions/${encodeURIComponent(id)}/log`).catch(() => '');
-    if (e.live && e.cwd) t = withHeaderCwd(t, e.cwd);
+    let t: string;
+    if (e.live && hit && hit.seq !== null && e.seq !== null && e.seq > hit.seq && hit.text) {
+      // the log moved on: fetch only the events past what we hold
+      const tail = await text(`/sessions/${encodeURIComponent(id)}/log?since=${hit.seq}`).catch(() => null);
+      if (tail === null) t = hit.text;
+      else t = tail ? `${hit.text}\n${tail}` : hit.text;
+    } else {
+      t = await text(e.live ? `/sessions/${encodeURIComponent(id)}/log` : `/disksessions/${encodeURIComponent(id)}/log`).catch(() => '');
+      if (e.live && e.cwd) t = withHeaderCwd(t, e.cwd);
+    }
     cache.set(id, { at: Date.now(), seq: e.seq, text: t });
     return t;
   };
@@ -123,28 +143,54 @@ export function installDshSessionsBridge(apiBase: string): void {
 
   const listeners: ((e: { rootKey: string; rel: string }) => void)[] = [];
   let polling = false;
+  // files that changed lately: the ones a running agent is writing. Between
+  // full listings only these are stat'd — a few calls, not a walk of every root
+  const hot = new Map<string, { rootKey: string; rel: string; mtime: number }>();
+  let lastFullListing = 0;
+  const noteFile = (rootKey: string, f: FileEntry): void => {
+    const k = `${rootKey}|${f.rel}`;
+    const prev = fileMtimes.get(k);
+    fileMtimes.set(k, f.mtime);
+    if (Date.now() - f.mtime < HOT_WINDOW_MS) hot.set(k, { rootKey, rel: f.rel, mtime: f.mtime }); else hot.delete(k);
+    if (prev !== undefined && f.mtime > prev) for (const cb of listeners) cb({ rootKey, rel: f.rel });
+  };
   const poll = async (): Promise<void> => {
+    const full = Date.now() - lastFullListing >= LIST_EVERY_MS;
     const before = new Map([...index].map(([id, e]) => [id, e.seq]));
-    const now = await refreshIndex().catch(() => [] as Entry[]);
+    // the live sessions every tick (a small list); the disk sessions with the full pass
+    const now = await (full ? refreshIndex() : refreshLive()).catch(() => [] as Entry[]);
     for (const e of now) {
       if (!e.live) continue;
       const prev = before.get(e.id);
       // new live session, or one whose log moved on
       if (prev === undefined || (e.seq !== null && prev !== null && e.seq > prev)) {
-        cache.delete(e.id);
         for (const cb of listeners) cb({ rootKey: ROOT_KEY, rel: relOf(e.id) });
       }
     }
-    // the other agents' files: a grown mtime is the change signal
-    for (const r of await fileRootsOf()) {
-      for (const f of await listFiles(r.key)) {
-        const k = `${r.key}|${f.rel}`;
-        const prev = fileMtimes.get(k);
-        fileMtimes.set(k, f.mtime);
-        if (prev !== undefined && f.mtime > prev) for (const cb of listeners) cb({ rootKey: r.key, rel: f.rel });
-      }
+    if (full) {
+      lastFullListing = Date.now();
+      for (const r of await fileRootsOf()) for (const f of await listFiles(r.key)) noteFile(r.key, f);
+      return;
+    }
+    for (const h of [...hot.values()]) {
+      const st = await json<{ size: number; mtime: number }>(fileUrl(h.rootKey, 'stat', h.rel)).catch(() => null);
+      if (!st) { hot.delete(`${h.rootKey}|${h.rel}`); continue; }
+      noteFile(h.rootKey, { rel: h.rel, size: st.size, mtime: st.mtime });
     }
   };
+
+  // cadence follows visibility: the canvas shown polls every few seconds;
+  // hidden (overlay closed, tab in the background) it looks once a minute
+  // and catches up the moment it is shown again
+  let shown = true;
+  let timer: number | null = null;
+  const visible = () => shown && document.visibilityState !== 'hidden';
+  const schedule = (): void => {
+    if (timer !== null) window.clearTimeout(timer);
+    timer = window.setTimeout(async () => { await poll().catch(() => {}); schedule(); }, visible() ? POLL_MS : HIDDEN_POLL_MS);
+  };
+  const wake = (): void => { if (!polling || !visible()) return; void poll().catch(() => {}).then(schedule); };
+  document.addEventListener('visibilitychange', wake);
 
   const select = (id: string): void => {
     window.parent.postMessage({ source: 'dsh-thoughtdag', type: 'td:select-session', session: id }, window.location.origin);
@@ -214,7 +260,9 @@ export function installDshSessionsBridge(apiBase: string): void {
       if (!polling) {
         polling = true;
         await refreshIndex().catch(() => {});
-        window.setInterval(() => { void poll(); }, POLL_MS);
+        lastFullListing = Date.now();
+        for (const r of await fileRootsOf()) for (const f of await listFiles(r.key)) noteFile(r.key, f);
+        schedule();
       }
       return true;
     },
@@ -230,6 +278,11 @@ export function installDshSessionsBridge(apiBase: string): void {
     if (d.type === 'td:current-session') {
       currentSession = d.session ?? null;
       window.dispatchEvent(new CustomEvent('td:dsh-current', { detail: currentSession }));
+    }
+    if (d.type === 'td:view') {
+      const was = shown;
+      shown = (d as { shown?: boolean }).shown !== false;
+      if (shown && !was) wake(); else if (!shown && was) schedule();
     }
   });
   window.parent.postMessage({ source: 'dsh-thoughtdag', type: 'td:request-current' }, window.location.origin);

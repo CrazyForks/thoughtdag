@@ -218,6 +218,14 @@ function sessionToJsonl(session) {
   return lines.join('\n')
 }
 
+/** The events after `since`, as lines — the tail a reader appends to the
+ *  log it already holds, instead of fetching the whole log again. */
+function eventsJsonlSince(session, since) {
+  const lines = []
+  for (const event of allEvents(session)) if (typeof event.seq === 'number' && event.seq > since) lines.push(JSON.stringify(event))
+  return lines.join('\n')
+}
+
 // ── durable-session bridge (disk) ──────────────────────────────────────
 // DSH persists each session as session.jsonl.zstd under
 // $DSH_HOME/sessions/<encoded-cwd>/<session-id>/. The zstd log is a
@@ -306,6 +314,18 @@ async function findSessionFiles(dshHome) {
  *  header names the id+cwd; session/title arrives right after in live logs.
  *  Falls back to the session id when the frame boundary cuts early. */
 const HEAD_READ_BYTES = 256 * 1024 // covers the first frames: header + title + opening turns
+// a session's head is decoded once per (path, size, mtime): the listing is
+// polled, and a poll must not decompress sixty files it already knows
+const headCache = new Map()
+async function cachedHead(f) {
+  const key = `${f.log}|${f.size}|${f.mtime}`
+  const hit = headCache.get(key)
+  if (hit) return hit
+  const head = await sessionTitleFromHead(f.log)
+  if (headCache.size > 4000) headCache.clear()
+  headCache.set(key, head)
+  return head
+}
 async function sessionTitleFromHead(logPath) {
   try {
     const fh = await open(logPath, 'r')
@@ -412,9 +432,13 @@ function fileInRoot(rootKey, rel) {
 }
 
 /** Every session file under a root, two-to-five levels deep like the desktop's walk. */
+const listCache = new Map() // rootKey → { at, files }: a walk is reused for a few seconds
+const LIST_CACHE_MS = 5000
 async function listRoot(rootKey) {
   const root = FILE_ROOTS[rootKey]
   if (!root) throw new HttpError(404, 'no such root')
+  const hit = listCache.get(rootKey)
+  if (hit && Date.now() - hit.at < LIST_CACHE_MS) return hit.files
   const out = []
   const walk = async (dir, depth) => {
     if (depth > 5) return
@@ -429,6 +453,7 @@ async function listRoot(rootKey) {
     }
   }
   await walk(root, 0)
+  listCache.set(rootKey, { at: Date.now(), files: out })
   return out
 }
 
@@ -844,7 +869,7 @@ export async function apply(ctx, config) {
         const files = await findSessionFiles(dshHome)
         const sessions = []
         for (const f of files) {
-          const head = await sessionTitleFromHead(f.log)
+          const head = await cachedHead(f)
           sessions.push({
             id: head.id ?? f.sessionDir,
             title: head.title,
@@ -880,7 +905,11 @@ export async function apply(ctx, config) {
         const id = decodeURIComponent(one[1])
         const session = liveSession(ctx, id)
         if (session === undefined) return sendJson(res, 404, { error: 'no such session' })
-        if (one[2] === '/log') return sendFile(res, 'application/x-ndjson; charset=utf-8', sessionToJsonl(session))
+        if (one[2] === '/log') {
+          const since = url.searchParams.get('since')
+          if (since !== null && since !== '') return sendFile(res, 'application/x-ndjson; charset=utf-8', eventsJsonlSince(session, Number(since)))
+          return sendFile(res, 'application/x-ndjson; charset=utf-8', sessionToJsonl(session))
+        }
         return sendJson(res, 200, { session: sessionSummary(session) })
       }
       if (path === '/why/status' && req.method === 'GET') return sendJson(res, 200, whyStatus)
@@ -891,12 +920,13 @@ export async function apply(ctx, config) {
         for (const [key, p] of Object.entries(FILE_ROOTS)) roots.push({ key, path: p, builtin: true, exists: await stat(p).then(st => st.isDirectory()).catch(() => false) })
         return sendJson(res, 200, { roots })
       }
-      const rootRoute = /^\/roots\/([a-z-]+)\/(list|head|read|range)$/.exec(path)
+      const rootRoute = /^\/roots\/([a-z-]+)\/(list|head|read|range|stat)$/.exec(path)
       if (rootRoute !== null && req.method === 'GET') {
         const key = rootRoute[1]
         if (rootRoute[2] === 'list') return sendJson(res, 200, { files: await listRoot(key) })
         const rel = url.searchParams.get('rel') ?? ''
         const abs = fileInRoot(key, rel)
+        if (rootRoute[2] === 'stat') { const st = await stat(abs).catch(() => null); return st ? sendJson(res, 200, { size: st.size, mtime: st.mtimeMs }) : sendJson(res, 404, { error: 'no such file' }) }
         if (rootRoute[2] === 'head') return sendFile(res, 'text/plain; charset=utf-8', await headOfFile(abs, Number(url.searchParams.get('bytes')) || 16384).catch(() => ''))
         if (rootRoute[2] === 'read') {
           const st = await stat(abs).catch(() => null)

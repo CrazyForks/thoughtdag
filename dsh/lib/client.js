@@ -48,7 +48,7 @@ window.__ModuleLoader__.load({
         mapBtn.classList.toggle('active', map)
         mapBtn.setAttribute('aria-pressed', String(map))
       }
-      const close = () => { overlay.hidden = true; setView(false) }
+      const close = () => { overlay.hidden = true; setView(false); send('td:view', { shown: false }) }
       const send = (type, payload) => frame.contentWindow?.postMessage({ source: 'dsh-thoughtdag', type, ...payload }, location.origin)
 
       const syncCurrent = () => {
@@ -64,8 +64,9 @@ window.__ModuleLoader__.load({
         // box and shows nothing when revealed
         if (!frame.src) frame.src = frame.dataset.src + (pluginVersion ? (frame.dataset.src.includes('?') ? '&' : '?') + 'dv=' + encodeURIComponent(pluginVersion) : '')
         syncCurrent()
+        send('td:view', { shown: true })
         // let the SPA boot, then re-sync so its listener is ready
-        window.setTimeout(syncCurrent, 400)
+        window.setTimeout(() => { syncCurrent(); send('td:view', { shown: true }) }, 400)
       })
       dialogBtn.addEventListener('click', close)
 
