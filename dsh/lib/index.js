@@ -665,24 +665,33 @@ function installApprovalAnswerer(ctx) {
 }
 
 /** Run one question through the harness's agent loop, continuing a mirrored
- *  session, forking a ThoughtDAG parent session, or creating a fresh session.
- *  Report progress as SSE-style frames via `emit`; resolves when the turn ends. */
+ *  session, forking a dsh mirror at the parent's exact turn, or creating a
+ *  fresh session. Report progress as SSE-style frames via `emit`; resolves
+ *  when the turn ends. */
 async function runAgentTurn(ctx, body, emit, isClosed, { answerApprovals = true } = {}) {
   const { question, context } = compileForAgent(body)
-  // A mirrored DSH tail continues in place. Ordinary ThoughtDAG child nodes
-  // fork their parent's Harness session so durable preset state (for example
-  // promotion after a first tool/call) follows the branch while sibling
-  // branches remain isolated. Otherwise create a fresh session.
+  // A parent that is a current ledger tail continues in place. A historical
+  // dsh mirror forks at the exact turn named by its user-message id, so later
+  // turns (including sibling work) cannot leak into the branch. Otherwise a
+  // fresh session receives the compiled canvas context.
   const continueId = typeof body?.harness?.session === 'string' && body.harness.session ? body.harness.session : null
   const forkId = typeof body?.harness?.forkSession === 'string' && body.harness.forkSession ? body.harness.forkSession : null
-  let sessionId
+  const forkAnchor = typeof body?.harness?.forkAnchor === 'string' && body.harness.forkAnchor ? body.harness.forkAnchor : null
+  let sessionId = null
   let forkedFrom = null
   if (continueId && (liveSession(ctx, continueId) || (await eventsOfSession(ctx, continueId)) !== null)) {
     sessionId = continueId
-  } else if (forkId && (liveSession(ctx, forkId) || (await eventsOfSession(ctx, forkId)) !== null)) {
-    sessionId = (await ctx.sessionController.fork({ sessionId: forkId })).sessionId
-    forkedFrom = forkId
-  } else {
+  } else if (forkId && forkAnchor) {
+    const events = await eventsOfSession(ctx, forkId)
+    if (events !== null) {
+      const turn = turnsOf(events).find(t => t.userMessageId === forkAnchor)
+      if (!turn) throw new HttpError(400, 'no such fork anchor: ' + forkAnchor)
+      if (turn.endSeq === null) throw new HttpError(409, 'turn ' + turn.turn + ' is still open; a fork needs a completed turn')
+      sessionId = (await ctx.sessionController.fork({ sessionId: forkId, atSeq: turn.endSeq })).sessionId
+      forkedFrom = forkId
+    }
+  }
+  if (!sessionId) {
     const cwd = typeof body?.harness?.cwd === 'string' && body.harness.cwd ? { cwd: body.harness.cwd } : {}
     sessionId = (await ctx.sessionController.create({ ...cwd })).sessionId
   }
