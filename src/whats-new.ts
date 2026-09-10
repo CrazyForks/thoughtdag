@@ -32,6 +32,16 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.4.12',
+    date: '2026-09-10',
+    announce: false,
+    lead: {
+      zh: 'DeepSeek Harness 插件里，Agent 子节点现在续接父节点的会话；同一父节点下的第二个分支从父节点那一轮分叉出自己的会话，preset 的会话状态不再在每个子节点重头开始（#28、#29）。插件的构建脚本在 Windows 上也能跑了（#24、#26）。桌面版本次只同步版本号。',
+      en: 'Inside the DeepSeek Harness plugin, an agent child node now continues its parent\'s session, and a second branch off the same parent forks its own session at that parent\'s turn, so a preset\'s session state no longer restarts at every child (#28, #29). The plugin\'s build script runs on Windows too (#24, #26). The desktop app only moves its version number.',
+    },
+    items: [],
+  },
+  {
     version: '0.4.11',
     date: '2026-09-08',
     announce: false,
