@@ -231,11 +231,10 @@ export async function llmCallStream(
   callbacks?: StreamCallbacks,
   toolPrefs?: ToolPrefs,
   modelOverride?: string,
-  /** Agent lanes only: which working directory the turn runs in, and which
-      session it continues (a tail follow-up) — the harness's inside
-      DeepSeek Harness, the desktop runtime's (Pi) in the app. Ignored by
-      every model backend. */
-  harness?: { cwd?: string; session?: string; sessionPath?: string; forkEntryId?: string; nodeId?: string; continue?: boolean },
+  /** Agent lanes only: which working directory the turn runs in, which
+      session it continues, or which DSH session+turn anchor it forks from.
+      The harness fields are ignored by every non-Harness backend. */
+  harness?: { cwd?: string; session?: string; forkSession?: string; forkAnchor?: string; sessionPath?: string; forkEntryId?: string; nodeId?: string; continue?: boolean },
 ): Promise<string> {
   // On the Workers deployment, OpenRouter models stream straight from the
   // browser — the proxy's CPU allowance can't survive big contexts + heavy

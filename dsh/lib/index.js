@@ -664,21 +664,38 @@ function installApprovalAnswerer(ctx) {
   }, true)
 }
 
-/** Run one question through the harness's agent loop in a fresh session and
- *  report it as SSE-style frames via `emit`; resolves when the turn ends. */
+/** Run one question through the harness's agent loop, continuing a mirrored
+ *  session, forking a dsh mirror at the parent's exact turn, or creating a
+ *  fresh session. Report progress as SSE-style frames via `emit`; resolves
+ *  when the turn ends. */
 async function runAgentTurn(ctx, body, emit, isClosed, { answerApprovals = true } = {}) {
   const { question, context } = compileForAgent(body)
-  // continue the session the canvas mirrors (a tail follow-up), else a fresh
-  // session in the requested working directory (the canvas's project)
+  // A parent that is a current ledger tail continues in place. A historical
+  // dsh mirror forks at the exact turn named by its user-message id, so later
+  // turns (including sibling work) cannot leak into the branch. Otherwise a
+  // fresh session receives the compiled canvas context.
   const continueId = typeof body?.harness?.session === 'string' && body.harness.session ? body.harness.session : null
-  let sessionId
+  const forkId = typeof body?.harness?.forkSession === 'string' && body.harness.forkSession ? body.harness.forkSession : null
+  const forkAnchor = typeof body?.harness?.forkAnchor === 'string' && body.harness.forkAnchor ? body.harness.forkAnchor : null
+  let sessionId = null
+  let forkedFrom = null
   if (continueId && (liveSession(ctx, continueId) || (await eventsOfSession(ctx, continueId)) !== null)) {
     sessionId = continueId
-  } else {
+  } else if (forkId && forkAnchor) {
+    const events = await eventsOfSession(ctx, forkId)
+    if (events !== null) {
+      const turn = turnsOf(events).find(t => t.userMessageId === forkAnchor)
+      if (!turn) throw new HttpError(400, 'no such fork anchor: ' + forkAnchor)
+      if (turn.endSeq === null) throw new HttpError(409, 'turn ' + turn.turn + ' is still open; a fork needs a completed turn')
+      sessionId = (await ctx.sessionController.fork({ sessionId: forkId, atSeq: turn.endSeq })).sessionId
+      forkedFrom = forkId
+    }
+  }
+  if (!sessionId) {
     const cwd = typeof body?.harness?.cwd === 'string' && body.harness.cwd ? { cwd: body.harness.cwd } : {}
     sessionId = (await ctx.sessionController.create({ ...cwd })).sessionId
   }
-  emit({ harnessSession: sessionId, continued: sessionId === continueId })
+  emit({ harnessSession: sessionId, continued: sessionId === continueId, ...(forkedFrom ? { forkedFrom } : {}) })
   // a streaming caller can show and answer approvals; a one-shot caller
   // (/claude) cannot, so its requests fall through to the harness's own panel
   const turnEntry = { emit, isClosed, calls: new Map() }
@@ -724,7 +741,8 @@ async function runAgentTurn(ctx, body, emit, isClosed, { answerApprovals = true 
     }
   })
   try {
-    const injectContext = continueId && sessionId === continueId ? (typeof body?.harness?.extraContext === 'string' ? body.harness.extraContext : '') : context
+    const inheritsSessionContext = (continueId && sessionId === continueId) || forkedFrom
+    const injectContext = inheritsSessionContext ? (typeof body?.harness?.extraContext === 'string' ? body.harness.extraContext : '') : context
     if (injectContext) agent.inject({ id: 'td-' + randomUUID(), role: 'user', content: [{ type: 'text', text: injectContext }], source: SOURCE })
     const promptContent = [{ type: 'text', text: question }]
     for (const img of Array.isArray(body?.images) ? body.images : []) {
