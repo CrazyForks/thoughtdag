@@ -664,21 +664,29 @@ function installApprovalAnswerer(ctx) {
   }, true)
 }
 
-/** Run one question through the harness's agent loop in a fresh session and
- *  report it as SSE-style frames via `emit`; resolves when the turn ends. */
+/** Run one question through the harness's agent loop, continuing a mirrored
+ *  session, forking a ThoughtDAG parent session, or creating a fresh session.
+ *  Report progress as SSE-style frames via `emit`; resolves when the turn ends. */
 async function runAgentTurn(ctx, body, emit, isClosed, { answerApprovals = true } = {}) {
   const { question, context } = compileForAgent(body)
-  // continue the session the canvas mirrors (a tail follow-up), else a fresh
-  // session in the requested working directory (the canvas's project)
+  // A mirrored DSH tail continues in place. Ordinary ThoughtDAG child nodes
+  // fork their parent's Harness session so durable preset state (for example
+  // promotion after a first tool/call) follows the branch while sibling
+  // branches remain isolated. Otherwise create a fresh session.
   const continueId = typeof body?.harness?.session === 'string' && body.harness.session ? body.harness.session : null
+  const forkId = typeof body?.harness?.forkSession === 'string' && body.harness.forkSession ? body.harness.forkSession : null
   let sessionId
+  let forkedFrom = null
   if (continueId && (liveSession(ctx, continueId) || (await eventsOfSession(ctx, continueId)) !== null)) {
     sessionId = continueId
+  } else if (forkId && (liveSession(ctx, forkId) || (await eventsOfSession(ctx, forkId)) !== null)) {
+    sessionId = (await ctx.sessionController.fork({ sessionId: forkId })).sessionId
+    forkedFrom = forkId
   } else {
     const cwd = typeof body?.harness?.cwd === 'string' && body.harness.cwd ? { cwd: body.harness.cwd } : {}
     sessionId = (await ctx.sessionController.create({ ...cwd })).sessionId
   }
-  emit({ harnessSession: sessionId, continued: sessionId === continueId })
+  emit({ harnessSession: sessionId, continued: sessionId === continueId, ...(forkedFrom ? { forkedFrom } : {}) })
   // a streaming caller can show and answer approvals; a one-shot caller
   // (/claude) cannot, so its requests fall through to the harness's own panel
   const turnEntry = { emit, isClosed, calls: new Map() }
@@ -724,7 +732,8 @@ async function runAgentTurn(ctx, body, emit, isClosed, { answerApprovals = true 
     }
   })
   try {
-    const injectContext = continueId && sessionId === continueId ? (typeof body?.harness?.extraContext === 'string' ? body.harness.extraContext : '') : context
+    const inheritsSessionContext = (continueId && sessionId === continueId) || forkedFrom
+    const injectContext = inheritsSessionContext ? (typeof body?.harness?.extraContext === 'string' ? body.harness.extraContext : '') : context
     if (injectContext) agent.inject({ id: 'td-' + randomUUID(), role: 'user', content: [{ type: 'text', text: injectContext }], source: SOURCE })
     const promptContent = [{ type: 'text', text: question }]
     for (const img of Array.isArray(body?.images) ? body.images : []) {
