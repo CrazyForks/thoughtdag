@@ -235,7 +235,7 @@ export async function llmCallStream(
       session it continues (a tail follow-up) — the harness's inside
       DeepSeek Harness, the desktop runtime's (Pi) in the app. Ignored by
       every model backend. */
-  harness?: { cwd?: string; session?: string; sessionPath?: string; forkEntryId?: string; nodeId?: string; continue?: boolean },
+  harness?: { cwd?: string; session?: string; forkSession?: string; sessionPath?: string; forkEntryId?: string; nodeId?: string; continue?: boolean },
 ): Promise<string> {
   // On the Workers deployment, OpenRouter models stream straight from the
   // browser — the proxy's CPU allowance can't survive big contexts + heavy
