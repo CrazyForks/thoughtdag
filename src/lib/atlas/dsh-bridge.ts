@@ -314,14 +314,16 @@ async function activeCanvasCwd(): Promise<string | null> {
   } catch { return null; }
 }
 
+type HarnessRoute = { cwd?: string; session?: string; forkSession?: string; forkAnchor?: string };
+
 /** For the node about to generate: the harness routing for its request, or
- *  undefined when not embedded / not a harness-agent question. A question
- *  asked DIRECTLY off the mirrored session's current tail, with nothing else
- *  wired in, continues that session (a follow-up). A simple child of a
- *  ThoughtDAG-created Harness session forks that session, preserving durable
- *  agent/preset state while keeping sibling branches isolated. Richer wiring
- *  gets a fresh session carrying the compiled context. */
-export async function harnessOutbound(nodeId: string, model: string | undefined): Promise<{ cwd?: string; session?: string; forkSession?: string } | undefined> {
+ *  undefined when not embedded / not a harness-agent question. A simple
+ *  child continues when its parent is the tail of ANY dsh ledger entry
+ *  (main, chapter or branch). A dsh mirror parent that is not a current tail
+ *  forks at that parent's own turn, identified by its user-message id. Any
+ *  richer wiring, or a parent without an exact turn anchor, gets a fresh
+ *  session carrying the compiled canvas context. */
+export async function harnessOutbound(nodeId: string, model: string | undefined): Promise<HarnessRoute | undefined> {
   if (!window.desktopSessions || !isHarnessAgentModel(model)) return undefined;
   const cwd = (await activeCanvasCwd()) ?? currentSession?.cwd ?? undefined;
   try {
@@ -333,29 +335,29 @@ export async function harnessOutbound(nodeId: string, model: string | undefined)
     const incoming = edges.filter((e) => e.target === nodeId);
     if (incoming.length === 1) {
       const parentId = incoming[0].source;
-      // Preserve the existing live-mirror behavior: a direct follow-up from
-      // the imported DSH session's current tail continues in place.
-      if (ss && ss.runner === 'dsh' && parentId === ss.tailNodeId) {
-        return { ...(cwd ? { cwd } : {}), session: ss.sessionId };
+      // The live mirror may file a harness-created session under chapters or
+      // branches rather than the placeholder main entry. Search the complete
+      // ledger exactly as agentOutbound does for Pi/Codex/Claude Code.
+      const entries = ss
+        ? [ss, ...(ss.chapters ?? []), ...(ss.branches ?? [])].filter((e) => e.runner === 'dsh' && e.sessionId)
+        : [];
+      const tailEntry = entries.find((e) => e.tailNodeId === parentId);
+      if (tailEntry) {
+        return { ...(cwd ? { cwd } : {}), session: tailEntry.sessionId };
       }
+
+      // A historical/non-tail dsh mirror must fork at the parent's OWN turn,
+      // never at the session's latest turn: otherwise a sibling or later turn
+      // can leak into this branch. itemIds[0] is the user's message id for the
+      // mirrored turn and the host resolves it to that turn's endSeq.
       const parent = nodes.find((n) => n.id === parentId);
-      const parentSession = parent?.data.importSource?.runner === 'dsh'
-        ? parent.data.importSource.sessionId
-        : undefined;
-      if (parentSession) {
-        // Imported historical nodes may represent an earlier turn in a longer
-        // subscribed session. Without an exact turn anchor, forking that
-        // session's latest turn could leak later history. Sessions created by
-        // ThoughtDAG itself are not ledger subscriptions, so their last turn is
-        // exactly the parent node and is safe to fork.
-        const subscribed = new Set([
-          ss?.sessionId,
-          ...(ss?.chapters ?? []).map((c) => c.sessionId),
-          ...(ss?.branches ?? []).map((b) => b.sessionId),
-        ].filter((id): id is string => !!id));
-        if (!subscribed.has(parentSession)) {
-          return { ...(cwd ? { cwd } : {}), forkSession: parentSession };
-        }
+      const source = parent?.data.importSource;
+      if (source?.runner === 'dsh' && source.sessionId && source.itemIds?.[0]) {
+        return {
+          ...(cwd ? { cwd } : {}),
+          forkSession: source.sessionId,
+          forkAnchor: source.itemIds[0],
+        };
       }
     }
   } catch { /* store not ready — fall through to a fresh session */ }
@@ -363,7 +365,6 @@ export async function harnessOutbound(nodeId: string, model: string | undefined)
 }
 
 type HarnessTurnRef = { session: string; turn: number | null; userMessageId: string | null; seq: number | null };
-type HarnessRoute = { cwd?: string; session?: string; forkSession?: string };
 
 /** Provenance for a node that IS a dsh turn: runner, session, the person's
  *  message id (the deep-link and dedup key), the project it ran in. */
