@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
@@ -55,7 +55,28 @@ jobs:
           fi
 
       # prepack builds the bundled SPA, the why layer and the agent runtime
+      - name: Pack the plugin
+        working-directory: dsh
+        run: npm pack --silent && ls -la dsh-thoughtdag-*.tgz
+
+      # every release carries the plugin as a file too, so a user can
+      # install it before (or without) npm; the desktop workflow creates
+      # the draft release from the same tag, so wait for it briefly
+      - name: Attach the tarball to the release
+        if: github.ref_type == 'tag'
+        working-directory: dsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          for i in $(seq 1 30); do
+            gh release view "$TAG" -R "$REPO" >/dev/null 2>&1 && break
+            sleep 10
+          done
+          gh release upload "$TAG" dsh-thoughtdag-*.tgz -R "$REPO" --clobber
+
       - name: Publish dsh-thoughtdag
         if: steps.check.outputs.publish == 'true'
         working-directory: dsh
-        run: npm publish --provenance --access public
+        run: npm publish ./dsh-thoughtdag-*.tgz --provenance --access public

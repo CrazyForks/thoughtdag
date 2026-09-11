@@ -16,7 +16,7 @@ full-screen iframe.
 
 ## What works
 
-- `dsh plugin --profile web add dsh-thoughtdag` installs the plugin
+- `dsh plugin --profile web add dsh-thoughtdag` installs the plugin from npm; every GitHub release also carries `dsh-thoughtdag-<version>.tgz`, and the same command takes that file's URL (`dsh plugin` forwards to pnpm)
 - The harness GUI gains a view switch; "思维图" opens ThoughtDAG at
   `/thoughtdag/` (same origin — no CORS, no second server)
 - The host serves the SPA plus a read-only session bridge:

@@ -15,6 +15,14 @@ dsh plugin --profile web add dsh-thoughtdag
 dsh web
 ```
 
+每个 Release 的 GitHub 资产里也附带插件文件 `dsh-thoughtdag-<版本>.tgz`。npm 上的版本落后于最新 Release 时，用同一条命令直接安装这个文件（`dsh plugin` 底层运行 pnpm，包名、链接、本地路径都可以）：
+
+```bash
+dsh plugin --profile web add https://github.com/chenxiachan/thoughtdag/releases/download/v0.4.13/dsh-thoughtdag-0.4.13.tgz
+```
+
+之后想回到跟随 npm 更新，执行 `dsh plugin --profile web add dsh-thoughtdag@latest`。
+
 打开 `dsh web` 输出的地址，在聊天顶部选择 **思维图**。需要返回聊天时，选择 **对话**。
 
 插件已包含画布，**无需另装 ThoughtDAG 桌面版、CLI 或 MCP**。模型与工具沿用你的 Harness 配置。

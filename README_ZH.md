@@ -24,6 +24,14 @@ dsh plugin --profile web add dsh-thoughtdag
 dsh web
 ```
 
+> **紧急修复通知（0.4.13）。** 插件 0.4.11 和 0.4.12 的模型选择器里，「Harness · 模型」这一组 Agent 条目会消失。修复已经发布，但 npm 包被账号的临时冷却期挡到 9 月 14 日，`update` 和 `add dsh-thoughtdag@latest` 拿到的仍是 0.4.12。请直接安装 Release 上的修复版文件，装完重启 `dsh web`：
+>
+> ```bash
+> dsh plugin --profile web add https://github.com/chenxiachan/thoughtdag/releases/download/v0.4.13/dsh-thoughtdag-0.4.13.tgz
+> ```
+>
+> 等 0.4.13 上了 npm，执行 `dsh plugin --profile web add dsh-thoughtdag@latest` 即可回到跟随 npm 更新。
+
 - **Agent 对话地图看到四家。** Harness 自己的会话和 Claude Code、Codex、Pi 并列；打开一个就是一张图，随对话实时生长。
 - **在画布上提问。** 选 Harness 的任一模型，或选 **DeepSeek Harness · Agent**，问题作为一轮真实的 Harness 对话执行，工具随它用。回答流回节点，这一轮留在 Harness 的会话日志里。
 - **连线决定 Harness 看到什么。** 连进问题的材料、笔记和节点就是它收到的上下文；在镜像会话的链尾追问，会续接那个会话。

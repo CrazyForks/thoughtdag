@@ -15,6 +15,14 @@ dsh plugin --profile web add dsh-thoughtdag
 dsh web
 ```
 
+Every release also ships the plugin as a file, `dsh-thoughtdag-<version>.tgz`, in the release's Assets on GitHub. If npm is behind the latest release, install from the file with the same command (`dsh plugin` runs pnpm, which accepts a package name, a URL or a local path):
+
+```bash
+dsh plugin --profile web add https://github.com/chenxiachan/thoughtdag/releases/download/v0.4.13/dsh-thoughtdag-0.4.13.tgz
+```
+
+To return to following npm later, run `dsh plugin --profile web add dsh-thoughtdag@latest`.
+
 Open the address printed by `dsh web`. Above the chat, switch to the thought-graph view (**思维图**); select the chat view (**对话**) to return.
 
 The plugin includes the canvas. **No separate ThoughtDAG desktop app, CLI, or MCP installation is required.** Models and tools use your Harness configuration.
