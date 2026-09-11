@@ -32,6 +32,16 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.4.14',
+    date: '2026-09-11',
+    announce: false,
+    lead: {
+      zh: '插件的「有新版本」提示现在复制 dsh plugin --profile web add dsh-thoughtdag@latest，这条命令对从 npm 装和从 Release 文件装的用户都有效（update 对文件安装无效）。其余同 0.4.13。',
+      en: 'The plugin\'s update hint now copies dsh plugin --profile web add dsh-thoughtdag@latest, which works for installs from npm and from a release file alike (update does nothing for a file install). Otherwise the same as 0.4.13.',
+    },
+    items: [],
+  },
+  {
     version: '0.4.13',
     date: '2026-09-11',
     announce: false,

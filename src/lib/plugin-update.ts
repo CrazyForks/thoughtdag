@@ -8,7 +8,10 @@ import { compareVersions } from '../whats-new';
 // toast the first time. Nothing updates by itself — the person runs the
 // harness's own command.
 const NOTIFIED_KEY = 'thoughtdag.pluginUpdateNotified';
-export const PLUGIN_UPDATE_COMMAND = 'dsh plugin --profile web update dsh-thoughtdag';
+// `add …@latest` rewrites the profile's spec back to the registry, so it works
+// for a profile that installed from a release file too (`update` re-resolves
+// the same file URL and never moves)
+export const PLUGIN_UPDATE_COMMAND = 'dsh plugin --profile web add dsh-thoughtdag@latest';
 
 export async function bootPluginUpdateCheck(apiBase: string): Promise<void> {
   try {

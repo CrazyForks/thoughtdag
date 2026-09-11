@@ -20,17 +20,11 @@
 > ThoughtDAG 可以作为 DeepSeek Harness 网页界面里的一个视图运行：对话框上方多一个 对话 | 思维图 开关。画布决定 Harness 下一步看到什么，Harness 负责把这一轮跑完。
 
 ```bash
-dsh plugin --profile web add dsh-thoughtdag
+dsh plugin --profile web add https://github.com/chenxiachan/thoughtdag/releases/download/v0.4.14/dsh-thoughtdag-0.4.14.tgz
 dsh web
 ```
 
-> **紧急修复通知（0.4.13）。** 插件 0.4.11 和 0.4.12 的模型选择器里，「Harness · 模型」这一组 Agent 条目会消失。修复已经发布，但 npm 包被账号的临时冷却期挡到 9 月 14 日，`update` 和 `add dsh-thoughtdag@latest` 拿到的仍是 0.4.12。请直接安装 Release 上的修复版文件，装完重启 `dsh web`：
->
-> ```bash
-> dsh plugin --profile web add https://github.com/chenxiachan/thoughtdag/releases/download/v0.4.13/dsh-thoughtdag-0.4.13.tgz
-> ```
->
-> 等 0.4.13 上了 npm，执行 `dsh plugin --profile web add dsh-thoughtdag@latest` 即可回到跟随 npm 更新。
+> **为什么这里是文件链接而不是包名（9 月 14 日前）。** 插件 0.4.11 和 0.4.12 的模型选择器里，「Harness · 模型」这一组 Agent 条目会消失。修复已经发布，但 npm 包被账号的临时冷却期挡住，9 月 14 日前 `add dsh-thoughtdag` 装到的仍是 0.4.12；上面的文件就是修复版。9 月 15 日起，安装命令恢复为 `dsh plugin --profile web add dsh-thoughtdag`。无论从文件还是从 npm 装的，更新都用 `dsh plugin --profile web add dsh-thoughtdag@latest`（应用内的更新提示复制的就是这条）。
 
 - **Agent 对话地图看到四家。** Harness 自己的会话和 Claude Code、Codex、Pi 并列；打开一个就是一张图，随对话实时生长。
 - **在画布上提问。** 选 Harness 的任一模型，或选 **DeepSeek Harness · Agent**，问题作为一轮真实的 Harness 对话执行，工具随它用。回答流回节点，这一轮留在 Harness 的会话日志里。

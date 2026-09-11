@@ -20,17 +20,11 @@
 > ThoughtDAG runs as a view inside the DeepSeek Harness web UI: a 对话 | 思维图 switch above the chat. The canvas is where you decide what the harness sees next; the harness runs the turn.
 
 ```bash
-dsh plugin --profile web add dsh-thoughtdag
+dsh plugin --profile web add https://github.com/chenxiachan/thoughtdag/releases/download/v0.4.14/dsh-thoughtdag-0.4.14.tgz
 dsh web
 ```
 
-> **Hotfix notice (0.4.13).** Plugin 0.4.11 and 0.4.12 lose the **Harness · model** agent entries in the model picker. The fix is released, but the npm package is held back by a temporary account cooldown until September 14, so `update` and `add dsh-thoughtdag@latest` still fetch 0.4.12. Install the fixed build straight from the release file, then restart `dsh web`:
->
-> ```bash
-> dsh plugin --profile web add https://github.com/chenxiachan/thoughtdag/releases/download/v0.4.13/dsh-thoughtdag-0.4.13.tgz
-> ```
->
-> Once 0.4.13 is on npm, `dsh plugin --profile web add dsh-thoughtdag@latest` puts the profile back on registry updates.
+> **Why a file URL instead of the package name (until September 14).** Plugin 0.4.11 and 0.4.12 lose the **Harness · model** agent entries in the model picker. The fix is out, but the npm package is held by a temporary account cooldown, so `add dsh-thoughtdag` still installs 0.4.12 until September 14; the file above is the same fixed build. From September 15, `dsh plugin --profile web add dsh-thoughtdag` is the install command again. To update any install, from the file or from npm, run `dsh plugin --profile web add dsh-thoughtdag@latest` (the in-app update hint copies this command).
 
 - **Session Atlas sees all four agents.** The harness's own sessions sit beside Claude Code, Codex and Pi; open one as a graph and it follows the conversation live.
 - **Ask from the canvas.** Pick one of the harness's models, or **DeepSeek Harness · Agent** to run the question as a real harness turn with tools. The answer streams back into the node, and the turn stays in the harness's session log.

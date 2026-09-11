@@ -11,17 +11,13 @@ The plugin embeds the ThoughtDAG canvas in the Harness web UI. Compose the next 
 Prerequisites: a configured DeepSeek Harness installation, **0.1.2-rc.1 or later**, with Node.js **22.19+ (22.x) or 24+**.
 
 ```bash
-dsh plugin --profile web add dsh-thoughtdag
+dsh plugin --profile web add https://github.com/chenxiachan/thoughtdag/releases/download/v0.4.14/dsh-thoughtdag-0.4.14.tgz
 dsh web
 ```
 
-Every release also ships the plugin as a file, `dsh-thoughtdag-<version>.tgz`, in the release's Assets on GitHub. If npm is behind the latest release, install from the file with the same command (`dsh plugin` runs pnpm, which accepts a package name, a URL or a local path):
+The command above installs from the release file. Until September 14 the npm package lags behind (a temporary account cooldown), so the package name `dsh-thoughtdag` would still install 0.4.12, which loses the Harness agent entries in the model picker. From September 15, `dsh plugin --profile web add dsh-thoughtdag` installs from npm again. Every release carries the plugin as `dsh-thoughtdag-<version>.tgz` in its Assets; `dsh plugin` runs pnpm, which accepts a package name, a URL or a local path alike.
 
-```bash
-dsh plugin --profile web add https://github.com/chenxiachan/thoughtdag/releases/download/v0.4.13/dsh-thoughtdag-0.4.13.tgz
-```
-
-To return to following npm later, run `dsh plugin --profile web add dsh-thoughtdag@latest`.
+To update any install, from the file or from npm, run `dsh plugin --profile web add dsh-thoughtdag@latest`; `update` does nothing for a profile that installed from a file.
 
 Open the address printed by `dsh web`. Above the chat, switch to the thought-graph view (**思维图**); select the chat view (**对话**) to return.
 

@@ -11,17 +11,13 @@ title: 在 DeepSeek Harness 中使用 ThoughtDAG
 前提：已安装并配置 DeepSeek Harness **0.1.2-rc.1 或更新版本**，使用 Node.js **22.19+（22.x）或 24+**。
 
 ```bash
-dsh plugin --profile web add dsh-thoughtdag
+dsh plugin --profile web add https://github.com/chenxiachan/thoughtdag/releases/download/v0.4.14/dsh-thoughtdag-0.4.14.tgz
 dsh web
 ```
 
-每个 Release 的 GitHub 资产里也附带插件文件 `dsh-thoughtdag-<版本>.tgz`。npm 上的版本落后于最新 Release 时，用同一条命令直接安装这个文件（`dsh plugin` 底层运行 pnpm，包名、链接、本地路径都可以）：
+上面这条从 Release 文件安装。9 月 14 日前 npm 上的包落后（账号临时冷却期），用包名 `dsh-thoughtdag` 装到的仍是 0.4.12，它的模型选择器会丢失 Harness 的 Agent 条目。9 月 15 日起，`dsh plugin --profile web add dsh-thoughtdag` 恢复从 npm 安装。每个 Release 的资产里都附带 `dsh-thoughtdag-<版本>.tgz`；`dsh plugin` 底层运行 pnpm，包名、链接、本地路径都可以。
 
-```bash
-dsh plugin --profile web add https://github.com/chenxiachan/thoughtdag/releases/download/v0.4.13/dsh-thoughtdag-0.4.13.tgz
-```
-
-之后想回到跟随 npm 更新，执行 `dsh plugin --profile web add dsh-thoughtdag@latest`。
+无论从文件还是从 npm 装的，更新都执行 `dsh plugin --profile web add dsh-thoughtdag@latest`；对从文件安装的 profile，`update` 不会有任何变化。
 
 打开 `dsh web` 输出的地址，在聊天顶部选择 **思维图**。需要返回聊天时，选择 **对话**。
 
