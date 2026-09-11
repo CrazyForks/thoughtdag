@@ -1,0 +1,61 @@
+# Publish the DeepSeek Harness plugin (dsh-thoughtdag) to npm on every
+# release tag, through npm Trusted Publishing: the job proves it is this
+# repository's workflow via GitHub's OIDC token and npm mints a short-lived
+# publish credential for it. No npm token, no one-time password, and every
+# published version carries provenance pointing back at the commit.
+#
+# One-time setup on npmjs.com (package dsh-thoughtdag → Settings → Trusted
+# Publisher → GitHub Actions): owner chenxiachan, repository thoughtdag,
+# workflow filename publish-plugin.yml, environment left empty.
+#
+# Skips quietly when the version in dsh/package.json is already on npm, so
+# re-running (workflow_dispatch) after a failed attempt is safe.
+name: publish plugin
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
+      # trusted publishing needs npm 11.5.1 or newer
+      - run: npm install -g npm@latest && npm --version
+
+      - run: npm ci
+
+      - name: Decide whether this version is new
+        id: check
+        run: |
+          local_v=$(node -p "require('./dsh/package.json').version")
+          remote_v=$(npm view dsh-thoughtdag version 2>/dev/null || echo none)
+          echo "local=$local_v remote=$remote_v"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "v${local_v}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match dsh/package.json ${local_v}" >&2
+            exit 1
+          fi
+          if npm view "dsh-thoughtdag@${local_v}" version >/dev/null 2>&1; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "dsh-thoughtdag@${local_v} is already on npm, nothing to do"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # prepack builds the bundled SPA, the why layer and the agent runtime
+      - name: Publish dsh-thoughtdag
+        if: steps.check.outputs.publish == 'true'
+        working-directory: dsh
+        run: npm publish --provenance --access public
