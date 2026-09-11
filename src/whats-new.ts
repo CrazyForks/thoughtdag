@@ -32,6 +32,16 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.4.13',
+    date: '2026-09-11',
+    announce: false,
+    lead: {
+      zh: '修复：DeepSeek Harness 插件里，模型选择器丢失了「Harness · 模型」这一组 Agent 条目（0.4.11 起，机器上没装 Pi、Codex 等命令行时整组消失）。原因是思维图把 Harness 给的条目当成本机命令行的探测结果替换掉了，现在只替换命令行报来的那几种。插件里「如何使用」的教程动图也能显示了（#35，感谢 @Moya-Doc）。',
+      en: 'Fix: inside the DeepSeek Harness plugin, the model picker lost the "Harness · model" agent entries (since 0.4.11; with no Pi or Codex CLI on the machine the whole group vanished). The canvas had been replacing the harness\'s entries with the local CLI probe; now only the entries the CLIs report get replaced. The tutorial gifs inside the plugin load again (#35, thanks @Moya-Doc).',
+    },
+    items: [],
+  },
+  {
     version: '0.4.12',
     date: '2026-09-10',
     announce: false,

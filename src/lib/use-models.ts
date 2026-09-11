@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { API_BASE } from './constants';
 import { storedProviders, pushProviders } from './runtime-providers';
-import { agentModels, AGENT_PROVIDER, AGENT_RUNTIMES, agentTarget } from './agents/agent-runtime';
+import { agentModels, AGENT_PROVIDER, AGENT_RUNTIMES, agentTarget, isAgentModel } from './agents/agent-runtime';
 
 export interface ModelInfo {
   id: string;
@@ -79,6 +79,11 @@ export function reconcileModelId(pinned: string, models: ModelInfo[]): string | 
 const AGENT_CACHE_KEY = 'thoughtdag.agentModels';
 const AGENT_NAMES_KEY = 'thoughtdag.agentModelNames';
 const hasAgentsBridge = () => typeof window !== 'undefined' && !!window.desktopAgents;
+/** The agent entries the runtimes bridge owns and may replace: the ones it
+ *  reported itself (pi/ codex/ claude/ ids). A server can hand out agent
+ *  entries of its own under the same group (the harness runs the agent loop
+ *  on its models); those belong with the API list and are never replaced. */
+const isRuntimeAgent = (m: ModelInfo) => m.provider === AGENT_PROVIDER && isAgentModel(m.id);
 
 /** Picker id → the model name the runtime actually ran under it (an alias
  *  like `opus` resolves inside the CLI; the first turn tells us to what). */
@@ -117,8 +122,8 @@ function withRemembered(d: ModelData): ModelData {
   if (!hasAgentsBridge()) return d;
   let remembered: ModelInfo[] = [];
   try { remembered = JSON.parse(localStorage.getItem(AGENT_CACHE_KEY) ?? '[]'); } catch { remembered = []; }
-  const own = d.models.filter((m) => m.provider !== AGENT_PROVIDER);
-  return { ...d, models: [...own, ...withResolvedNames(remembered.filter((m) => m && m.provider === AGENT_PROVIDER))], agentsPending: false };
+  const own = d.models.filter((m) => !isRuntimeAgent(m));
+  return { ...d, models: [...own, ...withResolvedNames(remembered.filter((m) => m && isRuntimeAgent(m)))], agentsPending: false };
 }
 
 let agentsAsked = false;
@@ -133,7 +138,7 @@ async function refreshAgents(): Promise<void> {
     setModelsCache({ ...before, agentsPending: true });
     const extra = await agentModels().catch(() => [] as ModelInfo[]);
     try { localStorage.setItem(AGENT_CACHE_KEY, JSON.stringify(extra)); } catch { /* ignore */ }
-    const own = (cache ?? before).models.filter((m) => m.provider !== AGENT_PROVIDER);
+    const own = (cache ?? before).models.filter((m) => !isRuntimeAgent(m));
     setModelsCache({ ...(cache ?? before), models: [...own, ...withResolvedNames(extra)], agentsPending: false });
   })().finally(() => { agentsRefreshing = null; });
   return agentsRefreshing;
@@ -157,8 +162,8 @@ export function noteAgentModelName(id: string, resolved: string): void {
   names[id] = resolved;
   try { localStorage.setItem(AGENT_NAMES_KEY, JSON.stringify(names)); } catch { /* ignore */ }
   if (!cache) return;
-  const own = cache.models.filter((m) => m.provider !== AGENT_PROVIDER);
-  const agents = cache.models.filter((m) => m.provider === AGENT_PROVIDER).map((m) => ({ ...m, name: m.name.split(' · ').slice(0, 2).join(' · ') }));
+  const own = cache.models.filter((m) => !isRuntimeAgent(m));
+  const agents = cache.models.filter(isRuntimeAgent).map((m) => ({ ...m, name: m.name.split(' · ').slice(0, 2).join(' · ') }));
   setModelsCache({ ...cache, models: [...own, ...withResolvedNames(agents)] });
 }
 if (typeof window !== 'undefined') {
@@ -176,7 +181,7 @@ export function setModelsCache(d: ModelData): void {
   // a list rebuilt from a runtime-key change carries no agent group yet:
   // last launch's entries come back, and a fresh answer only if this
   // launch already asked (the runtimes are then alive anyway)
-  if (d.agentsPending === undefined && hasAgentsBridge() && !d.models.some((m) => m.provider === AGENT_PROVIDER)) {
+  if (d.agentsPending === undefined && hasAgentsBridge() && !d.models.some(isRuntimeAgent)) {
     cache = withRemembered(d);
     for (const fn of listeners) fn(cache);
     if (agentsAsked) void refreshAgents();
