@@ -11,8 +11,12 @@ plugin (a Cordis plugin distributed as an npm package), built on the same shell
 pattern as [dsh-synapse](https://github.com/liangmianya/dsh-synapse): the host
 half mounts the ThoughtDAG SPA under `/thoughtdag/` on the EXISTING harness
 web server (no second process, no second port), and the client half adds a
-floating "对话 | 思维图" switch that shows the canvas in a same-origin
-full-screen iframe.
+"对话 | 思维图" switch to the session header that shows the canvas in a
+same-origin full-screen iframe.
+
+> The switch lives in the session header: open a session first — there is
+> no switcher on the empty state. (入口在会话标题栏，需要先打开一个会话；
+> 空态下没有切换器。)
 
 ## What works
 
