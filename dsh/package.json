@@ -5,7 +5,7 @@
   "author": "Xia Chen",
   "repository": {
     "type": "git",
-    "url": "https://github.com/chenxiachan/thoughtdag.git",
+    "url": "git+https://github.com/chenxiachan/thoughtdag.git",
     "directory": "dsh"
   },
   "homepage": "https://github.com/chenxiachan/thoughtdag/tree/main/dsh#readme",
