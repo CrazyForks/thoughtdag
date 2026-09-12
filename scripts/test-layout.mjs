@@ -46,8 +46,15 @@ const th = (id, over = {}) => ({
   },
 });
 const file = (id, x) => ({ ...th(id, { stepKind: 'file' }), position: { x, y: 0 }, measured: { width: 120, height: 120 } });
+const frame = (id, x, y, width, height, frameCarry = true) => ({
+  ...th(id, { stepKind: 'frame', frameCarry }), position: { x, y }, width, height, zIndex: -1,
+});
+const placed = (node, x, y, width = 520, height = 120) => ({
+  ...node, position: { x, y }, measured: { width, height },
+});
 const ed = (s, t, data) => ({ id: `${s}->${t}`, source: s, target: t, ...(data ? { data } : {}) });
 const xOf = (laid, id) => laid.find((n) => n.id === id).position.x;
+const nodeOf = (laid, id) => laid.find((n) => n.id === id);
 
 // Every arrow-order and overlap rule, checked per edge.
 function violations(laid, edges) {
@@ -128,6 +135,73 @@ test('a chain reading several documents hangs from the lowest of them', () => {
   const edges = ['f0', 'f1', 'f2', 'f3', 'f4'].map((f) => ed(f, 'synth'));
   const x = xOf(autoLayout(nodes, edges), 'synth');
   assert(Math.abs(x - (2700 - 60)) < 1, `synthesis at ${x}, not under the lowest document f3`);
+});
+
+test('a linked frame re-wraps the members it contained before layout', () => {
+  const nodes = [
+    frame('frame', 0, 400, 700, 900),
+    placed(th('root'), 100, 500, 520, 260),
+    placed(th('child'), 100, 900, 520, 260),
+  ];
+  const laid = autoLayout(nodes, [ed('root', 'child')]);
+  const f = nodeOf(laid, 'frame'), root = nodeOf(laid, 'root'), child = nodeOf(laid, 'child');
+  const minX = Math.min(root.position.x, child.position.x);
+  const maxX = Math.max(root.position.x + 520, child.position.x + 520);
+  const minY = Math.min(root.position.y, child.position.y);
+  const maxY = Math.max(root.position.y + nodeHeight(root), child.position.y + nodeHeight(child));
+  assert(f.position.y < 0, `frame stayed near its old y=${f.position.y}`);
+  assert(f.position.x < minX && f.position.y < minY, 'frame does not leave padding above/left of members');
+  assert(f.position.x + f.width > maxX && f.position.y + f.height > maxY, 'frame does not enclose laid-out members');
+});
+
+test('an unlinked frame is untouched by auto layout', () => {
+  const original = frame('frame', 0, 400, 700, 900, false);
+  const laid = autoLayout([
+    original,
+    placed(th('root'), 100, 500),
+    placed(th('child'), 100, 900),
+  ], [ed('root', 'child')]);
+  const f = nodeOf(laid, 'frame');
+  assert(f.position.x === original.position.x && f.position.y === original.position.y, 'unlinked frame moved');
+  assert(f.width === original.width && f.height === original.height, 'unlinked frame resized');
+});
+
+test('a linked frame with no members is untouched by auto layout', () => {
+  const original = frame('empty', 2000, 2000, 700, 900);
+  const laid = autoLayout([original, placed(th('root'), 0, 0)], []);
+  const f = nodeOf(laid, 'empty');
+  assert(f.position.x === original.position.x && f.position.y === original.position.y, 'empty frame moved');
+  assert(f.width === original.width && f.height === original.height, 'empty frame resized');
+});
+
+test('nested frames re-wrap inner to outer with more room on the outer frame', () => {
+  const nodes = [
+    frame('outer', 0, 400, 760, 1050),
+    frame('inner', 50, 450, 660, 950),
+    placed(th('root'), 100, 500),
+    placed(th('child'), 100, 900),
+  ];
+  const laid = autoLayout(nodes, [ed('root', 'child')]);
+  const outer = nodeOf(laid, 'outer'), inner = nodeOf(laid, 'inner');
+  assert(outer.position.x < inner.position.x, 'outer frame does not have more left padding');
+  assert(outer.position.y < inner.position.y, 'outer frame does not have more top padding');
+  assert(outer.position.x + outer.width > inner.position.x + inner.width, 'outer frame does not have more right padding');
+  assert(outer.position.y + outer.height > inner.position.y + inner.height, 'outer frame does not have more bottom padding');
+});
+
+test('overlapping frames can share a member and both still follow it', () => {
+  const nodes = [
+    frame('leftFrame', 0, 400, 650, 700),
+    frame('rightFrame', 150, 400, 650, 700),
+    placed(th('root'), 100, 500, 520, 120),
+  ];
+  const laid = autoLayout(nodes, []);
+  const root = nodeOf(laid, 'root');
+  for (const id of ['leftFrame', 'rightFrame']) {
+    const f = nodeOf(laid, id);
+    assert(f.position.x < root.position.x && f.position.y < root.position.y, `${id} lost shared member`);
+    assert(f.position.x + f.width > root.position.x + 520, `${id} no longer wraps shared member`);
+  }
 });
 
 test('the benchmark canvases keep the arrow order', () => {
