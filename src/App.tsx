@@ -567,8 +567,9 @@ function Canvas() {
     const fh = frame.measured?.height ?? frame.height ?? 0;
     const members = st.nodes
       .filter((n) => {
-        // multi-select drag already moves selected nodes — don't move them twice
-        if (n.id === frame.id || n.data.stepKind === 'frame' || n.selected) return false;
+        // multi-select drag already moves selected nodes — don't move them twice.
+        // Nested frames are members too, so an outer frame carries the whole region.
+        if (n.id === frame.id || n.selected) return false;
         const cx = n.position.x + (n.measured?.width ?? 520) / 2;
         const cy = n.position.y + (n.measured?.height ?? 120) / 2;
         return cx >= frame.position.x && cx <= frame.position.x + fw && cy >= frame.position.y && cy <= frame.position.y + fh;
