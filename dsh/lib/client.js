@@ -109,7 +109,10 @@ window.__ModuleLoader__.load({
         // the canvas forked or continued a session: stage it and go back to the
         // chat, which now shows exactly the context the canvas produced
         if (event.data.type === 'td:select-session' && typeof event.data.session === 'string') {
-          ctx.sessions.select(event.data.session)
+          // 0.1.2 renamed the selector: the ISessions contract exposes open(id);
+          // older runtimes (0.1.1) still call it select
+          const select = ctx.sessions.open ?? ctx.sessions.select
+          select.call(ctx.sessions, event.data.session)
           if (event.data.close !== false) setMap(false)
           syncCurrent()
         }
