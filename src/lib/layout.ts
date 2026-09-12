@@ -78,8 +78,73 @@ export function healLegacyNoteEdges(nodes: ThoughtNode[], edges: ThoughtEdge[]):
   return out;
 }
 
+type FrameSnapshot = {
+  id: string;
+  memberIds: string[];
+  rect: { x: number; y: number; width: number; height: number };
+  nestingLevel: number;
+};
+
+const FRAME_SIDE_PADDING = 36;
+const FRAME_TITLE_GAP = 44;
+const FRAME_NESTING_GAP = 24;
+const FRAME_MIN_WIDTH = 280;
+const FRAME_MIN_HEIGHT = 180;
+
+function snapshotLayoutFrames(allNodes: ThoughtNode[]): FrameSnapshot[] {
+  const frames = allNodes.filter((n) => n.data.stepKind === 'frame' && n.data.frameCarry !== false);
+  const snapshots = frames.map((frame) => {
+    const width = frame.measured?.width ?? frame.width ?? 0;
+    const height = frame.measured?.height ?? frame.height ?? 0;
+    const memberIds = allNodes
+      .filter((n) => {
+        if (n.id === frame.id || n.data.stepKind === 'frame') return false;
+        // Keep membership identical to frame dragging: the node center decides
+        // whether it belongs to the region, and membership is frozen before
+        // layout so nodes cannot switch frames while they are being moved.
+        const cx = n.position.x + (n.measured?.width ?? 520) / 2;
+        const cy = n.position.y + (n.measured?.height ?? 120) / 2;
+        return cx >= frame.position.x && cx <= frame.position.x + width
+          && cy >= frame.position.y && cy <= frame.position.y + height;
+      })
+      .map((n) => n.id);
+    return {
+      id: frame.id,
+      memberIds,
+      rect: { x: frame.position.x, y: frame.position.y, width, height },
+      nestingLevel: 0,
+    };
+  });
+
+  const contains = (outer: FrameSnapshot, inner: FrameSnapshot) => {
+    if (outer.id === inner.id) return false;
+    const a = outer.rect;
+    const b = inner.rect;
+    const strictlyLarger = a.width * a.height > b.width * b.height;
+    return strictlyLarger
+      && b.x >= a.x && b.y >= a.y
+      && b.x + b.width <= a.x + a.width
+      && b.y + b.height <= a.y + a.height;
+  };
+
+  // Level 0 is the innermost frame. Each enclosing layer gets more padding,
+  // which keeps nested frame borders from collapsing onto the same edge.
+  const memo = new Map<string, number>();
+  const levelOf = (frame: FrameSnapshot): number => {
+    const cached = memo.get(frame.id);
+    if (cached !== undefined) return cached;
+    const innerFrames = snapshots.filter((candidate) => contains(frame, candidate));
+    const level = innerFrames.length === 0 ? 0 : 1 + Math.max(...innerFrames.map(levelOf));
+    memo.set(frame.id, level);
+    return level;
+  };
+  for (const snapshot of snapshots) snapshot.nestingLevel = levelOf(snapshot);
+  return snapshots;
+}
+
 export function autoLayout(allNodes: ThoughtNode[], allEdges: ThoughtEdge[]): ThoughtNode[] {
   if (allNodes.length === 0) return allNodes;
+  const frameSnapshots = snapshotLayoutFrames(allNodes);
   // Content nodes (notes / files) are user-arranged material: layout never
   // moves them and their edges don't shape the column tree. A node whose
   // only parent is a content node simply roots its own chain.
@@ -557,7 +622,48 @@ export function autoLayout(allNodes: ThoughtNode[], allEdges: ThoughtEdge[]): Th
     positioned.set(note.id, { x, y });
   }
 
+  // --- Pass 6: Frame follow-up ---
+  // Frames are not part of the column tree. Instead, linked frames snapshot
+  // their members before layout and re-wrap those same members afterwards.
+  // This preserves the conversation layout law while keeping spatial regions
+  // attached to the nodes the user grouped.
+  const frameLayouts = new Map<string, { position: { x: number; y: number }; width: number; height: number }>();
+  const nodeById = new Map(allNodes.map((n) => [n.id, n]));
+  const contentKinds = new Set(['note', 'file', 'link']);
+  const snapshotsInnerToOuter = [...frameSnapshots].sort((a, b) => a.nestingLevel - b.nestingLevel);
+
+  for (const frame of snapshotsInnerToOuter) {
+    if (frame.memberIds.length === 0) continue;
+    const rects = frame.memberIds
+      .map((id) => {
+        const node = nodeById.get(id);
+        if (!node) return null;
+        const position = positioned.get(id) ?? node.position;
+        const width = node.measured?.width ?? node.width ?? LAYOUT_COL_WIDTH;
+        const height = contentKinds.has(node.data.stepKind ?? '')
+          ? (node.measured?.height ?? node.height ?? 120)
+          : Math.max(node.measured?.height ?? 0, node.height ?? 0, nodeHeight(node));
+        return { x: position.x, y: position.y, width, height };
+      })
+      .filter((r): r is { x: number; y: number; width: number; height: number } => r !== null);
+    if (rects.length === 0) continue;
+
+    const minX = Math.min(...rects.map((r) => r.x));
+    const minY = Math.min(...rects.map((r) => r.y));
+    const maxX = Math.max(...rects.map((r) => r.x + r.width));
+    const maxY = Math.max(...rects.map((r) => r.y + r.height));
+    const sidePadding = FRAME_SIDE_PADDING + frame.nestingLevel * FRAME_NESTING_GAP;
+    const topPadding = sidePadding + FRAME_TITLE_GAP;
+    const x = minX - sidePadding;
+    const y = minY - topPadding;
+    const width = Math.max(FRAME_MIN_WIDTH, maxX - minX + sidePadding * 2);
+    const height = Math.max(FRAME_MIN_HEIGHT, maxY - minY + topPadding + sidePadding);
+    frameLayouts.set(frame.id, { position: { x, y }, width, height });
+  }
+
   return allNodes.map((node) => {
+    const frameLayout = frameLayouts.get(node.id);
+    if (frameLayout) return { ...node, ...frameLayout };
     const pos = positioned.get(node.id);
     return pos ? { ...node, position: pos } : node;
   });
