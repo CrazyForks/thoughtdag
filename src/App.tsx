@@ -895,7 +895,21 @@ function Canvas() {
   }, [selectedNodeId, selectedNodeIds, nodes, edges]);
 
   const displayNodes = useMemo((): typeof nodes => {
-    let out = nodes;
+    // Smaller frames represent more specific regions, so render them above
+    // larger frames while keeping every frame below ordinary canvas nodes.
+    // Equal-sized overlaps keep their existing array order.
+    const stackedFrames = nodes
+      .filter((n) => n.data.stepKind === 'frame')
+      .map((n, order) => ({
+        id: n.id,
+        order,
+        area: (n.measured?.width ?? n.width ?? 640) * (n.measured?.height ?? n.height ?? 420),
+      }))
+      .sort((a, b) => b.area - a.area || a.order - b.order);
+    const frameZ = new Map(stackedFrames.map((frame, index) => [frame.id, index - stackedFrames.length]));
+    let out = nodes.map((n) => (
+      n.data.stepKind === 'frame' ? { ...n, zIndex: frameZ.get(n.id) ?? -1 } : n
+    ));
     if (annotationsHidden) {
       out = out.map((n) => {
         const k = n.data.stepKind;
