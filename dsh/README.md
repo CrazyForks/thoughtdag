@@ -11,13 +11,18 @@ plugin (a Cordis plugin distributed as an npm package), built on the same shell
 pattern as [dsh-synapse](https://github.com/liangmianya/dsh-synapse): the host
 half mounts the ThoughtDAG SPA under `/thoughtdag/` on the EXISTING harness
 web server (no second process, no second port), and the client half adds a
-floating "对话 | 思维图" switch that shows the canvas in a same-origin
-full-screen iframe.
+"对话 | 思维图" switch to the session header that shows the canvas in a
+same-origin full-screen iframe.
+
+> The switch lives in the session header: open a session first — there is
+> no switcher on the empty state. (入口在会话标题栏，需要先打开一个会话；
+> 空态下没有切换器。)
 
 ## What works
 
 - `dsh plugin --profile web add dsh-thoughtdag` installs the plugin from npm; every GitHub release also carries `dsh-thoughtdag-<version>.tgz`, and the same command takes that file's URL (`dsh plugin` forwards to pnpm)
-- The harness GUI gains a view switch; "思维图" opens ThoughtDAG at
+- The harness GUI gains a "对话 | 思维图" switch in the session header;
+  "思维图" opens ThoughtDAG at
   `/thoughtdag/` (same origin — no CORS, no second server)
 - The host serves the SPA plus a read-only session bridge:
 
@@ -48,7 +53,7 @@ full-screen iframe.
 - installed into the local `web` profile via `dsh plugin --profile web add <dir>`
 - a fresh web-profile boot serves `/thoughtdag/` (SPA) and the bridge API; the
   index injection table lists `dsh-thoughtdag/client.js`
-- headless-browser walk: the "对话 | 思维图" switch appears, the full-screen
+- headless-browser walk: the "对话 | 思维图" switch appears in the session header, the full-screen
   same-origin iframe opens, and ThoughtDAG boots inside it
 - fetching the bridge from INSIDE the thoughtdag origin works with no extra
   auth: `GET /thoughtdag/api/disksessions` lists every on-disk session (new
@@ -109,7 +114,7 @@ npm run dsh:build            # writes dsh/dist-app, which git ignores
 # 2. install into a profile from this directory (pnpm link)
 dsh plugin --profile web add /abs/path/to/thoughtdag/dsh
 
-# 3. restart the profile's web app; open the view switch in the GUI
+# 3. restart the profile's web app; open a session and use the switch in its header
 ```
 
 The script drives `tsc`, `vite` and `esbuild` through Node directly, so the
