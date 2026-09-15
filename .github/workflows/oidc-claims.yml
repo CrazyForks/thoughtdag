@@ -1,0 +1,21 @@
+# Diagnostic only: print the OIDC identity GitHub would present to npm, so a
+# trusted-publisher entry on npmjs.com can be checked field by field. Prints
+# claims, never the token. Run by hand; delete when no longer needed.
+name: oidc claims
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  claims:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show the claims npm sees
+        run: |
+          resp=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=npm:registry.npmjs.org")
+          tok=$(echo "$resp" | python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])')
+          echo "$tok" | cut -d. -f2 | tr '_-' '/+' | python3 -c 'import base64,json,sys; s=sys.stdin.read().strip(); s+="="*(-len(s)%4); c=json.loads(base64.b64decode(s)); [print(f"{k}: {c[k]}") for k in ["aud","repository","repository_owner","workflow_ref","job_workflow_ref","environment","ref","ref_type","event_name","sub"] if k in c]'
