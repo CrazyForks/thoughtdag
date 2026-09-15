@@ -15,7 +15,7 @@ dsh plugin --profile web add dsh-thoughtdag
 dsh web
 ```
 
-每个 Release 的 GitHub 资产里也附带插件文件 `dsh-thoughtdag-<版本>.tgz`；`dsh plugin` 底层运行 pnpm，同一条命令也接受这个文件的链接或本地路径。已装的用 `dsh plugin --profile web add dsh-thoughtdag@latest` 更新（应用内的更新提示复制的就是这条）。
+pnpm 11 默认压住发布不满 24 小时的版本；想在发版当天装到新版，直接点名版本：`dsh plugin --profile web add dsh-thoughtdag@<版本号>`。每个 Release 的 GitHub 资产里也附带插件文件 `dsh-thoughtdag-<版本>.tgz`；`dsh plugin` 底层运行 pnpm，同一条命令也接受这个文件的链接或本地路径。已装的用 `dsh plugin --profile web add dsh-thoughtdag@latest` 更新（应用内的更新提示复制的就是这条）。
 
 打开 `dsh web` 输出的地址，在聊天顶部选择 **思维图**。需要返回聊天时，选择 **对话**。
 

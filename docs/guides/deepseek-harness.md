@@ -15,7 +15,7 @@ dsh plugin --profile web add dsh-thoughtdag
 dsh web
 ```
 
-Every release also carries the plugin as `dsh-thoughtdag-<version>.tgz` in its Assets on GitHub; `dsh plugin` runs pnpm, so the same command takes that file's URL or a local path. To update an existing install, run `dsh plugin --profile web add dsh-thoughtdag@latest` (the in-app update hint copies this command).
+pnpm 11 holds back versions published within the last 24 hours by default; to install a release the day it ships, name the version: `dsh plugin --profile web add dsh-thoughtdag@<version>`. Every release also carries the plugin as `dsh-thoughtdag-<version>.tgz` in its Assets on GitHub; `dsh plugin` runs pnpm, so the same command takes that file's URL or a local path. To update an existing install, run `dsh plugin --profile web add dsh-thoughtdag@latest` (the in-app update hint copies this command).
 
 Open the address printed by `dsh web`. Above the chat, switch to the thought-graph view (**思维图**); select the chat view (**对话**) to return.
 
