@@ -27,10 +27,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # no registry-url here: with it, setup-node writes an .npmrc whose auth
+      # token is a placeholder (XXXXX-XXXXX-XXXXX-XXXXX) and npm, seeing a
+      # token configured, skips the OIDC exchange and publishes as nobody (404)
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          registry-url: 'https://registry.npmjs.org'
 
       # trusted publishing needs npm 11.5.1 or newer
       - run: npm install -g npm@latest && npm --version
