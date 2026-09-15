@@ -81,4 +81,5 @@ jobs:
       - name: Publish dsh-thoughtdag
         if: steps.check.outputs.publish == 'true'
         working-directory: dsh
-        run: npm publish ./dsh-thoughtdag-*.tgz --provenance --access public
+        # verbose: the OIDC token exchange logs its outcome only at this level
+        run: npm publish ./dsh-thoughtdag-*.tgz --provenance --access public --loglevel verbose
