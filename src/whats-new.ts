@@ -32,6 +32,16 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.4.15',
+    date: '2026-09-15',
+    announce: false,
+    lead: {
+      zh: '分区框三件事：一键排版后，框跟着框内的节点重新包好（#32）；拖动外框会带动嵌套在里面的框；重叠时小框叠在大框上面，标题栏不再被盖住。三项均来自 @hexu321。DeepSeek Harness 插件：「对话 | 思维图」切换器移进会话标题栏，不再遮挡标题；返回按钮居中，画布右上的工具栏保持可见；从画布切回会话的跳转修好了（#30，来自 @nanami-0713）。插件重新在 npm 上发布，安装命令恢复为包名。',
+      en: 'Frames, three fixes: after auto layout a frame re-wraps the nodes it held (#32); dragging an outer frame carries the frames nested inside it; where frames overlap, the smaller one stacks on top so its title bar stays reachable. All three by @hexu321. DeepSeek Harness plugin: the 对话 | 思维图 switch moves into the session header and no longer covers the title; the back button sits top centre, clear of the canvas toolbar; jumping from the canvas back to a session works again (#30, by @nanami-0713). The plugin is back on npm and the install command is the package name again.',
+    },
+    items: [],
+  },
+  {
     version: '0.4.14',
     date: '2026-09-11',
     announce: false,
