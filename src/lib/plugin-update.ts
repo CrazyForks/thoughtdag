@@ -8,10 +8,14 @@ import { compareVersions } from '../whats-new';
 // toast the first time. Nothing updates by itself — the person runs the
 // harness's own command.
 const NOTIFIED_KEY = 'thoughtdag.pluginUpdateNotified';
-// `add …@latest` rewrites the profile's spec back to the registry, so it works
-// for a profile that installed from a release file too (`update` re-resolves
-// the same file URL and never moves)
-export const PLUGIN_UPDATE_COMMAND = 'dsh plugin --profile web add dsh-thoughtdag@latest';
+// `add dsh-thoughtdag@<version>` rewrites the profile's spec back to the
+// registry, so it works for a profile that installed from a release file too
+// (`update` re-resolves the same file URL and never moves). The exact version
+// matters: pnpm 11 holds back versions published within the last day when it
+// resolves a tag like `latest`, but installs a named version at once.
+export function pluginUpdateCommand(latest?: string | null): string {
+  return `dsh plugin --profile web add dsh-thoughtdag@${latest || 'latest'}`;
+}
 
 export async function bootPluginUpdateCheck(apiBase: string): Promise<void> {
   try {

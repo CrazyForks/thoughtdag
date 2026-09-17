@@ -32,6 +32,16 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.4.16',
+    date: '2026-09-17',
+    announce: false,
+    lead: {
+      zh: '分区框：两个只是部分重叠的框不再互相收编。拖动大框时，重叠的小框和它自己的节点留在原地；拖动和一键排版现在用同一条成员规则，普通节点按中心点归属，框只有完整落在另一个框里才算它的成员（#40，感谢 @nanami-0713）。DeepSeek Harness 插件：「插件有新版本」提示复制的命令带上具体版本号，发版当天也能立刻装到新版。',
+      en: 'Frames: two frames that merely overlap no longer own each other. Dragging the larger one leaves the overlapping smaller frame and its own nodes in place; dragging and auto layout now share one membership rule, nodes by centre and a frame only when it lies fully inside another (#40, thanks @nanami-0713). DeepSeek Harness plugin: the update hint now copies a command naming the exact version, so a release installs on its first day too.',
+    },
+    items: [],
+  },
+  {
     version: '0.4.15',
     date: '2026-09-15',
     announce: false,

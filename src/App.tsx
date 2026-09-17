@@ -76,7 +76,7 @@ import Tutorial from './components/Tutorial';
 import WhatsNewDialog from './components/ui/WhatsNewDialog';
 import ReleaseNotesDialog from './components/ui/ReleaseNotesDialog';
 import AgentCwdChip from './components/ui/AgentCwdChip';
-import { PLUGIN_UPDATE_COMMAND } from './lib/plugin-update';
+import { pluginUpdateCommand } from './lib/plugin-update';
 import { useT, t as ti, fmt, useI18n } from './i18n';
 import { isViewerMode, buildViewerLink } from './lib/viewer';
 import { useModels } from './lib/use-models';
@@ -1885,9 +1885,9 @@ function Canvas() {
               </button>
               {pluginUpdate && (
                 <button
-                  onClick={() => { setMoreOpen(false); void navigator.clipboard.writeText(PLUGIN_UPDATE_COMMAND).then(() => toast('success', t('plugin.updateCopied'), 6000)).catch(() => {}); }}
+                  onClick={() => { setMoreOpen(false); void navigator.clipboard.writeText(pluginUpdateCommand(pluginUpdate.latest)).then(() => toast('success', t('plugin.updateCopied'), 6000)).catch(() => {}); }}
                   className="w-full text-left px-3 py-2 text-xs text-accent hover:bg-wash transition-colors flex items-center gap-2.5"
-                  title={fmt(t('plugin.updateHint'), { cmd: PLUGIN_UPDATE_COMMAND })}
+                  title={fmt(t('plugin.updateHint'), { cmd: pluginUpdateCommand(pluginUpdate.latest) })}
                   data-plugin-update
                 >
                   <Download size={14} strokeWidth={1.75} className="shrink-0" /> {fmt(t('plugin.updateAvailable'), { v: pluginUpdate.latest })}
