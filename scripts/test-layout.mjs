@@ -25,6 +25,11 @@ execFileSync(join(ROOT, 'node_modules/.bin/esbuild'), [
   '--define:import.meta.env.DEV=false',
 ], { stdio: ['ignore', 'ignore', 'pipe'] });
 const { autoLayout, nodeHeight } = await import(pathToFileURL(bundle).href);
+const framesBundle = join(tmp, 'frames.mjs');
+execFileSync(join(ROOT, 'node_modules/.bin/esbuild'), [
+  join(ROOT, 'src/lib/frames.ts'), '--bundle', '--format=esm', '--platform=node', `--outfile=${framesBundle}`,
+], { stdio: ['ignore', 'ignore', 'pipe'] });
+const { frameMembers } = await import(pathToFileURL(framesBundle).href);
 
 let failures = 0;
 function test(name, fn) {
@@ -202,6 +207,41 @@ test('overlapping frames can share a member and both still follow it', () => {
     assert(f.position.x < root.position.x && f.position.y < root.position.y, `${id} lost shared member`);
     assert(f.position.x + f.width > root.position.x + 520, `${id} no longer wraps shared member`);
   }
+});
+
+// #40: two linked frames that merely overlap must never own each other
+test('a partially overlapping frame is not a member, its own nodes stay with it', () => {
+  const F1 = frame('F1', 0, 0, 1000, 800);
+  const F2 = frame('F2', 700, 500, 600, 500); // centre (1000, 750) inside F1, but not contained
+  const a = placed(th('a'), 540, 540);        // centre (800, 600): inside both
+  const far = placed(th('far'), 1000, 880);   // centre (1260, 940): inside F2 only
+  const all = [F1, F2, a, far];
+  const ids = (f) => frameMembers(f, all).map((n) => n.id).sort();
+  assert(JSON.stringify(ids(F1)) === JSON.stringify(['a']), `F1 owns ${ids(F1)} (expected only a)`);
+  assert(JSON.stringify(ids(F2)) === JSON.stringify(['a', 'far']), `F2 owns ${ids(F2)} (expected a, far)`);
+});
+
+test('a fully contained frame is a member of the outer frame, never the reverse', () => {
+  const outer = frame('outer', 0, 0, 1000, 800);
+  const inner = frame('inner', 100, 100, 400, 300);
+  const n = placed(th('n'), 120, 120);
+  const all = [outer, inner, n];
+  const ids = (f) => frameMembers(f, all).map((x) => x.id).sort();
+  assert(JSON.stringify(ids(outer)) === JSON.stringify(['inner', 'n']), `outer owns ${ids(outer)}`);
+  assert(JSON.stringify(ids(inner)) === JSON.stringify(['n']), `inner owns ${ids(inner)}`);
+});
+
+test('auto layout keeps partially overlapping frames on their own members', () => {
+  const nodes = [
+    frame('F1', 0, 0, 1000, 800),
+    frame('F2', 700, 500, 600, 500),
+    placed(th('a'), 540, 540, 520, 120),
+    placed(th('far'), 1000, 880, 520, 120),
+  ];
+  const laid = autoLayout(nodes, []);
+  const f2 = nodeOf(laid, 'F2'), far = nodeOf(laid, 'far'), a = nodeOf(laid, 'a');
+  const wraps = (f, n) => f.position.x < n.position.x && f.position.y < n.position.y && f.position.x + f.width > n.position.x + 520 && f.position.y + f.height > n.position.y + nodeHeight(n);
+  assert(wraps(f2, far) && wraps(f2, a), 'F2 no longer wraps its own members after layout');
 });
 
 test('the benchmark canvases keep the arrow order', () => {

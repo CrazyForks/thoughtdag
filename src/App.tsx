@@ -35,6 +35,7 @@ import MaterialReader from './components/MaterialReader';
 import ProjectSwitcher from './components/ProjectSwitcher';
 import SessionAtlas from './components/SessionAtlas';
 import { useStore } from './store';
+import { frameMembers } from './lib/frames';
 import { useProjects, adoptImportedProject, markInstantiatedFrom } from './store/projects';
 import { projectStorageKey } from './store/projects';
 import { set as idbSet } from 'idb-keyval';
@@ -563,17 +564,11 @@ function Canvas() {
     const st = useStore.getState();
     const frame = st.nodes.find((n) => n.id === node.id);
     if (!frame) return;
-    const fw = frame.measured?.width ?? frame.width ?? 0;
-    const fh = frame.measured?.height ?? frame.height ?? 0;
-    const members = st.nodes
-      .filter((n) => {
-        // multi-select drag already moves selected nodes — don't move them twice.
-        // Nested frames are members too, so an outer frame carries the whole region.
-        if (n.id === frame.id || n.selected) return false;
-        const cx = n.position.x + (n.measured?.width ?? 520) / 2;
-        const cy = n.position.y + (n.measured?.height ?? 120) / 2;
-        return cx >= frame.position.x && cx <= frame.position.x + fw && cy >= frame.position.y && cy <= frame.position.y + fh;
-      })
+    // membership is the shared rule (lib/frames): nodes by centre, frames only
+    // when fully inside — a partially overlapping frame stays behind with its
+    // own members. Selected nodes are already moved by the multi-select drag.
+    const members = frameMembers(frame, st.nodes)
+      .filter((n) => !n.selected)
       .map((n) => ({ id: n.id, start: n.position }));
     if (members.length === 0) return;
     frameDrag.current = { frameId: frame.id, start: frame.position, members };

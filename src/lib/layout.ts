@@ -1,5 +1,6 @@
 import type { ThoughtNode, ThoughtEdge } from '../types';
 import { getDescendantIds } from './graph';
+import { frameContains, frameMembers, frameRect, isFrameNode } from './frames';
 import { COLLAPSED_LAYOUT_HEIGHT, LAYOUT_COL_WIDTH, LAYOUT_H_GAP, LAYOUT_V_GAP } from './constants';
 
 // Estimated rendered height of a node — fallback when React Flow hasn't
@@ -94,38 +95,17 @@ const FRAME_MIN_HEIGHT = 180;
 function snapshotLayoutFrames(allNodes: ThoughtNode[]): FrameSnapshot[] {
   const frames = allNodes.filter((n) => n.data.stepKind === 'frame' && n.data.frameCarry !== false);
   const snapshots = frames.map((frame) => {
-    const width = frame.measured?.width ?? frame.width ?? 0;
-    const height = frame.measured?.height ?? frame.height ?? 0;
-    const memberIds = allNodes
-      .filter((n) => {
-        if (n.id === frame.id || n.data.stepKind === 'frame') return false;
-        // Keep membership identical to frame dragging: the node center decides
-        // whether it belongs to the region, and membership is frozen before
-        // layout so nodes cannot switch frames while they are being moved.
-        const cx = n.position.x + (n.measured?.width ?? 520) / 2;
-        const cy = n.position.y + (n.measured?.height ?? 120) / 2;
-        return cx >= frame.position.x && cx <= frame.position.x + width
-          && cy >= frame.position.y && cy <= frame.position.y + height;
-      })
-      .map((n) => n.id);
-    return {
-      id: frame.id,
-      memberIds,
-      rect: { x: frame.position.x, y: frame.position.y, width, height },
-      nestingLevel: 0,
-    };
+    // Membership is the same rule dragging uses (lib/frames): ordinary nodes
+    // by centre, and it is frozen here, before layout, so a node cannot switch
+    // frames while it is being moved. Nested frames are not listed as members:
+    // they are re-wrapped in their own right, inner to outer, below.
+    const memberIds = frameMembers(frame, allNodes).filter((n) => !isFrameNode(n)).map((n) => n.id);
+    return { id: frame.id, memberIds, rect: frameRect(frame), nestingLevel: 0 };
   });
 
-  const contains = (outer: FrameSnapshot, inner: FrameSnapshot) => {
-    if (outer.id === inner.id) return false;
-    const a = outer.rect;
-    const b = inner.rect;
-    const strictlyLarger = a.width * a.height > b.width * b.height;
-    return strictlyLarger
-      && b.x >= a.x && b.y >= a.y
-      && b.x + b.width <= a.x + a.width
-      && b.y + b.height <= a.y + a.height;
-  };
+  // nesting is full containment (also lib/frames) — the relation dragging
+  // uses to carry one frame with another; partial overlap nests nothing
+  const contains = (outer: FrameSnapshot, inner: FrameSnapshot) => outer.id !== inner.id && frameContains(outer.rect, inner.rect);
 
   // Level 0 is the innermost frame. Each enclosing layer gets more padding,
   // which keeps nested frame borders from collapsing onto the same edge.
