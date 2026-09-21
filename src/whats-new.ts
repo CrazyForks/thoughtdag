@@ -32,6 +32,16 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.4.17',
+    date: '2026-09-21',
+    announce: false,
+    lead: {
+      zh: 'DeepSeek Harness 插件：从画布向 Harness 提问时，节点只接自己那一轮。此前如果你同时在聊天框里发消息，画布节点会拿到你那轮的回答、在你那轮结束时提前收尾，并把镜像标记挂到错误的轮次上，产生重复节点；工具审批也可能被画布抢走。现在 Host 用 dsh 记在消息上的请求 id 精确认出自己的那一轮，文本、工具调用、审批、结束全部按这一轮过滤（#42，感谢 @nanami-0713）。桌面版本次只同步版本号。',
+      en: 'DeepSeek Harness plugin: a question asked from the canvas now receives only its own turn. Before, if you were also typing in the chat, the canvas node could receive your turn\'s answer, finish early when your turn ended, and stamp its mirror mark on the wrong turn, leaving duplicate nodes; tool approvals could be captured by the canvas as well. The host now recognises its own turn by the request id dsh records on the message, and filters text, tool calls, approvals and the end of turn to that turn alone (#42, thanks @nanami-0713). The desktop app only moves its version number.',
+    },
+    items: [],
+  },
+  {
     version: '0.4.16',
     date: '2026-09-17',
     announce: false,

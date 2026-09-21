@@ -639,6 +639,9 @@ function installApprovalAnswerer(ctx) {
   ctx.on('approval/request', async function (req, next) {
     const entry = canvasTurns.get(req?.agent?.id)
     if (!entry) return next()
+    // an approval raised by another turn of the same session (the person's
+    // own tool call, running before or after ours) stays with the harness UI
+    if (entry.turn === null || entry.current() !== entry.turn) return next()
     const id = 'td-' + randomUUID()
     const call = req.callId !== undefined ? entry.calls.get(req.callId) : undefined
     const name = call?.name ?? req.toolName
@@ -698,7 +701,9 @@ async function runAgentTurn(ctx, body, emit, isClosed, { answerApprovals = true 
   emit({ harnessSession: sessionId, continued: sessionId === continueId, ...(forkedFrom ? { forkedFrom } : {}) })
   // a streaming caller can show and answer approvals; a one-shot caller
   // (/claude) cannot, so its requests fall through to the harness's own panel
-  const turnEntry = { emit, isClosed, calls: new Map() }
+  // turn/current are filled once our message enters the session: the approval
+  // answerer uses them to take only the approvals our turn raises
+  const turnEntry = { emit, isClosed, calls: new Map(), turn: null, current: () => null }
   if (answerApprovals) canvasTurns.set(sessionId, turnEntry)
   const hasImages = Array.isArray(body?.images) && body.images.length > 0
   if (hasImages) {
@@ -714,17 +719,40 @@ async function runAgentTurn(ctx, body, emit, isClosed, { answerApprovals = true 
   let fullText = ''
   let done
   const finished = new Promise(resolve => { done = resolve })
+  // The session is shared with the person chatting in the harness: their
+  // turns may run before, after or around ours (ours is queued behind
+  // whatever is running). Everything below is scoped to OUR turn. dsh stamps
+  // the prompt's requestId on the user message it creates (source.rpcId), so
+  // that message is recognised exactly; it names our turn, and only that
+  // turn's text, tool calls, approvals and end belong to this node (#42).
+  const requestId = 'td-' + randomUUID()
   let currentTurn = null
+  let ourTurn = null
+  let ourMessagePending = false
+  const claimTurn = (turn) => { ourTurn = turn; turnEntry.turn = turn }
+  const isOurs = (event) => ourTurn !== null && (typeof event.data?.turn === 'number' ? event.data.turn === ourTurn : currentTurn === ourTurn)
+  turnEntry.current = () => currentTurn
   const off = ctx.on('session/event', (session, event) => {
     if (session?.id !== sessionId || !event) return
-    if (event.type === 'turn/start') { currentTurn = event.data?.turn ?? null; return }
-    // the person's question entering the surface: THIS is the turn the
-    // canvas node stands for — with its id the canvas marks the node as the
-    // mirror of that turn, and the live mirror does not append it a second time
-    if (event.type === 'user/message' && (event.data?.source?.kind ?? 'user') === 'user') {
-      emit({ harnessTurn: { session: sessionId, turn: currentTurn, userMessageId: event.data?.id ?? null, seq: event.seq ?? null } })
+    if (event.type === 'turn/start') {
+      currentTurn = event.data?.turn ?? null
+      if (ourMessagePending && currentTurn !== null) { ourMessagePending = false; claimTurn(currentTurn) }
       return
     }
+    // the person's question entering the surface: THIS is the turn the
+    // canvas node stands for — with its id the canvas marks the node as the
+    // mirror of that turn, and the live mirror does not append it a second
+    // time. Only our own message counts; a message the person typed in the
+    // chat meanwhile belongs to their turn, not to this node.
+    if (event.type === 'user/message') {
+      const source = event.data?.source
+      if (ourTurn === null && !ourMessagePending && (source?.kind ?? 'user') === 'user' && source?.rpcId === requestId) {
+        if (currentTurn === null) ourMessagePending = true; else claimTurn(currentTurn)
+        emit({ harnessTurn: { session: sessionId, turn: currentTurn, userMessageId: event.data?.id ?? null, seq: event.seq ?? null } })
+      }
+      return
+    }
+    if (!isOurs(event)) return
     if (event.type === 'assistant/chunk') {
       const c = event.data?.chunk
       if (c?.type === 'text-delta' && c.text) { sawChunk = true; fullText += c.text; emit({ text: c.text }) }
@@ -748,7 +776,7 @@ async function runAgentTurn(ctx, body, emit, isClosed, { answerApprovals = true 
     for (const img of Array.isArray(body?.images) ? body.images : []) {
       if (img && typeof img.data === 'string' && IMAGE_MEDIA.has(img.mimeType)) promptContent.push({ type: 'image', mediaType: img.mimeType, data: img.data })
     }
-    await ctx.sessionController.prompt({ requestId: 'td-' + randomUUID(), sessionId, mode: 'queue', content: promptContent }, AbortSignal.timeout(30000))
+    await ctx.sessionController.prompt({ requestId, sessionId, mode: 'queue', content: promptContent }, AbortSignal.timeout(30000))
     const timeout = new Promise(resolve => setTimeout(resolve, 20 * 60 * 1000))
     const closed = new Promise(resolve => { const t = setInterval(() => { if (isClosed()) { clearInterval(t); resolve() } }, 500); finished.then(() => clearInterval(t)) })
     await Promise.race([finished, agent.whenIdle().then(() => finished), timeout, closed])
