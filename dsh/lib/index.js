@@ -288,7 +288,12 @@ function decompressZstdToText(raw) {
   } catch { return '' }
 }
 
-/** Walk $DSH_HOME/sessions for session.jsonl.zstd files (2 levels deep). */
+/** Walk $DSH_HOME/sessions for the session log (2 levels deep). DSH writes the
+ *  session format version into the file name: early builds used
+ *  `session.jsonl.zstd`, while session format V3 (0.1.5-rc.2 and later) uses
+ *  `session.v3.jsonl.zstd`. Probe the known names, newest first, so a listing
+ *  keeps working across both. */
+const SESSION_LOG_NAMES = ['session.v3.jsonl.zstd', 'session.jsonl.zstd']
 async function findSessionFiles(dshHome) {
   const root = join(dshHome, 'sessions')
   const out = []
@@ -300,11 +305,14 @@ async function findSessionFiles(dshHome) {
     try { sessions = await readdir(join(root, ws.name), { withFileTypes: true }) } catch { continue }
     for (const s of sessions) {
       if (!s.isDirectory()) continue
-      const log = join(root, ws.name, s.name, 'session.jsonl.zstd')
-      try {
-        const st = await stat(log)
-        out.push({ dir: ws.name, sessionDir: s.name, log, size: st.size, mtime: st.mtimeMs })
-      } catch { /* no log yet */ }
+      let log
+      let st
+      for (const name of SESSION_LOG_NAMES) {
+        const candidate = join(root, ws.name, s.name, name)
+        try { st = await stat(candidate); log = candidate; break } catch { /* try the next format */ }
+      }
+      if (log === undefined || st === undefined) continue
+      out.push({ dir: ws.name, sessionDir: s.name, log, size: st.size, mtime: st.mtimeMs })
     }
   }
   return out
