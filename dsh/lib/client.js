@@ -20,7 +20,9 @@ window.__ModuleLoader__.load({
   factory: () => {
     const module = { exports: {} }
 
-    module.exports.inject = ['sessions']
+    // uiWorkspace: the harness's directory picker (the OS dialog when the
+    // harness runs on this machine, its in-app browser when reached remotely)
+    module.exports.inject = ['sessions', 'uiWorkspace']
     module.exports.apply = ctx => {
       const currentSession = () => {
         const snapshot = ctx.sessions.list.getSnapshot()
@@ -81,6 +83,21 @@ window.__ModuleLoader__.load({
       window.addEventListener('message', event => {
         if (event.origin !== location.origin || event.data?.source !== 'dsh-thoughtdag') return
         if (event.data.type === 'td:close') return close()
+        // the canvas asks for a working directory: open the harness's own
+        // picker and hand the path back (null when cancelled; unsupported
+        // when this runtime has no picker, so the canvas shows a typed field)
+        if (event.data.type === 'td:pick-cwd') {
+          const requestId = event.data.requestId
+          const pick = ctx.uiWorkspace?.pickDirectory
+          if (typeof pick !== 'function') return send('td:picked-cwd', { requestId, path: null, unsupported: true })
+          // null = cancelled; a throw = this harness has no OS dialog to show
+          // (reached remotely, its picker is the in-app browse kind): the
+          // canvas then offers a typed path instead
+          Promise.resolve(pick.call(ctx.uiWorkspace))
+            .then(path => send('td:picked-cwd', { requestId, path: typeof path === 'string' ? path : null }))
+            .catch(() => send('td:picked-cwd', { requestId, path: null, unsupported: true }))
+          return
+        }
         if (event.data.type === 'td:request-current') {
           // the SPA has booted and shows its own switch: the pill steps aside
           spaReady = true

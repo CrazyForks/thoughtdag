@@ -27,8 +27,29 @@ export async function installAgentsHttpBridge(apiBase: string): Promise<boolean>
       try { const p = JSON.parse(ev.data); for (const cb of listeners) cb(p); } catch { /* a heartbeat */ }
     };
   };
+  // A browser tab cannot learn an absolute path from the system's own file
+  // dialog. Inside the harness the shim can: the harness has a directory
+  // picker of its own (the OS dialog when it runs on this machine, its
+  // in-app browser when reached remotely), and the canvas asks for it by
+  // message. On a plain local server the field stays a typed path.
+  const embedded = !!import.meta.env.VITE_DSH_BRIDGE && window.parent !== window;
+  const capabilities = { nativePicker: embedded };
+  const pickThroughHarness = (): Promise<string | null> => new Promise((resolve) => {
+    if (!embedded) return resolve(null);
+    const requestId = `cwd-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const onMessage = (ev: MessageEvent) => {
+      const d = ev.data as { source?: string; type?: string; requestId?: string; path?: string | null; unsupported?: boolean } | null;
+      if (ev.origin !== window.location.origin || d?.source !== 'dsh-thoughtdag' || d.type !== 'td:picked-cwd' || d.requestId !== requestId) return;
+      window.removeEventListener('message', onMessage);
+      // a harness without the picker: the chip falls back to the typed field from now on
+      if (d.unsupported) capabilities.nativePicker = false;
+      resolve(typeof d.path === 'string' && d.path ? d.path : null);
+    };
+    window.addEventListener('message', onMessage);
+    window.parent.postMessage({ source: 'dsh-thoughtdag', type: 'td:pick-cwd', requestId }, window.location.origin);
+  });
   window.desktopAgents = {
-    capabilities: { nativePicker: false },
+    capabilities,
     available: async () => available,
     models: async (runtime) => {
       const r = await fetch(api + '/agents/models' + (runtime ? `?runtime=${encodeURIComponent(runtime)}` : ''), { credentials: 'same-origin' });
@@ -38,13 +59,7 @@ export async function installAgentsHttpBridge(apiBase: string): Promise<boolean>
     abort: async (runId) => (await post<{ ok: boolean }>('/agents/abort', { runId })).ok,
     answer: async (runId, requestId, response) => (await post<{ ok: boolean }>('/agents/answer', { runId, requestId, response })).ok,
     workspace: async (canvasId) => (await post<{ dir: string }>('/agents/workspace', { canvasId })).dir,
-    pickCwd: async () => null,
-    // no system dialog in a browser tab: the canvas walks the host's folders itself
-    listDirectory: async (dir) => {
-      const r = await fetch(api + '/agents/dirs' + (dir ? `?path=${encodeURIComponent(dir)}` : ''), { credentials: 'same-origin' });
-      if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? `${r.status}`);
-      return r.json();
-    },
+    pickCwd: () => pickThroughHarness(),
     guardWrite: async (cwd, config) => (await post<{ ok: boolean }>('/agents/guard', { cwd, config })).ok,
     writeMaterials: async (cwd, files) => post('/agents/materials', { cwd, files }),
     onEvent: (cb) => { listeners.push(cb); ensureFeed(); },

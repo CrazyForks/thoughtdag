@@ -113,11 +113,6 @@ interface DesktopAgentRunRequest {
   allowRules?: string[];
 }
 
-/** One folder row of a listing: a child, or an ancestor crumb. */
-interface DirectoryEntry { name: string; path: string; hidden: boolean }
-/** One level of the host's filesystem plus its ancestry. */
-interface DirectoryListing { path: string; home: string; crumbs: DirectoryEntry[]; entries: DirectoryEntry[]; truncated: boolean }
-
 interface DesktopAgentsBridge {
   /** what this host can do beyond the calls: a native folder dialog */
   capabilities?: { nativePicker: boolean };
@@ -133,8 +128,6 @@ interface DesktopAgentsBridge {
   answer(runId: string, requestId: string, response: { confirmed: boolean; scope?: 'session' } | { value: string } | { cancelled: true }): Promise<boolean>;
   /** a folder picked in the system dialog, or null */
   pickCwd(): Promise<string | null>;
-  /** one level of the host's folders, for a browser the person walks when there is no system dialog; no dir = home */
-  listDirectory?(dir?: string): Promise<DirectoryListing>;
   /** the boundary guard's tuning for a working directory */
   guardWrite(cwd: string, config: { mode: 'ask' | 'allow'; allow: string[] }): Promise<boolean>;
   /** the canvas's materials written under <cwd>/.thoughtdag/materials */
