@@ -82,7 +82,8 @@ export function startLiveMirror(): void {
       const { streamRunnerConversation } = await import('../adapters');
       const { importOrAppendConversation, shellSessionReader } = await import('./canonical');
       const conv = await streamRunnerConversation(shellSessionReader(ev.rootKey, ev.rel)).catch(() => null);
-      const result = await importOrAppendConversation(conv);
+      // a sweep refreshes quietly; only a genuinely new turn lands with focus
+      const result = await importOrAppendConversation(conv, { focusOnRefresh: false });
       if (result?.kind === 'appended') {
         toast('success', fmt(t('atlas.liveAppended'), { n: result.turns }), 8000);
       } else if (result?.kind === 'mounted') {

@@ -331,11 +331,14 @@ type HarnessRoute = { cwd?: string; session?: string; forkSession?: string; fork
  *  session carrying the compiled canvas context. */
 export async function harnessOutbound(nodeId: string, model: string | undefined): Promise<HarnessRoute | undefined> {
   if (!window.desktopSessions || !isHarnessAgentModel(model)) return undefined;
-  const cwd = (await activeCanvasCwd()) ?? currentSession?.cwd ?? undefined;
+  const { useProjects } = await import('../../store/projects');
+  const { projects, activeId } = useProjects.getState();
+  // the folder the person chose for this canvas first, then the project the
+  // canvas mirrors, then the session the chat shows
+  const chosen = projects.find((p) => p.id === activeId)?.agentCwd;
+  const cwd = chosen ?? (await activeCanvasCwd()) ?? currentSession?.cwd ?? undefined;
   try {
     const { useStore } = await import('../../store');
-    const { useProjects } = await import('../../store/projects');
-    const { projects, activeId } = useProjects.getState();
     const ss = projects.find((p) => p.id === activeId)?.sourceSession;
     const { nodes, edges } = useStore.getState();
     const incoming = edges.filter((e) => e.target === nodeId);

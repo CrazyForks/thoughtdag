@@ -5,6 +5,8 @@ import { useUiStore } from '../../lib/ui-store';
 import { useProjects, setProjectAgentCwd } from '../../store/projects';
 import { useStore } from '../../store';
 import { isAgentModel, resolveAgentCwd, mirroredCwd, setGuardMode, allowLocation, type CwdChoice } from '../../lib/agents/agent-runtime';
+import { isHarnessAgentModel } from '../../lib/atlas/dsh-bridge';
+import { IN_HARNESS } from '../../lib/embedded';
 
 // Where the agent works, on the toolbar, whenever an agent model is the
 // pick: the chosen folder, the mirrored project, or the canvas's own
@@ -25,15 +27,18 @@ export default function AgentCwdChip() {
   const [typed, setTyped] = useState('');
   const [, rerender] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
-  const visible = !!window.desktopAgents && isAgentModel(selectedModel);
+  // the runtimes the canvas launches itself, and inside the harness its own
+  // agent too: a fresh harness session runs where this says
+  const harness = IN_HARNESS && !!window.desktopSessions && isHarnessAgentModel(selectedModel);
+  const visible = !!window.desktopAgents && (isAgentModel(selectedModel) || harness);
 
   useEffect(() => {
     if (!visible) return;
     let alive = true;
-    void resolveAgentCwd().then((c) => { if (alive) setChoice(c); });
+    void resolveAgentCwd(harness).then((c) => { if (alive) setChoice(c); });
     void mirroredCwd().then((m) => { if (alive) setMirrored(m); });
     return () => { alive = false; };
-  }, [visible, activeId, projects, nodeCount]);
+  }, [visible, harness, activeId, projects, nodeCount]);
 
   useEffect(() => {
     if (!open) return;
@@ -82,8 +87,8 @@ export default function AgentCwdChip() {
           <p className="text-2xs text-ink-faint uppercase tracking-wider font-medium px-3 pt-1 pb-1">{t('agent.cwd')}</p>
           <button onClick={() => void choose(undefined)} className="w-full text-left px-3 py-2 text-xs hover:bg-wash flex items-center gap-2">
             <span className="flex-1 min-w-0">
-              <span className="block text-ink">{mirrored ? t('agent.cwdMirrored') : t('agent.cwdWorkspace')}</span>
-              <span className="block text-2xs text-ink-faint truncate">{mirrored ?? t('agent.cwdWorkspaceHint')}</span>
+              <span className="block text-ink">{mirrored ? t('agent.cwdMirrored') : choice.kind === 'session' ? t('agent.cwdSession') : t('agent.cwdWorkspace')}</span>
+              <span className="block text-2xs text-ink-faint truncate">{mirrored ?? (choice.kind === 'session' ? choice.cwd : t('agent.cwdWorkspaceHint'))}</span>
             </span>
             {!meta?.agentCwd && <Check size={13} strokeWidth={2} className="shrink-0 text-accent" />}
           </button>

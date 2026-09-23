@@ -1,4 +1,5 @@
 import { useT } from '../../i18n';
+import { IN_HARNESS_FRAME } from '../../lib/embedded';
 
 // The 对话 | 思维图 switch, as the canvas shows it while it runs inside the
 // harness: one control in the canvas's own top bar, right after the canvas
@@ -7,11 +8,9 @@ import { useT } from '../../i18n';
 // canvas is up). 思维图 is where we are; 对话 asks the shim to close the
 // overlay. Renders nothing outside the harness build.
 
-const embedded = !!import.meta.env.VITE_DSH_BRIDGE && typeof window !== 'undefined' && window.parent !== window;
-
 export default function HarnessViewSwitch() {
   const t = useT();
-  if (!embedded) return null;
+  if (!IN_HARNESS_FRAME) return null;
   const close = () => window.parent.postMessage({ source: 'dsh-thoughtdag', type: 'td:close' }, window.location.origin);
   return (
     <div className="bg-card/90 backdrop-blur border border-line rounded-xl p-0.5 shadow-sm flex items-center" role="group" aria-label="view switch" data-harness-view-switch>

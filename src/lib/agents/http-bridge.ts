@@ -4,6 +4,8 @@
 // server-sent-events feed. Installed only when the host answers; the
 // hosted deployment has no machine to run an agent on and never does.
 
+import { IN_HARNESS_FRAME } from '../embedded';
+
 export async function installAgentsHttpBridge(apiBase: string): Promise<boolean> {
   if (window.desktopAgents) return true;
   const api = apiBase.replace(/\/+$/, '');
@@ -32,7 +34,7 @@ export async function installAgentsHttpBridge(apiBase: string): Promise<boolean>
   // picker of its own (the OS dialog when it runs on this machine, its
   // in-app browser when reached remotely), and the canvas asks for it by
   // message. On a plain local server the field stays a typed path.
-  const embedded = !!import.meta.env.VITE_DSH_BRIDGE && window.parent !== window;
+  const embedded = IN_HARNESS_FRAME;
   const capabilities = { nativePicker: embedded };
   const pickThroughHarness = (): Promise<string | null> => new Promise((resolve) => {
     if (!embedded) return resolve(null);

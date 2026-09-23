@@ -222,6 +222,7 @@ export const zh: Record<keyof typeof en, string> = {
   'agent.cwdWorkspace': '画布工作区',
   'agent.cwdWorkspaceHint': '默认：这张画布自己的目录',
   'agent.cwdMirrored': '镜像的项目',
+  'agent.cwdSession': '对话当前会话的目录',
   'agent.cwdRecent': '最近用过',
   'agent.cwdPick': '选择文件夹…',
   'agent.cwdType': '输入目录的完整路径…',

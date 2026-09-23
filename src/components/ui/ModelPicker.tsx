@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { IN_HARNESS } from '../../lib/embedded';
 import { Check, ChevronDown, Cpu, KeyRound, RefreshCw, Info, Loader2 } from 'lucide-react';
 import { toast, useUiStore } from '../../lib/ui-store';
 import { useModels, setModelsCache, ensureAgentsFresh, type ModelInfo } from '../../lib/use-models';
@@ -168,7 +169,7 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
           ))}
           {!nodeMode && (
             <div className="flex items-center pr-1">
-            <button
+            {!IN_HARNESS && <button
               onClick={() => { setOpen(false); useUiStore.getState().setApiKeyModalOpen(true); }}
               className={`flex-1 text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors hover:bg-wash ${
                 models.length === 0 ? 'text-accent font-medium' : 'text-ink-muted'
@@ -176,7 +177,7 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
               data-picker-apikey
             >
               <KeyRound size={13} strokeWidth={1.75} className="shrink-0" /> {t('apikey.entryTitle')}
-            </button>
+            </button>}
             <button
               onClick={() => {
                 setRefreshing(true);

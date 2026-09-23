@@ -62,6 +62,7 @@ import GlobalTooltip from './components/ui/GlobalTooltip';
 import RoleManagerModal from './components/ui/RoleManagerModal';
 import MemoryManagerModal from './components/ui/MemoryManagerModal';
 import ApiKeyModal from './components/ui/ApiKeyModal';
+import { IN_HARNESS } from './lib/embedded';
 import ResponseViewer from './components/ui/ResponseViewer';
 import ShareDialog from './components/ui/ShareDialog';
 import ThoughtMapDialog from './components/ui/ThoughtMapDialog';
@@ -1604,8 +1605,9 @@ function Canvas() {
         {!isParadigm && <AgentCwdChip />}
         {!isParadigm && <ModelPicker />}
         {/* Landing convenience only: inside the canvas the picker's own
-            empty state (Connect a model) is the door — no twin key icon */}
-        {!hasNodes && (
+            empty state (Connect a model) is the door — no twin key icon.
+            Inside the harness there is no key to configure at all. */}
+        {!hasNodes && !IN_HARNESS && (
           <button
             onClick={() => useUiStore.getState().setApiKeyModalOpen(true)}
             className="bg-card/90 backdrop-blur border border-line rounded-lg w-8 h-8 flex items-center justify-center shadow-sm hover:bg-wash transition-colors text-ink-faint hover:text-accent"

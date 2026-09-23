@@ -163,8 +163,11 @@ export async function runNodeGeneration(
   // Inside DeepSeek Harness a generation runs as a real dsh turn: the bridge
   // reports which session it ran in and the turn it created, so this node can
   // become that turn's mirror (and the live mirror not append it again).
-  const harnessRoute = await harnessOutbound(nodeId, pinnedModel ?? useUiStore.getState().selectedModel ?? serverDefaultModel ?? undefined);
-  const agentRoute = harnessRoute ? undefined : await agentOutbound(pinnedModel ?? useUiStore.getState().selectedModel ?? serverDefaultModel ?? undefined, nodeId);
+  // Resolved ONCE, here: the picker may change while this node runs, and the
+  // node must record what it was asked with, not what the picker says later
+  const requestedModel = pinnedModel ?? useUiStore.getState().selectedModel ?? serverDefaultModel ?? undefined;
+  const harnessRoute = await harnessOutbound(nodeId, requestedModel);
+  const agentRoute = harnessRoute ? undefined : await agentOutbound(requestedModel, nodeId);
   let harnessSession: string | undefined;
   let harnessTurn: { session: string; turn: number | null; userMessageId: string | null; seq: number | null } | null = null;
   // the turn is claimed the moment the bridge names it (mid-generation), so a
@@ -174,7 +177,7 @@ export async function runNodeGeneration(
   const writeFinal = (response: string, failed = false) => {
     if (!isCurrent()) return; // superseded: a newer generation owns this node
     const tokenCount = countTokens(question + response);
-    const modelUsed = actualModel ?? pinnedModel ?? useUiStore.getState().selectedModel ?? serverDefaultModel ?? undefined;
+    const modelUsed = actualModel ?? requestedModel;
     get().logEvent('generate', nodeId, { chars: response.length, ...(modelUsed ? { model: modelUsed } : {}), ...(failed ? { failed: true } : {}) });
     // Provenance: fingerprint what this answer depended on, AT completion —
     // the staleness pass compares this against the live upstream fingerprint.
@@ -233,7 +236,7 @@ export async function runNodeGeneration(
     // reason (and no spend) instead of a guaranteed upstream 400. countTokens
     // errs high on CJK, and an input hugging the window leaves no room for
     // the answer anyway — so a plain >= is the honest cutoff.
-    const effectiveModel = pinnedModel ?? useUiStore.getState().selectedModel ?? serverDefaultModel;
+    const effectiveModel = requestedModel;
     const windowLimit = effectiveModel ? contextLengthFor(effectiveModel) : undefined;
     if (windowLimit) {
       const est = countTokens(messages.map((m) => m.content).join('\n'));
@@ -289,12 +292,37 @@ export async function runNodeGeneration(
         ...(shown.length ? { m: shown.join(',') } : {}), ...(members.length > shown.length ? { more: true } : {}),
       });
     };
+    let toolsSettled = false;
     const response = await llmCallStream(messages, (_chunk, fullSoFar) => {
       pushStream({ response: fullSoFar });
+      if (harnessRoute && !toolsSettled) {
+        // the answer has begun: whatever step was still running is over
+        toolsSettled = true;
+        const now = new Date().toISOString();
+        set((state) => ({ nodes: state.nodes.map((n) => (n.id === nodeId && n.data.agentTrace?.some((e) => e.status === 'running')
+          ? { ...n, data: { ...n.data, agentTrace: n.data.agentTrace.map((e) => (e.status === 'running' ? { ...e, status: 'ok' as const, endedAt: now } : e)) } }
+          : n)) }));
+      }
     }, abortController.signal, images, {
       onDispatch: (p) => { void commitDispatch(p).catch(() => undefined); },
       onToolCall: (name, query) => {
         if (!isCurrent()) return;
+        if (harnessRoute) {
+          // a harness turn is a run: every tool is a step, listed on the node
+          // as it happens (latest last), the thinking between steps beneath.
+          // The host reports starts only; a step is done when the next one
+          // begins or the answer starts.
+          const now = new Date().toISOString();
+          set((state) => ({
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const trace = (n.data.agentTrace ?? []).map((e) => (e.status === 'running' ? { ...e, status: 'ok' as const, endedAt: now } : e));
+              trace.push({ id: `${now}-${trace.length}`, name, query, status: 'running', startedAt: now });
+              return { ...n, data: { ...n.data, agentTrace: trace } };
+            }),
+          }));
+          return;
+        }
         // Show what's being searched while the answer hasn't started streaming
         const icon = name === 'arxiv_search' ? '📚' : name === 'semantic_scholar' ? '🎓' : name.startsWith('mcp:') ? '🔧' : '🔍';
         set((state) => ({

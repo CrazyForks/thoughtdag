@@ -74,12 +74,12 @@ export async function agentModels(): Promise<ModelInfo[]> {
 
 export type AgentRoute = { cwd: string; sessionPath?: string; forkEntryId?: string; continue?: boolean };
 
-export type CwdChoice = { cwd: string; kind: 'chosen' | 'mirrored' | 'workspace' };
+export type CwdChoice = { cwd: string; kind: 'chosen' | 'mirrored' | 'session' | 'workspace' };
 
 /** The working directory the active canvas's agent turns run in: the one
  *  the person chose for this canvas, else the project its mirrored nodes
  *  came from, else the canvas's own workspace. */
-export async function resolveAgentCwd(): Promise<CwdChoice | null> {
+export async function resolveAgentCwd(forHarness = false): Promise<CwdChoice | null> {
   if (!window.desktopAgents) return null;
   try {
     const { useStore } = await import('../../store');
@@ -96,6 +96,13 @@ export async function resolveAgentCwd(): Promise<CwdChoice | null> {
     for (const [c, n] of counts) if (n > bestN) { best = c; bestN = n; }
     const workspace = await window.desktopAgents.workspace(activeId ?? 'default');
     if (best && best !== workspace) return { cwd: best, kind: 'mirrored' };
+    // a Harness Agent turn without a choice of its own follows the session
+    // the chat shows, not the canvas's workspace folder
+    if (forHarness) {
+      const { currentDshSession } = await import('../atlas/dsh-bridge');
+      const session = currentDshSession()?.cwd;
+      if (session) return { cwd: session, kind: 'session' };
+    }
     return { cwd: workspace, kind: 'workspace' };
   } catch {
     return null;

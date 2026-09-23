@@ -98,7 +98,15 @@ function placeSegment(
   return { moved, edges };
 }
 
-export async function importOrAppendConversation(conv: import('../import-chat').ImportableConversation | null): Promise<CanonicalResult> {
+export interface OpenOptions {
+  /** Centre the canvas on the session's tail when nothing new arrived. An
+   *  explicit open wants that (the person asked to see it); the live sweep
+   *  does not (a session refreshing while the person works elsewhere must
+   *  not drag the camera back every few seconds). Default true. */
+  focusOnRefresh?: boolean;
+}
+
+export async function importOrAppendConversation(conv: import('../import-chat').ImportableConversation | null, opts: OpenOptions = {}): Promise<CanonicalResult> {
   if (!conv) return null;
 
   const built = conv.build();
@@ -108,7 +116,7 @@ export async function importOrAppendConversation(conv: import('../import-chat').
 
   // ── 1. subscribed somewhere? open + idempotent append ──
   const hit = findSubscription(conv.sessionId);
-  if (hit) return appendPastLedger(conv, built, qa, tailQaId, hit);
+  if (hit) return appendPastLedger(conv, built, qa, tailQaId, hit, opts);
 
   // ── 1a. provenance adoption: a canvas that still HOLDS this
   //       session's mirror nodes but lost its ledger entry (a healed
@@ -134,7 +142,7 @@ export async function importOrAppendConversation(conv: import('../import-chat').
           sessionId: conv.sessionId, runner: conv.source, importedCount: lastIdx + 1, tailNodeId: tailNode,
         });
         const adopted = findSubscription(conv.sessionId);
-        if (adopted) return appendPastLedger(conv, built, qa, tailQaId, adopted);
+        if (adopted) return appendPastLedger(conv, built, qa, tailQaId, adopted, opts);
       }
     }
   }
@@ -280,6 +288,7 @@ async function appendPastLedger(
   qa: ThoughtNode[],
   tailQaId: string,
   hit: LedgerHit,
+  opts: OpenOptions = {},
 ): Promise<CanonicalResult> {
   await switchProject(hit.project.id);
   const store = useStore.getState();
@@ -341,7 +350,7 @@ async function appendPastLedger(
   }
 
   if (qa.length <= hit.entry.importedCount) {
-    useUiStore.getState().setArrivalFocusNodeId(anchor?.id ?? null);
+    if (opts.focusOnRefresh !== false) useUiStore.getState().setArrivalFocusNodeId(anchor?.id ?? null);
     return { kind: 'opened' };
   }
 
