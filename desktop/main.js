@@ -141,7 +141,8 @@ function resolveInRoot(rootKey, rel) {
   return abs;
 }
 
-// DSH sessions are zstd-compressed JSONL (session.jsonl.zstd). The fenced
+// DSH sessions are zstd-compressed JSONL (session.jsonl.zstd, or
+// session.v3.jsonl.zstd from session format V3 on; listing goes by extension). The fenced
 // primitives below answer with TEXT — a head, a read, line-aligned chunks —
 // so a .zstd rel is decompressed here, once per file+mtime, and served from
 // the same buffer every reader sees. Raw files (claude/codex) are untouched.

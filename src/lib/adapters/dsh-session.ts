@@ -10,7 +10,8 @@ import {
 
 // DeepSeek Harness session importer — the continuity layer's READ
 // direction for the DSH runner. A session lives as a zstd-compressed
-// JSONL under ~/.dsh/sessions/<encoded-cwd>/<session-id>/session.jsonl.zstd
+// JSONL under ~/.dsh/sessions/<encoded-cwd>/<session-id>/session[.v3].jsonl.zstd
+// (the session format version rides in the file name from format V3 on)
 // (the desktop shell decompresses before this reader sees a line). Each
 // line is ONE event; every event carries a monotonic seq, and turn/step
 // boundaries ride explicit events (turn/start, step/start, step/end).

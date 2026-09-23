@@ -32,6 +32,16 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.4.18',
+    date: '2026-09-23',
+    announce: false,
+    lead: {
+      zh: 'DeepSeek Harness 插件：历史会话列表在新版 Harness 上不再为空。dsh 从 0.1.5-rc.2 起把会话格式版本写进日志文件名（session.v3.jsonl.zstd），插件现在按已知文件名探测，新旧两种都认（#44，感谢 @LHN-xiao-hai-tun）。模型选择器加宽，条目悬停显示完整名称，Agent 执行组的长名字改为换行而不是截断，flash 与 flash-vision 一眼可辨（#43）。',
+      en: 'DeepSeek Harness plugin: the list of past sessions is no longer empty on newer Harness builds. From 0.1.5-rc.2 dsh writes the session format version into the log file name (session.v3.jsonl.zstd); the plugin now probes the known names and reads both (#44, thanks @LHN-xiao-hai-tun). The model picker is wider, every entry shows its full name on hover, and long names in the agent group wrap instead of being cut, so flash and flash-vision tell apart at a glance (#43).',
+    },
+    items: [],
+  },
+  {
     version: '0.4.17',
     date: '2026-09-21',
     announce: false,

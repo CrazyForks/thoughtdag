@@ -126,7 +126,7 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
       {open && (
         // Both placements drop DOWN: the compact picker lives in the panel
         // header now (an upward menu would fly off the viewport top)
-        <div className="absolute top-9 right-0 bg-card border border-line rounded-xl shadow-xl py-1.5 w-64 max-h-[60vh] overflow-y-auto z-30">
+        <div className="absolute top-9 right-0 bg-card border border-line rounded-xl shadow-xl py-1.5 w-80 max-h-[60vh] overflow-y-auto z-30">
           {nodeMode && (
             <button
               onClick={() => pick(null)}
@@ -150,11 +150,14 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
                 <div key={m.id}>
                 <button
                   onClick={() => pick(m.id)}
+                  title={m.name}
                   className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors hover:bg-wash ${
                     m.id === activeId ? 'text-accent font-medium' : 'text-ink'
                   }`}
                 >
-                  <span className="truncate flex-1">{m.name.replace(` (${m.provider})`, '')}</span>
+                  {/* agent entries carry runtime · model · variant and tell apart only by
+                      their tail, so they wrap instead of losing it to an ellipsis (#43) */}
+                  <span className={provider === AGENT_PROVIDER ? 'flex-1 break-words leading-snug' : 'truncate flex-1'}>{m.name.replace(` (${m.provider})`, '')}</span>
                   {m.vision && <span className="text-2xs text-ink-faint shrink-0">{t('model.vision')}</span>}
                   {m.id === activeId && <Check size={13} strokeWidth={2} className="shrink-0" />}
                 </button>

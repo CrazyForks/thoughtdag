@@ -24,6 +24,9 @@ type Root = Awaited<ReturnType<Bridge['roots']>>[number];
 type Listed = Awaited<ReturnType<Bridge['list']>>[number];
 
 const ROOT_KEY = 'dsh-sessions';
+// the bridge's rows are addressed by session id; this suffix only dresses the
+// id up as the file-shaped `rel` the atlas expects and is peeled off again —
+// it never touches the disk, whatever the log is actually named there
 const REL_SUFFIX = '/session.jsonl.zstd';
 const CACHE_MS = 1500;
 const POLL_MS = 2500;
