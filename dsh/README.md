@@ -14,9 +14,11 @@ web server (no second process, no second port), and the client half adds a
 floating "对话 | 思维图" switch at the top of the harness page that shows the
 canvas in a same-origin full-screen iframe.
 
-> The switch floats over the harness page, so it is there before any session
-> is open and stays the same control in both views. (开关浮在页面顶部，空态
-> 也能切换，两个视图里是同一个控件。0.4.18 曾把它放进会话标题栏，0.4.19 撤回。)
+> The switch floats over the chat, so it is there before any session is
+> open; while the canvas is up, the same switch sits in the canvas's own top
+> bar next to the canvas chip, so it never covers the canvas toolbar. (开关浮
+> 在对话页顶部，空态也能切换；思维图打开时，同一个开关在画布顶栏「画布名」右侧，
+> 不再压住画布工具栏。0.4.18 曾把它放进会话标题栏，0.4.19 撤回。)
 
 ## What works
 

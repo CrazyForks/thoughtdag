@@ -226,6 +226,8 @@ export const zh: Record<keyof typeof en, string> = {
   'agent.cwdPick': '选择文件夹…',
   'agent.cwdType': '输入目录的完整路径…',
   'agent.cwdUse': '使用',
+  'harness.viewChat': '对话',
+  'harness.viewMap': '思维图',
   'agent.cwdBrowse': '浏览文件夹…',
   'agent.cwdUseThis': '使用此目录',
   'agent.cwdShowHidden': '隐藏目录',

@@ -3,9 +3,11 @@
 // "思维图", shows a full-screen SAME-ORIGIN iframe at /thoughtdag/ (the SPA
 // is served by the host half on the same web server — no CORS, no second
 // origin). The switch floats on purpose: it is there before any session is
-// open, and it is the same control in both views (0.4.18 moved it into the
-// session header, which hid it on the empty page and left a separate
-// capsule over the canvas; both went back in 0.4.19). All conversation smarts live inside the ThoughtDAG app; this file
+// open (0.4.18 moved it into the session header, which hid it on the empty
+// page; withdrawn in 0.4.19). While the canvas is up, the SPA shows the same
+// switch in its own top bar, next to the canvas chip, so nothing floats over
+// the canvas toolbar at any width: the pill hides once the SPA has booted
+// and comes back when the canvas closes (0.4.20). All conversation smarts live inside the ThoughtDAG app; this file
 // only opens the door and forwards the current session id so the canvas can
 // offer to mirror it.
 //
@@ -29,7 +31,7 @@ window.__ModuleLoader__.load({
       }
 
       const style = document.createElement('style')
-      style.textContent = '.dsh-td-switch{position:fixed;z-index:120;top:12px;left:50%;display:flex;gap:2px;transform:translateX(-50%);border:1px solid #d1d5db;border-radius:999px;background:rgba(255,255,255,.96);padding:3px;backdrop-filter:blur(10px)}.dsh-td-switch button{height:28px;border:0;border-radius:999px;background:transparent;padding:0 11px;color:#6b7280;font:600 12px Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}.dsh-td-switch button:hover{background:#f3f4f6;color:#111827}.dsh-td-switch button.active{background:#111827;color:#fff}.dsh-td-overlay{position:fixed;z-index:100;inset:0;background:#faf9f7}.dsh-td-overlay[hidden]{display:none}.dsh-td-overlay iframe{display:block;width:100%;height:100%;border:0}'
+      style.textContent = '.dsh-td-switch{position:fixed;z-index:120;top:12px;left:50%;display:flex;gap:2px;transform:translateX(-50%);border:1px solid #d1d5db;border-radius:999px;background:rgba(255,255,255,.96);padding:3px;backdrop-filter:blur(10px)}.dsh-td-switch button{height:28px;border:0;border-radius:999px;background:transparent;padding:0 11px;color:#6b7280;font:600 12px Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}.dsh-td-switch button:hover{background:#f3f4f6;color:#111827}.dsh-td-switch button.active{background:#111827;color:#fff}.dsh-td-switch[hidden]{display:none}.dsh-td-overlay{position:fixed;z-index:100;inset:0;background:#faf9f7}.dsh-td-overlay[hidden]{display:none}.dsh-td-overlay iframe{display:block;width:100%;height:100%;border:0}'
       document.head.append(style)
 
       const host = document.createElement('div')
@@ -40,6 +42,8 @@ window.__ModuleLoader__.load({
       let pluginVersion = null
       fetch('/thoughtdag/api/version').then(r => (r.ok ? r.json() : null)).then(j => { if (j && typeof j.version === 'string') pluginVersion = j.version }).catch(() => {})
 
+      const switchEl = host.querySelector('.dsh-td-switch')
+      let spaReady = false
       const dialogBtn = host.querySelector('[data-view="dialog"]')
       const mapBtn = host.querySelector('[data-view="map"]')
       const overlay = host.querySelector('.dsh-td-overlay')
@@ -51,7 +55,7 @@ window.__ModuleLoader__.load({
         mapBtn.classList.toggle('active', map)
         mapBtn.setAttribute('aria-pressed', String(map))
       }
-      const close = () => { overlay.hidden = true; setView(false); send('td:view', { shown: false }) }
+      const close = () => { overlay.hidden = true; switchEl.hidden = false; setView(false); send('td:view', { shown: false }) }
       const send = (type, payload) => frame.contentWindow?.postMessage({ source: 'dsh-thoughtdag', type, ...payload }, location.origin)
 
       const syncCurrent = () => {
@@ -62,6 +66,7 @@ window.__ModuleLoader__.load({
       mapBtn.addEventListener('click', () => {
         overlay.hidden = false
         setView(true)
+        if (spaReady) switchEl.hidden = true
         // the SPA boots on first open, never while hidden: a canvas that
         // measures itself inside a display:none frame fits its view to a 0×0
         // box and shows nothing when revealed
@@ -76,7 +81,12 @@ window.__ModuleLoader__.load({
       window.addEventListener('message', event => {
         if (event.origin !== location.origin || event.data?.source !== 'dsh-thoughtdag') return
         if (event.data.type === 'td:close') return close()
-        if (event.data.type === 'td:request-current') return syncCurrent()
+        if (event.data.type === 'td:request-current') {
+          // the SPA has booted and shows its own switch: the pill steps aside
+          spaReady = true
+          if (!overlay.hidden) switchEl.hidden = true
+          return syncCurrent()
+        }
         // the canvas forked or continued a session: stage it and go back to the
         // chat, which now shows exactly the context the canvas produced
         if (event.data.type === 'td:select-session' && typeof event.data.session === 'string') {

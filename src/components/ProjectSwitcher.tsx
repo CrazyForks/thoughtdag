@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Archive, ChevronDown, Dna, FolderOpen, Loader2, Map as MapIcon, Pencil, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
 import SessionAtlas from './SessionAtlas';
+import HarnessViewSwitch from './ui/HarnessViewSwitch';
 import { knownSessionIds } from '../lib/atlas/discover';
 import { useProjects, switchProject, createProject, renameProject, deleteProject, setProjectArchived } from '../store/projects';
 import { useI18n } from '../i18n';
@@ -97,6 +98,8 @@ export default function ProjectSwitcher({ onSwitched }: { onSwitched: () => void
           <span className="truncate font-medium">{active?.name ?? '…'}</span>
           <ChevronDown size={14} strokeWidth={1.75} className="shrink-0 text-ink-faint" />
         </button>
+        {/* inside the harness: the view switch shares this row (see HarnessViewSwitch) */}
+        <HarnessViewSwitch />
         {/* the twin badge: this canvas is one face of a session — the
             other face is one click away on the map */}
         {!!active?.sourceSession?.sessionId && (() => {

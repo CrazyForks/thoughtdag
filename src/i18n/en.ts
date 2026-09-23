@@ -226,6 +226,8 @@ export const en = {
   'agent.cwdPick': 'Choose a folder…',
   'agent.cwdType': 'Type the full path of a folder…',
   'agent.cwdUse': 'Use',
+  'harness.viewChat': 'Chat',
+  'harness.viewMap': 'Thought graph',
   'agent.cwdBrowse': 'Browse folders…',
   'agent.cwdUseThis': 'Use this folder',
   'agent.cwdShowHidden': 'Hidden folders',
