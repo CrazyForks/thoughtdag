@@ -264,8 +264,6 @@ export const zh: Record<keyof typeof en, string> = {
   'backup.enabled': '自动备份已开启：画布会在变更后写入所选文件夹',
   'backup.reauth': '自动备份等待授权：浏览器重启后需要确认一次文件夹权限',
   'backup.reauthBtn': '重新授权，继续备份',
-  'backup.nudge': '画布数据保存在浏览器本地：重启不丢，但「清除站点数据」会清掉。这张画布有些日子没备份了，建议导出一份画布文件。',
-  'backup.nudgeBtn': '导出备份',
   'backup.now': '立即备份当前画布',
   'viewer.badge': '只读视图',
   'viewer.shareDialogTitle': '分享链接',

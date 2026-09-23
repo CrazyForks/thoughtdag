@@ -32,6 +32,16 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.4.20',
+    date: '2026-09-23',
+    announce: false,
+    lead: {
+      zh: 'DeepSeek Harness 插件一轮实测后的整理。「对话 | 思维图」开关：对话页顶部仍是浮动的，切到思维图后它移到画布顶栏「画布名」右侧，不再压住画布工具栏。工作目录改用 Harness 自己的目录选择器：本机运行时弹的就是系统的文件夹对话框，远程访问时回落为输入路径；0.4.19 里自带的目录浏览器撤掉。Harness Agent 也能选工作目录，新会话按所选目录运行。插件里去掉配置模型 API 的入口。实时镜像刷新会话时不再把镜头拉回节点。节点记录的是发起请求时的模型，执行中切换选择器不再改写徽章。Harness 执行中的每个工具调用都列为一条步骤，思考尾巴显示在下方。备份提醒去掉。',
+      en: 'DeepSeek Harness plugin, after a round of hands-on testing. The 对话 | 思维图 switch still floats over the chat; on the canvas it sits in the canvas\'s own top bar next to the canvas chip, so it never covers the toolbar. The working directory is chosen in the harness\'s own picker: the system folder dialog when the harness runs on this machine, a typed path when reached remotely; the folder browser 0.4.19 carried is withdrawn. The Harness Agent gets the folder chip too, and a fresh session runs where it says. The API-key door is gone inside the plugin. The live mirror no longer drags the camera back to a node while its session refreshes. A node records the model it was asked with; switching the picker mid-run no longer relabels it. Every tool call of a harness run is listed as a step, the thinking beneath. The backup reminder is removed.',
+    },
+    items: [],
+  },
+  {
     version: '0.4.19',
     date: '2026-09-23',
     announce: false,

@@ -264,8 +264,6 @@ export const en = {
   'backup.enabled': 'Auto-backup enabled: the canvas is written to the chosen folder after changes',
   'backup.reauth': 'Auto-backup is waiting: confirm folder permission once after a browser restart',
   'backup.reauthBtn': 'Re-authorize & keep backing up',
-  'backup.nudge': 'Your canvas lives in browser storage: it survives restarts, but clearing site data erases it. This canvas has not been backed up for a while — export a canvas file.',
-  'backup.nudgeBtn': 'Export a backup',
   'backup.now': 'Back up this canvas now',
   'viewer.badge': 'Read-only view',
   'viewer.shareDialogTitle': 'Share link',
