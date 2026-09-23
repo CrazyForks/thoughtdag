@@ -18,6 +18,7 @@
 
 import type { StoreApi } from 'zustand';
 import type { StoreState } from '../../store/types';
+import { liveTailPlan } from './live-log';
 
 type Bridge = NonNullable<Window['desktopSessions']>;
 type Root = Awaited<ReturnType<Bridge['roots']>>[number];
@@ -119,11 +120,13 @@ export function installDshSessionsBridge(apiBase: string): void {
     const hit = cache.get(id);
     if (hit && Date.now() - hit.at < CACHE_MS && hit.seq === e.seq) return hit.text;
     let t: string;
-    if (e.live && hit && hit.seq !== null && e.seq !== null && e.seq > hit.seq && hit.text) {
-      // the log moved on: fetch only the events past what we hold
-      const tail = await text(`/sessions/${encodeURIComponent(id)}/log?since=${hit.seq}`).catch(() => null);
-      if (tail === null) t = hit.text;
-      else t = tail ? `${hit.text}\n${tail}` : hit.text;
+    // a live log grows: fetch only the events past the last one we hold
+    // (see liveTailPlan for why the held log, not the list's seq, decides)
+    const plan = e.live ? liveTailPlan(hit?.text, e.seq) : { kind: 'full' as const };
+    if (plan.kind === 'reuse' && hit) t = hit.text;
+    else if (plan.kind === 'tail' && hit) {
+      const tail = await text(`/sessions/${encodeURIComponent(id)}/log?since=${plan.since}`).catch(() => null);
+      t = tail ? `${hit.text}\n${tail}` : hit.text;
     } else {
       t = await text(e.live ? `/sessions/${encodeURIComponent(id)}/log` : `/disksessions/${encodeURIComponent(id)}/log`).catch(() => '');
       if (e.live && e.cwd) t = withHeaderCwd(t, e.cwd);

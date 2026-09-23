@@ -32,6 +32,16 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.4.19',
+    date: '2026-09-23',
+    announce: false,
+    lead: {
+      zh: 'DeepSeek Harness 插件：Harness Agent 节点的回答不再「闪一下就没了」。新版 Harness（0.1.5-rc.3）不再把逐字流写进会话日志，一步只落一条 assistant/message；画布续读实时日志时按会话列表报的序号少读了一条，恰好是带答案的那条，节点随后被镜像成空回答。现在按实际持有的最后一条事件续读，且镜像永不把已有回答改写为空。思考过程重新同步显示：宿主订阅 Harness 新的流事件（agent/assistant-stream），正文和思考逐字到达节点，没有流的运行时从每步的 reasoning 块补发。「对话 | 思维图」开关回到浮动位置，空态也能切换（0.4.18 的标题栏开关撤回）。Agent 的工作目录改为浏览宿主机的文件夹来选，也仍可直接输入路径。',
+      en: 'DeepSeek Harness plugin: a Harness Agent node no longer shows its answer for a moment and then loses it. Newer Harness builds (0.1.5-rc.3) stop writing the token stream into the session log; a step lands as one assistant/message. When the canvas read the live log incrementally it asked from the seq the session list reported and skipped exactly one event, the one carrying the answer, and the node was then mirrored as an empty reply. It now continues from the last event it actually holds, and a mirror never rewrites an existing answer to nothing. Reasoning shows live again: the host subscribes to the Harness\'s new stream event (agent/assistant-stream), so text and reasoning reach the node as they are produced; a runtime without that stream gets each step\'s reasoning block instead. The 对话 | 思维图 switch floats again and works on the empty page (the 0.4.18 header switch is withdrawn). An agent\'s working directory is chosen by browsing the host\'s folders, with a path field still there for typing.',
+    },
+    items: [],
+  },
+  {
     version: '0.4.18',
     date: '2026-09-23',
     announce: false,

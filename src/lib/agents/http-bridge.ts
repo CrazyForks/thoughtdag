@@ -39,6 +39,12 @@ export async function installAgentsHttpBridge(apiBase: string): Promise<boolean>
     answer: async (runId, requestId, response) => (await post<{ ok: boolean }>('/agents/answer', { runId, requestId, response })).ok,
     workspace: async (canvasId) => (await post<{ dir: string }>('/agents/workspace', { canvasId })).dir,
     pickCwd: async () => null,
+    // no system dialog in a browser tab: the canvas walks the host's folders itself
+    listDirectory: async (dir) => {
+      const r = await fetch(api + '/agents/dirs' + (dir ? `?path=${encodeURIComponent(dir)}` : ''), { credentials: 'same-origin' });
+      if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? `${r.status}`);
+      return r.json();
+    },
     guardWrite: async (cwd, config) => (await post<{ ok: boolean }>('/agents/guard', { cwd, config })).ok,
     writeMaterials: async (cwd, files) => post('/agents/materials', { cwd, files }),
     onEvent: (cb) => { listeners.push(cb); ensureFeed(); },

@@ -1,8 +1,8 @@
 {
   "name": "thoughtdag-desktop",
   "private": true,
-  "version": "0.4.18",
-  "description": "Desktop shell for ThoughtDAG \u2014 same app, same server, one window",
+  "version": "0.4.19",
+  "description": "Desktop shell for ThoughtDAG — same app, same server, one window",
   "main": "main.js",
   "scripts": {
     "start": "electron .",

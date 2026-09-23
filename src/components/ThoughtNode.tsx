@@ -4,6 +4,10 @@ import { toolFingerprint, turnComposition, footprint, conclusionOf } from '../li
 import { Handle, Position, useReactFlow, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import { AlertTriangle, Archive, BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, GitBranch, Globe, Hourglass, Minimize2, Paperclip, RefreshCw, Send, Split, Square, Star, Trash2, UserRound, X, Pencil } from 'lucide-react';
 import 'katex/dist/katex.min.css';
+
+/** A tool's status line standing in for the answer while it runs (see
+ *  store/streaming.ts onToolCall): an icon, the query, an ellipsis. */
+const TOOL_PLACEHOLDER = /^(?:🔍|📚|🎓|🔧) [\s\S]*…$/;
 import type { ThoughtNode as ThoughtNodeType } from '../types';
 import { useStore } from '../store';
 import { useZoomTier } from '../lib/use-map-mode';
@@ -719,17 +723,43 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
                 {data.pendingApprovals.map((req) => <ApprovalCard key={req.id} nodeId={id} request={req} compact />)}
               </div>
             ) : data.agentTrace && data.agentTrace.length > 0 && (!data.response || data.restreaming) ? (
-              <AgentTrace entries={data.agentTrace} compact />
+              // An agent's steps and, between them, the model's thinking: the
+              // trace alone reads as a tool log; the thinking says what it is
+              // for. Live tail only — the whole text opens on the finished node.
+              <div className="flex flex-col gap-1.5">
+                <AgentTrace entries={data.agentTrace} compact />
+                {data.reasoning && (
+                  <div className="px-3 py-2 bg-wash/70 rounded-xl max-h-[96px] overflow-hidden flex flex-col justify-end" data-node-reasoning-live>
+                    <div className="text-2xs text-ink-faint mb-0.5">💭 {t('node.reasoningLive')}</div>
+                    <div className="text-xs text-ink-faint italic leading-relaxed whitespace-pre-wrap break-words">
+                      {data.reasoning.length > 200 ? '…' + data.reasoning.slice(-200) : data.reasoning}
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : data.response && !data.restreaming ? (
-              // Streaming: show the live tail of the response on the canvas
-              <div className="text-sm text-ink-muted leading-relaxed px-3 py-2.5 bg-surface rounded-xl max-h-[180px] overflow-hidden flex flex-col justify-end whitespace-pre-wrap break-words">
-                {data.response.length > 400 ? '…' + data.response.slice(-400) : data.response}
-                <span className="inline-block w-2 h-4 bg-accent animate-pulse rounded-sm" />
+              // Streaming: show the live tail of the response on the canvas.
+              // While the "response" is still a tool's placeholder line
+              // (the answer has not started), the thinking that led to the
+              // tool stays visible beneath it.
+              <div className="flex flex-col gap-1.5">
+                <div className="text-sm text-ink-muted leading-relaxed px-3 py-2.5 bg-surface rounded-xl max-h-[180px] overflow-hidden flex flex-col justify-end whitespace-pre-wrap break-words">
+                  {data.response.length > 400 ? '…' + data.response.slice(-400) : data.response}
+                  <span className="inline-block w-2 h-4 bg-accent animate-pulse rounded-sm" />
+                </div>
+                {data.reasoning && TOOL_PLACEHOLDER.test(data.response) && (
+                  <div className="px-3 py-2 bg-wash/70 rounded-xl max-h-[96px] overflow-hidden flex flex-col justify-end" data-node-reasoning-live>
+                    <div className="text-2xs text-ink-faint mb-0.5">💭 {t('node.reasoningLive')}</div>
+                    <div className="text-xs text-ink-faint italic leading-relaxed whitespace-pre-wrap break-words">
+                      {data.reasoning.length > 200 ? '…' + data.reasoning.slice(-200) : data.reasoning}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : data.reasoning ? (
               // Reasoning models think before they answer — show the live
               // tail of the thinking, visually quieter than an answer
-              <div className="px-3 py-2.5 bg-wash/70 rounded-xl max-h-[140px] overflow-hidden flex flex-col justify-end">
+              <div className="px-3 py-2.5 bg-wash/70 rounded-xl max-h-[140px] overflow-hidden flex flex-col justify-end" data-node-reasoning-live>
                 <div className="text-2xs text-ink-faint mb-1">💭 {t('node.reasoningLive')}</div>
                 <div className="text-xs text-ink-faint italic leading-relaxed whitespace-pre-wrap break-words">
                   {data.reasoning.length > 300 ? '…' + data.reasoning.slice(-300) : data.reasoning}

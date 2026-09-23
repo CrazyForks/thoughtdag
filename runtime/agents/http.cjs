@@ -77,6 +77,11 @@ function createAgentsHttp({ workspaceRoot = path.join(os.homedir(), '.thoughtdag
         const id = String(body?.runId ?? '');
         return json(res, 200, { ok: runtime(owners.get(id)).answer(id, String(body?.requestId ?? ''), body?.response) }), true;
       }
+      if (p === '/agents/dirs' && method === 'GET') {
+        // the directory browser's one level; a bad path is a 404 the client shows in place
+        try { return json(res, 200, await ops.listDirectory(url.searchParams.get('path') ?? '')), true; }
+        catch (e) { return json(res, 404, { error: String(e?.message ?? e) }), true; }
+      }
       if (p === '/agents/workspace' && method === 'POST') return json(res, 200, { dir: await ops.workspaceFor(workspaceRoot, String(body?.canvasId ?? 'default')) }), true;
       if (p === '/agents/guard' && method === 'POST') return json(res, 200, { ok: await ops.writeGuard(String(body?.cwd ?? ''), body?.config) }), true;
       if (p === '/agents/materials' && method === 'POST') return json(res, 200, await ops.writeMaterials(String(body?.cwd ?? ''), body?.files)), true;

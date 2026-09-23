@@ -307,7 +307,11 @@ async function appendPastLedger(
     const src = node?.data.source;
     const pristine = !!src && node.data.question === src.question && (node.data.response ?? '') === (src.response ?? '');
     const fd = lastImported.data;
-    const textChanged = !!node && (fd.question !== node.data.question || (fd.response ?? '') !== (node.data.response ?? ''));
+    // A projection can trail the node it mirrors (a live log read before
+    // the step that carried the answer): an answer that shrank to nothing
+    // is never an update. Only a later, fuller turn overwrites.
+    const blanking = !!node && (fd.response ?? '').trim() === '' && (node.data.response ?? '').trim() !== '';
+    const textChanged = !!node && !blanking && (fd.question !== node.data.question || (fd.response ?? '') !== (node.data.response ?? ''));
     // Arrivals land on a finished turn too: a subagent's report (task
     // notification) reaches the file minutes after the answer that
     // launched it. When the fresh turn carries MORE tool attachments and

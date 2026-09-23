@@ -4,6 +4,7 @@
 // the harness plugin host and the local server alike.
 'use strict';
 const path = require('node:path');
+const os = require('node:os');
 const fsp = require('node:fs/promises');
 
 const WORKSPACE_ID = /^[\w.-]{1,80}$/;
@@ -51,4 +52,37 @@ async function writeGuard(cwd, config) {
   return true;
 }
 
-module.exports = { workspaceFor, writeMaterials, writeGuard };
+/** How many child directories one listing reports at most; the rest is the
+ *  name-sorted tail and the listing says it was cut. */
+const DIR_LIST_LIMIT = 400;
+
+/** One level of the host's filesystem, for a browser the person walks to
+ *  pick a working directory: the directory itself, its ancestry as crumbs
+ *  (every one a jump target), its child directories name-sorted (symlinks
+ *  to directories included, hidden ones flagged and left to the client),
+ *  and the home directory to root a "Home" crumb. No path given lists the
+ *  home directory; an unreadable or missing one throws. */
+async function listDirectory(target) {
+  const home = os.homedir();
+  const dir = path.resolve(typeof target === 'string' && target.trim() ? target.trim() : home);
+  const st = await fsp.stat(dir);
+  if (!st.isDirectory()) throw new Error('not a directory');
+  const crumbs = [];
+  for (let cur = dir; ; cur = path.dirname(cur)) {
+    const parent = path.dirname(cur);
+    crumbs.unshift({ name: parent === cur ? cur : path.basename(cur), path: cur, hidden: false });
+    if (parent === cur) break;
+  }
+  const dirents = await fsp.readdir(dir, { withFileTypes: true });
+  const entries = [];
+  for (const d of dirents) {
+    let isDir = d.isDirectory();
+    if (!isDir && d.isSymbolicLink()) { try { isDir = (await fsp.stat(path.join(dir, d.name))).isDirectory(); } catch { isDir = false; } }
+    if (isDir) entries.push({ name: d.name, path: path.join(dir, d.name), hidden: d.name.startsWith('.') });
+  }
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+  const truncated = entries.length > DIR_LIST_LIMIT;
+  return { path: dir, home, crumbs, entries: truncated ? entries.slice(0, DIR_LIST_LIMIT) : entries, truncated };
+}
+
+module.exports = { workspaceFor, writeMaterials, writeGuard, listDirectory };

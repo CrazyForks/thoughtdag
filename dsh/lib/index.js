@@ -723,7 +723,8 @@ async function runAgentTurn(ctx, body, emit, isClosed, { answerApprovals = true 
   const picked = agentTargetOf(body?.model)
   if (picked && !hasImages) await ctx.sessionController.selectModel({ sessionId, provider: picked.provider, model: picked.model }).catch(() => {})
   const agent = await agentOf(ctx, sessionId)
-  let sawChunk = false
+  let sawChunk = false      // text deltas reached us live
+  let sawReasoning = false  // reasoning deltas reached us live
   let fullText = ''
   let done
   const finished = new Promise(resolve => { done = resolve })
@@ -740,6 +741,26 @@ async function runAgentTurn(ctx, body, emit, isClosed, { answerApprovals = true 
   const claimTurn = (turn) => { ourTurn = turn; turnEntry.turn = turn }
   const isOurs = (event) => ourTurn !== null && (typeof event.data?.turn === 'number' ? event.data.turn === ourTurn : currentTurn === ourTurn)
   turnEntry.current = () => currentTurn
+  const onDelta = (c) => {
+    if (c?.type === 'text-delta' && c.text) { sawChunk = true; fullText += c.text; emit({ text: c.text }) }
+    else if (c?.type === 'reasoning-delta' && c.text) { sawReasoning = true; emit({ reasoning: c.text }) }
+  }
+  // Since 0.1.5-rc.3 the deltas are no longer rows of the session log: the
+  // loop publishes them process-locally as agent/assistant-stream frames
+  // (start names the turn and step, chunk carries one model delta, end
+  // points at the committed assistant/message). Only OUR turn's attempts
+  // are followed; the committed message still arrives on the log and is
+  // then skipped as already streamed. On an older runtime this event never
+  // fires and the log rows above carry the deltas as before.
+  const attemptTurn = new Map()
+  const offStream = ctx.on('agent/assistant-stream', ({ agent, frame }) => {
+    if (agent?.session?.id !== sessionId || !frame) return
+    if (frame.type === 'start') { if (typeof frame.turn === 'number') attemptTurn.set(frame.attemptId, frame.turn); return }
+    const turn = attemptTurn.get(frame.attemptId)
+    if (frame.type === 'end') { attemptTurn.delete(frame.attemptId); return }
+    if (turn === undefined || ourTurn === null || turn !== ourTurn) return
+    if (frame.type === 'chunk') onDelta(frame.chunk)
+  })
   const off = ctx.on('session/event', (session, event) => {
     if (session?.id !== sessionId || !event) return
     if (event.type === 'turn/start') {
@@ -762,13 +783,20 @@ async function runAgentTurn(ctx, body, emit, isClosed, { answerApprovals = true 
     }
     if (!isOurs(event)) return
     if (event.type === 'assistant/chunk') {
-      const c = event.data?.chunk
-      if (c?.type === 'text-delta' && c.text) { sawChunk = true; fullText += c.text; emit({ text: c.text }) }
-      else if (c?.type === 'reasoning-delta' && c.text) emit({ reasoning: c.text })
-    } else if (event.type === 'assistant/message' && !sawChunk) {
-      // chunks did not reach us live (e.g. a compacted row): the whole text at once
-      const text = (event.data?.message?.content ?? []).filter(b => b.type === 'text').map(b => b.text).join('')
-      if (text) { fullText += text; emit({ text }) }
+      // up to 0.1.5-rc.2 the deltas are rows of the session log
+      onDelta(event.data?.chunk)
+    } else if (event.type === 'assistant/message') {
+      // deltas did not reach us live (a compacted row, or a runtime whose
+      // stream we do not know): the whole step at once, reasoning first
+      const blocks = event.data?.message?.content ?? []
+      if (!sawReasoning) {
+        const reasoning = blocks.filter(b => b.type === 'reasoning').map(b => (typeof b.text === 'string' ? b.text : '')).join('')
+        if (reasoning) emit({ reasoning })
+      }
+      if (!sawChunk) {
+        const text = blocks.filter(b => b.type === 'text').map(b => b.text).join('')
+        if (text) { fullText += text; emit({ text }) }
+      }
     } else if (event.type === 'tool/call' || event.type === 'tool/code-dispatch-start') {
       if (event.data?.callId) turnEntry.calls.set(event.data.callId, { name: event.data?.name ?? 'tool', arguments: event.data?.arguments })
       emit({ tool: { name: event.data?.name ?? 'tool', query: toolQuery(event.data?.name, event.data?.arguments) } })
@@ -791,6 +819,7 @@ async function runAgentTurn(ctx, body, emit, isClosed, { answerApprovals = true 
     if (isClosed()) { try { agent.cancel({ kind: 'user' }) } catch { /* best effort */ } }
   } finally {
     if (typeof off === 'function') off()
+    if (typeof offStream === 'function') offStream()
     if (canvasTurns.get(sessionId) === turnEntry) canvasTurns.delete(sessionId)
   }
   return { sessionId, text: fullText }
