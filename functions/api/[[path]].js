@@ -528,6 +528,26 @@ function modelsPayloadFor(providers, anysearchKey) {
   };
 }
 
+// The judge forwarded for the hosted app: only the known decision
+// endpoints, never an arbitrary URL (this proxy is public).
+const JUDGE_HOSTS = new Set(['api.typesafe.ai', 'api.cloudflare.com', 'openrouter.ai']);
+async function handleJudge(body) {
+  const { url, headers, body: payload } = body || {};
+  try {
+    const parsed = new URL(String(url));
+    if (parsed.protocol !== 'https:' || !JUDGE_HOSTS.has(parsed.hostname)) throw new Error('This endpoint is not one the hosted proxy forwards to');
+    const r = await fetch(parsed.href, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(headers && typeof headers === 'object' ? headers : {}) },
+      body: JSON.stringify(payload ?? {}),
+    });
+    const text = await r.text();
+    return new Response(text || '{}', { status: r.status, headers: { 'Content-Type': 'application/json' } });
+  } catch (e) {
+    return json({ error: e instanceof Error ? e.message : String(e) }, 502);
+  }
+}
+
 async function handleFetchUrl(body) {
   const { url } = body || {};
   try {
@@ -588,6 +608,7 @@ export async function onRequest({ request, params }) {
       models: (Array.isArray(body.models) && body.models.length > 0 ? body.models : ['openrouter/auto']).map((id) => (typeof id === 'string' ? { id } : id)),
     }] : []));
     case '/fetch-url': return handleFetchUrl(body);
+    case '/judge': return handleJudge(body);
     case '/pdf-extract': return json({ error: 'PDF extraction runs on the local proxy only — the file still attaches; text extraction is skipped on the demo deployment.' }, 501);
     default: return json({ error: 'Not found' }, 404);
   }

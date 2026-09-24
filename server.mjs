@@ -629,6 +629,31 @@ app.post('/api/pdf-extract', async (req, res) => {
 // and wrapped as [Link] when it enters context — web drift and prompt
 // injection are the threat model here, so no scripts, tags stripped, length
 // capped. Basic SSRF guard: http(s) only, no localhost / private ranges.
+// The judge (a System One decision endpoint) forwarded: TypeSafe and
+// Cloudflare do not answer browsers directly, and a self-hosted
+// /v1/systemone may sit on this very machine. The key rides in the request
+// and is not kept. Any http(s) target is allowed here — this proxy serves
+// one person's own machine.
+app.post('/api/judge', async (req, res) => {
+  const { url, headers, body } = req.body || {};
+  try {
+    const parsed = new URL(String(url));
+    if (!/^https?:$/.test(parsed.protocol)) throw new Error('Only http(s) URLs are supported');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60000);
+    const r = await fetch(parsed.href, {
+      method: 'POST', signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', ...(headers && typeof headers === 'object' ? headers : {}) },
+      body: JSON.stringify(body ?? {}),
+    });
+    clearTimeout(timer);
+    const text = await r.text();
+    res.status(r.status).type('application/json').send(text || '{}');
+  } catch (e) {
+    res.status(502).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
 app.post('/api/fetch-url', async (req, res) => {
   const { url } = req.body || {};
   try {

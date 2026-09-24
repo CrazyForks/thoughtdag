@@ -27,6 +27,7 @@ import {
   renderWhy,
   findHits,
   memoriesJson,
+  suggestJson,
   renderFind,
   factsForCheck,
   renderCheck,
@@ -161,6 +162,7 @@ const USAGE = `thoughtdag — the why layer
                                                    the turns where those words were asked (Q), answered (A) or attached (M)
   thoughtdag recall <session> <n>                  one turn in full (session id or prefix); a memory entry by its memory id
   thoughtdag memories                              the memory files the index holds (Claude Code memory directories, Codex memories)
+  thoughtdag suggest <term> [--limit N] [--json]   what a mistyped term could have meant: near words from the indexed text
   thoughtdag status                                what the index holds, and how much is evidence
   thoughtdag purge [--cache]                       delete everything this tool stored (--cache: only the interpretation and text caches)
   thoughtdag events <session-file> [--touches]     the canonical events of one source file, one JSON per line
@@ -191,6 +193,16 @@ async function main(argv: string[]): Promise<void> {
     console.log(`evidence: ${st.touches} touches · ${st.changes} edits/writes, ${st.withChangeHead} with an observed change head (${pct(st.withChangeHead, st.changes)} of changes, ${pct(st.withChangeHead, st.touches)} of touches) · ${st.withMention} answers name the file (${pct(st.withMention, st.touches)}, candidates only)`);
     if (st.memoryFiles) console.log(`memories: ${st.memoryFiles} file${st.memoryFiles === 1 ? '' : 's'} · ${st.memoryEntries} entr${st.memoryEntries === 1 ? 'y' : 'ies'} (Claude Code memory directories, Codex memories) · find and recall answer over them too`);
     console.log(`store: ${HOME} (0700) · fact-index.json + interpretation-cache.json + text-index.jsonl (0600)`);
+    return;
+  }
+  if (cmd === 'suggest') {
+    // what a mistyped search term could have meant, from the indexed text itself
+    if (!args[0]) { console.error(USAGE); process.exit(2); }
+    const r = await suggestJson(args[0], Number(value('limit') ?? 8) || 8);
+    if (flag('json')) { console.log(JSON.stringify(r)); return; }
+    if (r.known) console.log(`"${r.term}" occurs ${r.known} time${r.known === 1 ? '' : 's'} as written`);
+    if (!r.suggestions.length) { console.log(r.known ? '' : `nothing within reach of "${r.term}"`); return; }
+    for (const s of r.suggestions) console.log(`  ${s.term}  ×${s.count}  (${s.distance} edit${s.distance === 1 ? '' : 's'})`);
     return;
   }
   if (cmd === 'memories') {

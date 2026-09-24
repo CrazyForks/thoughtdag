@@ -23,6 +23,9 @@ interface ConfirmRequest {
 const WEB_SEARCH_KEY = 'thoughtdag.webSearch';
 const SCHOLAR_SEARCH_KEY = 'thoughtdag.scholarSearch';
 const RECALL_KEY = 'thoughtdag.recall';
+const RECALL_LIMIT_KEY = 'thoughtdag.recallLimit';
+const RECALL_BUDGET_KEY = 'thoughtdag.recallBudget';
+const JUDGE_KEY = 'thoughtdag.judge';
 const MODEL_KEY = 'thoughtdag.model';
 const EFFORT_KEY = 'thoughtdag.agentEffort';
 /** The effort level for the next agent turn, in that runtime's own words; '' = the runtime's own default. */
@@ -39,6 +42,11 @@ interface UiState {
   webSearchEnabled: boolean;
   /** recall past conversations and memories into a new ask (the why layer); off by default, per-node snapshot like the search switches */
   recallEnabled: boolean;
+  /** how many items one recall brings in, and the token budget they share */
+  recallLimit: number;
+  recallBudget: number;
+  /** the judge (a System One decision endpoint) recall and other judgements may ask */
+  judge: import('./judge').JudgeSettings;
   scholarSearchEnabled: boolean;
   mcpEnabled: boolean;
   autoRefreshPaused: boolean;
@@ -66,6 +74,9 @@ interface UiState {
   setTutorialOpen: (open: boolean) => void;
   setWebSearchEnabled: (enabled: boolean) => void;
   setRecallEnabled: (enabled: boolean) => void;
+  setRecallLimit: (n: number) => void;
+  setRecallBudget: (n: number) => void;
+  setJudge: (patch: Partial<import('./judge').JudgeSettings>) => void;
   setScholarSearchEnabled: (enabled: boolean) => void;
   setMcpEnabled: (enabled: boolean) => void;
   setAutoRefreshPaused: (paused: boolean) => void;
@@ -179,6 +190,9 @@ export const useUiStore = create<UiState>((set, get) => ({
   tutorialOpen: false,
   webSearchEnabled: localStorage.getItem(WEB_SEARCH_KEY) !== 'off',
   recallEnabled: localStorage.getItem(RECALL_KEY) === 'on',
+  recallLimit: Number(localStorage.getItem(RECALL_LIMIT_KEY)) || 6,
+  recallBudget: Number(localStorage.getItem(RECALL_BUDGET_KEY)) || 4000,
+  judge: (() => { try { const raw = localStorage.getItem(JUDGE_KEY); return raw ? { provider: 'none', openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '', ...JSON.parse(raw) } : { provider: 'none' as const, openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' }; } catch { return { provider: 'none' as const, openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' }; } })(),
   scholarSearchEnabled: localStorage.getItem(SCHOLAR_SEARCH_KEY) !== 'off',
   // MCP is parked until the personalization system is designed (external
   // knowledge needs its own provenance surface first) — hidden AND off.
@@ -198,6 +212,9 @@ export const useUiStore = create<UiState>((set, get) => ({
     if (!open) localStorage.setItem('thoughtdag.tutorialDone', '1');
     set({ tutorialOpen: open });
   },
+  setRecallLimit: (n) => { localStorage.setItem(RECALL_LIMIT_KEY, String(n)); set({ recallLimit: n }); },
+  setRecallBudget: (n) => { localStorage.setItem(RECALL_BUDGET_KEY, String(n)); set({ recallBudget: n }); },
+  setJudge: (patch) => set((s) => { const judge = { ...s.judge, ...patch }; localStorage.setItem(JUDGE_KEY, JSON.stringify(judge)); return { judge }; }),
   setRecallEnabled: (enabled) => {
     localStorage.setItem(RECALL_KEY, enabled ? 'on' : 'off');
     set({ recallEnabled: enabled });

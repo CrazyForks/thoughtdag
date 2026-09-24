@@ -1107,6 +1107,68 @@ async function recallJson(session: string, n: number): Promise<RecalledTurn> {
 
 interface MemoryFileJson { id: string; runner: FactSession['runner']; file: string; title: string; cwd: string; entries: number; mtime: number; headings: string[] }
 
+// ─── vocabulary: what a mistyped term could have meant ─────────────────
+// The words that actually occur in the indexed text (latin tokens of four
+// characters or more, lowercased, with counts), built from the text lines
+// on first use and kept while the index is unchanged. A term with no hits
+// is looked up here by edit distance; the caller (or a judge) picks.
+
+interface Suggestion { term: string; count: number; distance: number }
+let vocabCache: { builtFrom: string; counts: Map<string, number> } | null = null;
+
+async function vocabulary(): Promise<Map<string, number>> {
+  let stamp = '';
+  try { const st = await fsp.stat(TEXT_LINES); stamp = `${st.mtimeMs}:${st.size}`; } catch { return new Map(); }
+  if (vocabCache && vocabCache.builtFrom === stamp) return vocabCache.counts;
+  const counts = new Map<string, number>();
+  const lines = createInterface({ input: createReadStream(TEXT_LINES, { encoding: 'utf8', highWaterMark: 1 << 20 }) });
+  for await (const line of lines) {
+    let t: TextLine;
+    try { t = JSON.parse(line) as TextLine; } catch { continue; }
+    for (const body of [t.q, t.a, t.m]) {
+      if (!body) continue;
+      for (const m of body.matchAll(/[A-Za-z][A-Za-z0-9_-]{3,}/g)) { const w = m[0].toLowerCase(); counts.set(w, (counts.get(w) ?? 0) + 1); }
+    }
+  }
+  vocabCache = { builtFrom: stamp, counts };
+  return counts;
+}
+
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      const v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      cur.push(v); if (v < rowMin) rowMin = v;
+    }
+    if (rowMin > max) return max + 1;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/** Terms in the indexed text within a small edit distance of `term`
+ *  (one edit for short words, two from six characters on), closest and
+ *  most frequent first. Empty for a term that is itself in the text. */
+async function suggestJson(term: string, k = 8): Promise<{ term: string; known: number; suggestions: Suggestion[] }> {
+  const t = term.toLowerCase().trim();
+  const counts = await vocabulary();
+  const known = counts.get(t) ?? 0;
+  if (!t || t.length < 3) return { term, known, suggestions: [] };
+  const max = t.length >= 6 ? 2 : 1;
+  const out: Suggestion[] = [];
+  for (const [w, count] of counts) {
+    if (w === t) continue;
+    const d = editDistance(t, w, max);
+    if (d <= max) out.push({ term: w, count, distance: d });
+  }
+  out.sort((a, b) => a.distance - b.distance || b.count - a.count);
+  return { term, known, suggestions: out.slice(0, k) };
+}
+
 /** The memory files the index holds, newest first, with their entries' headings. */
 async function memoriesJson(): Promise<MemoryFileJson[]> {
   const facts = await ensureFresh();
@@ -1185,6 +1247,7 @@ export {
   findJson,
   recallJson,
   memoriesJson,
+  suggestJson,
   CLI_VERSION,
   MCP_TOOLS,
   mcpCall,

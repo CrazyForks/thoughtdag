@@ -4,7 +4,7 @@
 // where nothing can answer, so the UI hides what it cannot offer.
 import { IN_HARNESS } from './embedded';
 
-export type WhyBridge = Pick<DesktopWhyBridge, 'find' | 'recall' | 'memories'>;
+export type WhyBridge = Pick<DesktopWhyBridge, 'find' | 'recall' | 'memories' | 'suggest'>;
 
 let cached: WhyBridge | null | undefined;
 
@@ -23,6 +23,7 @@ export function whyBridge(): WhyBridge | null {
       find: (phrase, opts = {}) => get('/why/find', { phrase, scope: opts.scope ?? 'all', limit: String(opts.limit ?? 20), ...(opts.cwd ? { cwd: opts.cwd } : {}) }),
       recall: (session, turn) => get('/why/recall', { session, turn: String(turn) }),
       memories: () => get('/why/memories', {}),
+      suggest: (term, k) => get('/why/suggest', { term, limit: String(k ?? 8) }),
     };
     return cached;
   }

@@ -172,7 +172,10 @@ interface DesktopWhyBridge {
   find(phrase: string, opts?: { scope?: 'q' | 'a' | 'm' | 'all'; limit?: number; cwd?: string }): Promise<WhyFindResult>;
   recall(session: string, turn: number): Promise<WhyRecalledTurn>;
   memories(): Promise<WhyMemoryFile[]>;
+  /** near words from the indexed text for a mistyped term */
+  suggest(term: string, k?: number): Promise<WhySuggestions>;
 }
+interface WhySuggestions { term: string; known: number; suggestions: { term: string; count: number; distance: number }[] }
 
 interface Window {
   desktop?: DesktopBridge;

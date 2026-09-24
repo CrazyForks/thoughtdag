@@ -95,6 +95,20 @@ export interface RecallItem {
   text: string;
   tokens: number;
   excluded?: boolean;
+  /** the judge's probability that this bears on the question, when a judge ranked the pool */
+  relevance?: number;
+}
+
+/** How one recall ran: what it corrected, who ranked, how wide it looked. */
+export interface RecallMeta {
+  corrections: { from: string; to: string; p?: number }[];
+  judge?: { provider: string; model: string; calibrated: boolean };
+  judgeError?: string;
+  /** candidates considered, and hits the index reported in total */
+  pool: number;
+  total: number;
+  /** candidates the judge held irrelevant (below the floor) */
+  dropped?: number;
 }
 
 export interface AgentTraceEntry {
@@ -146,6 +160,7 @@ export interface ThoughtData extends Record<string, unknown> {
   recall?: boolean;
   /** what recall brought in for this node: listed, priced, removable; reused as they stand on a rerun */
   recallItems?: RecallItem[];
+  recallMeta?: RecallMeta;
   autoRerun?: boolean; // regenerate in place whenever an upstream ancestor finishes (generic primitive)
   /** Transient: a regeneration is streaming and data.response still holds
       the OLD text (cleared on the first new chunk) — display shows the live

@@ -64,6 +64,7 @@ contextBridge.exposeInMainWorld('desktopWhy', {
   find: (phrase, opts) => ipcRenderer.invoke('why:find', phrase, opts),
   recall: (session, turn) => ipcRenderer.invoke('why:recall', session, turn),
   memories: () => ipcRenderer.invoke('why:memories'),
+  suggest: (term, k) => ipcRenderer.invoke('why:suggest', term, k),
 });
 
 contextBridge.exposeInMainWorld('desktopLocal', {

@@ -241,9 +241,11 @@ export async function runNodeGeneration(
     let items = selfData?.recallItems;
     if (!items) {
       const { useProjects } = await import('./projects');
-      items = await fetchRecallItems(question, { excludeSession: useProjects.getState().activeId });
+      const { recallLimit, recallBudget } = useUiStore.getState();
+      const out = await fetchRecallItems(question, { excludeSession: useProjects.getState().activeId, limit: recallLimit, budget: recallBudget });
+      items = out.items;
       if (!isCurrent()) return;
-      set((state) => ({ nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, recallItems: items } } : n)) }));
+      set((state) => ({ nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, recallItems: out.items, recallMeta: out.meta } } : n)) }));
     }
     const block = recallContextBlock(items);
     if (block) {

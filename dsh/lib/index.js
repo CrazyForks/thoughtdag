@@ -1015,6 +1015,7 @@ export async function apply(ctx, config) {
           catch (e) { return sendJson(res, 404, { error: e instanceof Error ? e.message : String(e) }) }
         }
         if (path === '/why/memories') return sendJson(res, 200, await whyLib.memoriesJson())
+        if (path === '/why/suggest') return sendJson(res, 200, await whyLib.suggestJson(url.searchParams.get('term') ?? '', Number(url.searchParams.get('limit') ?? 8) || 8))
       }
       if (path === '/version' && req.method === 'GET') return sendJson(res, 200, { version: PLUGIN_VERSION, latest: await latestPluginVersion(), checkedAt: latestLookup.at || null })
       // ── the other agents' session files ──
@@ -1040,6 +1041,17 @@ export async function apply(ctx, config) {
         return sendJson(res, 200, await rangeOfFile(abs, url.searchParams.get('start'), url.searchParams.get('length')))
       }
       // ── link snapshots: the SPA's /api/fetch-url on the harness's bounded fetcher ──
+      // ── the judge (a System One decision endpoint) forwarded for the canvas; the key rides in the request ──
+      if (path === '/judge' && req.method === 'POST') {
+        const body = await readJson(req)
+        const target = typeof body?.url === 'string' ? body.url.trim() : ''
+        if (!/^https?:\/\//i.test(target)) return sendJson(res, 400, { error: 'url must be http(s)' })
+        try {
+          const r = await fetch(target, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(body.headers && typeof body.headers === 'object' ? body.headers : {}) }, body: JSON.stringify(body.body ?? {}), signal: AbortSignal.timeout(60000) })
+          const text = await r.text()
+          res.writeHead(r.status, { 'content-type': 'application/json; charset=utf-8' }); res.end(text || '{}'); return
+        } catch (error) { return sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) }) }
+      }
       if (path === '/fetch-url' && req.method === 'POST') {
         const body = await readJson(req)
         const target = typeof body?.url === 'string' ? body.url.trim() : ''

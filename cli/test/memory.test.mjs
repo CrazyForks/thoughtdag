@@ -166,3 +166,12 @@ test('a store that names its session roots but no memory roots indexes no memori
   const st = execFileSync(process.execPath, [CLI, 'status'], { env: { ...process.env, THOUGHTDAG_HOME: home2, THOUGHTDAG_SESSION_ROOTS: sessions }, cwd: tmp, encoding: 'utf8' });
   assert.doesNotMatch(st, /memories:/);
 });
+
+test('suggest: a mistyped term finds the frequent near word in the indexed text, built from the parsed text', () => {
+  const r = JSON.parse(run('suggest', 'solaris', '--json'));
+  assert.ok(r.known > 0, 'the word as typed is known');
+  const typo = JSON.parse(run('suggest', 'solaros', '--json'));
+  assert.equal(typo.known, 0);
+  assert.equal(typo.suggestions[0]?.term, 'solaris', JSON.stringify(typo.suggestions));
+  assert.ok(!typo.suggestions.some((s) => /^nsolaris/.test(s.term)), 'no line-break artefacts in the vocabulary');
+});
