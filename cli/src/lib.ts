@@ -19,6 +19,11 @@
 //                             turn per line — streamed, never parsed whole — for exact
 //                             phrase search (deletable, rebuilt on index); text-index.json
 //                             is its small manifest (which sources are in it)
+// Since 0.4.21 the index also holds what two agents wrote down for
+// themselves between sessions — Claude Code's per-project memory directory
+// and Codex's memories — as sessions of kind 'memory': a file is a session,
+// each entry a turn (its heading asked, its body answered), so find and
+// recall answer over them unchanged and a canvas can cite one entry.
 // Source files are read, never written. The index is derived and can
 // always be rebuilt; a query refreshes it first when a source moved on.
 
@@ -27,6 +32,7 @@ import { createInterface } from 'node:readline';
 import path from 'node:path';
 import os from 'node:os';
 import * as zlib from 'node:zlib';
+import { createHash } from 'node:crypto';
 import { ClaudeSessionCollector } from '../../src/lib/adapters/claude-code-session';
 import { CodexSessionCollector } from '../../src/lib/adapters/codex-session';
 import { DshSessionCollector } from '../../src/lib/adapters/dsh-session';
@@ -46,13 +52,16 @@ type Op = 'read' | 'fetch' | 'attach' | 'write' | 'edit';
 const readLike = (op: Op): boolean => op === 'read' || op === 'fetch' || op === 'attach';
 /** observed: the op, and the first differing line of the change (verbatim, partial) */
 interface Touch { op: Op; d?: string; l?: Locator[] }
-interface FactTurn { i: number; t: string; item?: string; at?: string; q: string; ops: Record<string, Touch> }
+/** `cwd`: a memory entry naming the project it is about (Codex's task groups do); a session's turns inherit the session's */
+interface FactTurn { i: number; t: string; item?: string; at?: string; q: string; ops: Record<string, Touch>; cwd?: string }
 /** One SOURCE FILE's worth of facts. A logical session (`id`) can span
  *  several — a resumed Codex thread opens a new rollout each time — so
  *  the store is keyed by source, and readers group by `id`. */
 interface FactSession {
   id: string; runner: 'claude-code' | 'codex' | 'dsh' | 'pi' | 'thoughtdag'; file: string; mtime: number; size: number;
   cwd: string; workspace: string; title: string; subagent?: boolean; turns: FactTurn[];
+  /** a memory file (Claude Code's memory directory, Codex's memories), not a conversation */
+  kind?: 'memory';
   /** opened from a canvas hand-off */
   anchor?: { project: string; node: string; bundle: string };
 }
@@ -79,7 +88,7 @@ interface TextTurn { q: string; a: string; m?: string }
 interface TextIndex { version: number; sessions: Record<string, number> }
 interface TextLine extends TextTurn { k: string; i: number }
 
-const INDEX_VERSION = 10;
+const INDEX_VERSION = 11;
 const EXCERPT = 200;
 
 const HOME = process.env.THOUGHTDAG_HOME ?? path.join(os.homedir(), '.thoughtdag');
@@ -95,6 +104,34 @@ const DSH_ROOT = path.join(process.env.DSH_HOME ?? path.join(os.homedir(), '.dsh
 const PI_ROOT = path.join(os.homedir(), '.pi', 'agent', 'sessions');
 const ROOTS = (process.env.THOUGHTDAG_SESSION_ROOTS?.split(path.delimiter).filter(Boolean))
   ?? [path.join(os.homedir(), '.claude', 'projects'), path.join(os.homedir(), '.codex', 'sessions'), DSH_ROOT, PI_ROOT];
+
+// What an agent wrote down for itself between sessions. Claude Code keeps one
+// markdown file per fact under <project>/memory/ (frontmatter names it; the
+// MEMORY.md there is only an index of the others); Codex keeps
+// ~/.codex/memories: MEMORY.md by task group (each naming its cwd),
+// raw_memories.md by thread, memory_summary.md, and ad-hoc extensions.
+// THOUGHTDAG_MEMORY_ROOTS lists them explicitly as runner=path pairs; a test
+// store that names its session roots and no memory roots gets none.
+type MemoryRunner = 'claude-code' | 'codex';
+const MEMORY_ROOTS: { runner: MemoryRunner; root: string }[] = (() => {
+  const env = process.env.THOUGHTDAG_MEMORY_ROOTS;
+  if (env !== undefined) {
+    return env.split(path.delimiter).filter(Boolean).flatMap((e) => {
+      const m = /^(claude-code|codex)=(.+)$/.exec(e);
+      return m ? [{ runner: m[1] as MemoryRunner, root: m[2] }] : [];
+    });
+  }
+  if (process.env.THOUGHTDAG_SESSION_ROOTS) return [];
+  return [
+    { runner: 'claude-code', root: path.join(os.homedir(), '.claude', 'projects') },
+    { runner: 'codex', root: path.join(os.homedir(), '.codex', 'memories') },
+  ];
+})();
+const isMemoryFile = (file: string, runner: MemoryRunner): boolean => {
+  if (!file.endsWith('.md')) return false;
+  if (runner === 'claude-code') return path.basename(path.dirname(file)) === 'memory' && path.basename(file) !== 'MEMORY.md';
+  return true;
+};
 
 /** Folders holding canvases (*.thoughtdag.json). Always: the records the
  *  desktop app writes itself under <home>/canvases. Plus the env var, or
@@ -115,7 +152,7 @@ async function rememberCanvasRoot(dir: string): Promise<void> {
 
 // ─── files ───────────────────────────────────────────────────────────
 
-interface FileStat { file: string; mtime: number; size: number }
+interface FileStat { file: string; mtime: number; size: number; /** set when the file is a memory file, and whose */ memory?: MemoryRunner }
 
 const isCanvasFile = (name: string): boolean => /\.thoughtdag\.json$/i.test(name);
 // a runner's log: JSONL, or DSH's zstd-framed JSONL
@@ -138,6 +175,11 @@ async function listSources(): Promise<FileStat[]> {
   const files: FileStat[] = [];
   for (const root of ROOTS) await walk(root, 0, files, isSessionFile);
   for (const root of await canvasRoots()) await walk(root, 0, files, isCanvasFile);
+  for (const { runner, root } of MEMORY_ROOTS) {
+    const md: FileStat[] = [];
+    await walk(root, 0, md, (name) => name.endsWith('.md'));
+    for (const m of md) if (isMemoryFile(m.file, runner)) files.push({ ...m, memory: runner });
+  }
   return files;
 }
 
@@ -299,7 +341,10 @@ async function eventsOf(file: string, sourceId?: string): Promise<Projected | nu
   return { runner, nativeId: s.sessionId, title: s.title, ...(anchor ? { anchor } : {}), ...(cwd ? { cwd } : {}), ...(subagent ? { subagent } : {}), events, texts, manifest: MANIFESTS[runner], turns: s.turns };
 }
 
-async function parseSession(f: FileStat): Promise<{ fact: FactSession; cache: Record<string, CacheTurn>; text: Record<string, TextTurn>; names: Record<string, string>; bundles: FactIndex['bundles'] } | null> {
+type ParsedSource = { fact: FactSession; cache: Record<string, CacheTurn>; text: Record<string, TextTurn>; names: Record<string, string>; bundles: FactIndex['bundles'] };
+
+async function parseSession(f: FileStat): Promise<ParsedSource | null> {
+  if (f.memory) return parseMemory(f, f.memory);
   const memo = new Map<string, string>();
   const sourceId = await canonicalPath(f.file, memo);
   const p = await eventsOf(f.file, sourceId);
@@ -357,6 +402,129 @@ async function parseSession(f: FileStat): Promise<{ fact: FactSession; cache: Re
   return {
     fact: { id: p.nativeId, runner: p.runner, file: f.file, mtime: f.mtime, size: f.size, cwd, workspace, title: p.title, ...(p.subagent ? { subagent: true } : {}), ...(p.anchor ? { anchor: p.anchor } : {}), turns },
     cache, text: text_, names, bundles,
+  };
+}
+
+// ─── memories ────────────────────────────────────────────────────────
+//
+// A memory file becomes one session of kind 'memory'; its entries are the
+// turns. What counts as an entry follows each file's own shape, read off
+// its headings — no model, no guessing beyond the markdown.
+
+interface MemoryUnit { heading: string; body: string; cwd?: string; at?: string }
+interface MemoryFile { title: string; cwd: string; units: MemoryUnit[] }
+
+/** Frontmatter (--- … ---) as flat key: value pairs, and the text after it. */
+function frontmatterOf(text: string): { meta: Record<string, string>; body: string } {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
+  if (!m) return { meta: {}, body: text };
+  const meta: Record<string, string> = {};
+  for (const line of m[1].split(/\r?\n/)) {
+    const kv = /^\s*([A-Za-z_][\w-]*):\s*(.*)$/.exec(line);
+    if (kv && kv[2].trim()) meta[kv[1]] = kv[2].trim();
+  }
+  return { meta, body: text.slice(m[0].length) };
+}
+
+/** The sections of a markdown text at one heading level: heading text and
+ *  the body under it (until the next heading of that level or a higher one). */
+function sectionsOf(text: string, level: number): { heading: string; body: string }[] {
+  const out: { heading: string; body: string }[] = [];
+  const lines = text.split(/\r?\n/);
+  let cur: { heading: string; body: string[] } | null = null;
+  const isBoundary = (line: string): number | null => { const m = /^(#{1,6})\s+(.*)$/.exec(line); return m && m[1].length <= level ? m[1].length : null; };
+  for (const line of lines) {
+    const lvl = isBoundary(line);
+    if (lvl === level) { if (cur) out.push({ heading: cur.heading, body: cur.body.join('\n').trim() }); cur = { heading: line.replace(/^#+\s+/, '').trim(), body: [] }; continue; }
+    if (lvl !== null && lvl < level) { if (cur) out.push({ heading: cur.heading, body: cur.body.join('\n').trim() }); cur = null; continue; }
+    if (cur) cur.body.push(line);
+  }
+  if (cur) out.push({ heading: cur.heading, body: cur.body.join('\n').trim() });
+  return out;
+}
+
+const metaLine = (body: string, key: string): string | undefined => {
+  const m = new RegExp(`^${key}:\\s*(.+)$`, 'm').exec(body);
+  return m ? m[1].trim() : undefined;
+};
+
+// the working directory a Claude Code project directory stands for: read off
+// one of its session files (every record carries cwd), remembered per directory
+const claudeCwdMemo = new Map<string, Promise<string>>();
+function claudeProjectCwd(projectDir: string): Promise<string> {
+  let p = claudeCwdMemo.get(projectDir);
+  if (!p) {
+    p = (async () => {
+      let entries: string[] = [];
+      try { entries = (await fsp.readdir(projectDir)).filter((n) => n.endsWith('.jsonl')).sort(); } catch { return ''; }
+      for (const n of entries) {
+        try { const o = JSON.parse(await firstLine(path.join(projectDir, n))) as { cwd?: unknown }; if (typeof o.cwd === 'string' && o.cwd) return o.cwd; } catch { /* not a record */ }
+      }
+      return '';
+    })();
+    claudeCwdMemo.set(projectDir, p);
+  }
+  return p;
+}
+
+/** One memory file, read into its entries. */
+async function memoryFile(file: string, runner: MemoryRunner): Promise<MemoryFile | null> {
+  let text: string;
+  try { text = await fsp.readFile(file, 'utf8'); } catch { return null; }
+  const base = path.basename(file);
+  if (runner === 'claude-code') {
+    const projectDir = path.dirname(path.dirname(file));
+    const cwd = await claudeProjectCwd(projectDir);
+    const { meta, body } = frontmatterOf(text);
+    const heading = meta.description || meta.name || base.replace(/\.md$/, '');
+    const project = path.basename(cwd || projectDir);
+    return { title: `memory · ${project} · ${base.replace(/\.md$/, '')}`, cwd, units: body.trim() ? [{ heading, body: body.trim() }] : [] };
+  }
+  // codex
+  if (base === 'MEMORY.md') {
+    const units: MemoryUnit[] = [];
+    for (const g of sectionsOf(text, 1)) {
+      const cwd = /cwd=([^;\n]+)/.exec(metaLine(g.body, 'applies_to') ?? '')?.[1]?.trim();
+      const subs = sectionsOf(g.body, 2);
+      if (!subs.length) { units.push({ heading: g.heading, body: g.body, ...(cwd ? { cwd } : {}) }); continue; }
+      for (const u of subs) units.push({ heading: `${g.heading} › ${u.heading}`, body: u.body, ...(cwd ? { cwd } : {}) });
+    }
+    return { title: 'memory · Codex · MEMORY.md', cwd: '', units };
+  }
+  if (base === 'raw_memories.md') {
+    const units: MemoryUnit[] = sectionsOf(text, 2).map((u) => {
+      const cwd = metaLine(u.body, 'cwd'); const at = metaLine(u.body, 'updated_at');
+      const heading = cwd ? `${u.heading} · ${path.basename(cwd)}` : u.heading;
+      return { heading, body: u.body, ...(cwd ? { cwd } : {}), ...(at ? { at: new Date(at).toISOString() } : {}) };
+    });
+    return { title: 'memory · Codex · raw_memories.md', cwd: '', units };
+  }
+  const subs = sectionsOf(text, 2);
+  if (subs.length) return { title: `memory · Codex · ${base}`, cwd: '', units: subs };
+  const h1 = sectionsOf(text, 1)[0];
+  return { title: `memory · Codex · ${base}`, cwd: '', units: text.trim() ? [{ heading: h1?.heading ?? base, body: text.trim() }] : [] };
+}
+
+const shortHash = (s: string): string => createHash('sha1').update(s).digest('hex').slice(0, 12);
+
+async function parseMemory(f: FileStat, runner: MemoryRunner): Promise<ParsedSource | null> {
+  const mf = await memoryFile(f.file, runner);
+  if (!mf || !mf.units.length) return null;
+  const memo = new Map<string, string>();
+  const cwd = mf.cwd ? await canonicalPath(mf.cwd, memo) : '';
+  const workspace = cwd ? await workspaceOf(cwd) : '';
+  const at = new Date(f.mtime).toISOString();
+  const turns: FactTurn[] = [];
+  const text: Record<string, TextTurn> = {};
+  for (const [i, u] of mf.units.entries()) {
+    const unitCwd = u.cwd ? await canonicalPath(u.cwd, memo) : '';
+    turns.push({ i, t: `memory#${i}`, at: u.at ?? at, q: questionExcerpt(u.heading), ops: {}, ...(unitCwd && unitCwd !== cwd ? { cwd: unitCwd } : {}) });
+    text[String(i)] = { q: u.heading, a: u.body };
+  }
+  const id = `mem-${runner === 'codex' ? 'cx' : 'cc'}-${shortHash(await canonicalPath(f.file, memo))}`;
+  return {
+    fact: { id, runner, kind: 'memory', file: f.file, mtime: f.mtime, size: f.size, cwd, workspace, title: mf.title, turns },
+    cache: {}, text, names: {}, bundles: {},
   };
 }
 
@@ -559,7 +727,7 @@ async function ensureFresh(): Promise<FactIndex> {
   return loadFacts();
 }
 
-interface Stats { sessions: number; sources: number; turns: number; artifacts: { file: number; url: number; arxiv: number; other: number }; touches: number; changes: number; withChangeHead: number; withMention: number }
+interface Stats { sessions: number; sources: number; turns: number; artifacts: { file: number; url: number; arxiv: number; other: number }; touches: number; changes: number; withChangeHead: number; withMention: number; memoryFiles: number; memoryEntries: number }
 const schemeOf = (id: string): keyof Stats['artifacts'] => id.startsWith('file://') ? 'file' : id.startsWith('arxiv:') ? 'arxiv' : /^https?:\/\//.test(id) ? 'url' : 'other';
 const artifactsLine = (a: Stats['artifacts']): string => [`${a.file} files`, a.url ? `${a.url} urls` : '', a.arxiv ? `${a.arxiv} papers` : '', a.other ? `${a.other} other` : ''].filter(Boolean).join(' · ');
 
@@ -580,7 +748,8 @@ function summarize(facts: FactIndex, cache: CacheIndex): Stats {
     }
   }
   const sessions = new Set(Object.values(facts.sessions).map((s) => s.id)).size;
-  return { sessions, sources: Object.keys(facts.sessions).length, turns, artifacts, touches, changes, withChangeHead, withMention };
+  const mem = Object.values(facts.sessions).filter((s) => s.kind === 'memory');
+  return { sessions, sources: Object.keys(facts.sessions).length, turns, artifacts, touches, changes, withChangeHead, withMention, memoryFiles: mem.length, memoryEntries: mem.reduce((n, s) => n + s.turns.length, 0) };
 }
 
 // ─── why ─────────────────────────────────────────────────────────────
@@ -661,7 +830,9 @@ function anchorStatus(facts: FactIndex, a: NonNullable<FactSession['anchor']>): 
 
 /** Where a hit opens: the mirrored session at that very turn, or the
  *  canvas project at that node. */
-function openLink(h: Hit): string {
+function openLink(h: { session: FactSession; turn: FactTurn }): string {
+  // a memory entry: the file and the entry's number
+  if (h.session.kind === 'memory') return `thoughtdag://open?memory=${encodeURIComponent(h.session.file)}&entry=${h.turn.i}`;
   // canvas: the project's own id when the backup carried one, its name otherwise
   if (h.session.runner === 'thoughtdag') return `thoughtdag://open?canvas=${encodeURIComponent(h.session.id)}&node=${encodeURIComponent(h.turn.t.split('#').pop() ?? '')}`;
   return `thoughtdag://open?session=${h.session.id}${h.turn.item ? `&turn=${encodeURIComponent(h.turn.item)}` : ''}`;
@@ -690,7 +861,7 @@ function fragmentsOf(facts: FactIndex, sessionId: string): { key: string; s: Fac
   let offset = 0;
   return frags.map(([key, s]) => { const f = { key, s, offset }; offset += s.turns.length; return f; });
 }
-function turnNumber(facts: FactIndex, h: Hit): number {
+function turnNumber(facts: FactIndex, h: { session: FactSession; sourceKey: string; turn: FactTurn }): number {
   return (fragmentsOf(facts, h.session.id).find((f) => f.key === h.sourceKey)?.offset ?? 0) + h.turn.i;
 }
 
@@ -760,7 +931,7 @@ async function renderWhy(facts: FactIndex, file: string, hits: Hit[], readsHidde
  *  questions (Q), the answers (A) and the text of attached materials (M),
  *  all verbatim. Recall is bounded by wording — a synonym is not a hit —
  *  and every hit is a quote with a pointer, never a guess. */
-interface FindHit { session: FactSession; sourceKey: string; turn: FactTurn; where: 'Q' | 'A' | 'M'; snippet: string }
+interface FindHit { session: FactSession; sourceKey: string; turn: FactTurn; where: 'Q' | 'A' | 'M'; snippet: string; kind: 'turn' | 'memory' }
 
 function snippetAround(text: string, needle: string, width = 70): string {
   const at = text.toLowerCase().indexOf(needle);
@@ -792,7 +963,7 @@ async function findHits(facts: FactIndex, phrase: string, scope: 'q' | 'a' | 'm'
       if (!body) continue;
       if (scope !== 'all' && where.toLowerCase() !== scope) continue;
       if (!body.toLowerCase().includes(needle)) continue;
-      raw.push({ session, sourceKey: t.k, turn, where, snippet: snippetAround(body, needle) });
+      raw.push({ session, sourceKey: t.k, turn, where, snippet: snippetAround(body, needle), kind: session.kind === 'memory' ? 'memory' : 'turn' });
       break; // one hit per turn, the strongest field first
     }
   }
@@ -812,13 +983,13 @@ function renderFind(facts: FactIndex, phrase: string, hits: FindHit[], limit: nu
   const sessions = new Set(hits.map((h) => h.session.id)).size;
   if (json) {
     out.push(JSON.stringify({ phrase, turns: hits.length, sessions, evidence: { Q: 'observed (a question, verbatim)', A: 'observed (an answer, verbatim)', M: "observed (an attached material's text, verbatim)" },
-      hits: shown.map((h) => ({ session: h.session.id, runner: h.session.runner, title: h.session.title, turn: turnNumber(facts, h), at: h.turn.at ?? null, where: h.where, snippet: h.snippet, open: openLink(h) })) }, null, 1));
+      hits: shown.map((h) => ({ kind: h.kind, session: h.session.id, runner: h.session.runner, title: h.session.title, cwd: h.turn.cwd ?? h.session.cwd, file: h.session.file, turn: turnNumber(facts, h), at: h.turn.at ?? null, where: h.where, snippet: h.snippet, open: openLink(h) })) }, null, 1));
     return out.join('\n');
   }
   out.push(`find "${phrase}"  ·  ${hits.length} turn${hits.length === 1 ? '' : 's'} in ${sessions} session${sessions === 1 ? '' : 's'}${hits.length > limit ? `  (showing ${limit}, --limit for more)` : ''}\n`);
   for (const h of shown) {
     const s = h.session;
-    out.push(`${when(h.turn, s)}  ${s.runner}  「${s.title.slice(0, 60)}」  #${turnNumber(facts, h)}  ${openLink(h)}`);
+    out.push(`${when(h.turn, s)}  ${s.runner}${h.kind === 'memory' ? ' memory' : ''}  「${s.title.slice(0, 60)}」  #${turnNumber(facts, h)}  ${openLink(h)}`);
     out.push(`    ${h.where}: ${h.snippet}`);
   }
   if (!shown.length) out.push('(nothing asked, answered or attached in those words — try another wording; matching is exact)');
@@ -855,14 +1026,26 @@ function renderCheck(facts: FactIndex, arg: string, file: string | null, hits: H
 
 // ─── recall ──────────────────────────────────────────────────────────
 
-async function renderRecall(facts: FactIndex, sidPrefix: string, n: number): Promise<string> {
-  const out: string[] = [];
+interface RecalledTurn {
+  kind: 'turn' | 'memory'; runner: FactSession['runner']; session: string; title: string; turn: number; at?: string; file: string;
+  cwd: string; question: string; response: string; tools: RunnerTurn['tools'];
+}
+
+/** One turn (or one memory entry) in full, by session id prefix and number. */
+async function recallTurn(facts: FactIndex, sidPrefix: string, n: number): Promise<RecalledTurn> {
   const any = Object.values(facts.sessions).find((x) => x.id.startsWith(sidPrefix));
   if (!any) throw new Error(`no session starts with ${sidPrefix}`);
   // the fragment that holds turn n of the logical session
   const frag = fragmentsOf(facts, any.id).find((f) => n >= f.offset && n < f.offset + f.s.turns.length);
   const s = frag?.s ?? any;
   const local = frag ? n - frag.offset : n;
+  const base = { runner: s.runner, session: s.id, title: s.title, turn: n, file: s.file };
+  if (s.kind === 'memory') {
+    const mf = await memoryFile(s.file, s.runner as MemoryRunner);
+    const u = mf?.units[local];
+    if (!u) throw new Error(`memory ${s.id.slice(0, 8)} has no entry #${n}`);
+    return { ...base, kind: 'memory', at: s.turns[local]?.at, cwd: s.turns[local]?.cwd ?? s.cwd, question: u.heading, response: u.body, tools: [] };
+  }
   const p = await eventsOf(s.file);
   const turn = p?.turns?.[local] ?? (() => {
     // a canvas turn: the node's own text
@@ -871,17 +1054,66 @@ async function renderRecall(facts: FactIndex, sidPrefix: string, n: number): Pro
     return text ? { question: text.question, response: text.response, tools: [] as RunnerTurn['tools'], at: s.turns[local]?.at } : undefined;
   })();
   if (!turn) throw new Error(`session ${s.id.slice(0, 8)} has no turn #${n}`);
-  out.push(`${s.runner}  「${s.title}」  turn #${n}${turn.at ? `  ${turn.at.slice(0, 16).replace('T', ' ')}` : ''}\n`);
-  out.push(`## Question\n\n${turn.question.trim()}\n`);
-  out.push(`## Answer\n\n${turn.response.trim() || '(none)'}\n`);
-  if (turn.tools.length) {
-    out.push(`## Tools (${turn.tools.length})\n`);
-    for (const t of turn.tools) {
+  return { ...base, kind: 'turn', at: turn.at, cwd: s.cwd, question: turn.question, response: turn.response, tools: turn.tools };
+}
+
+async function renderRecall(facts: FactIndex, sidPrefix: string, n: number): Promise<string> {
+  const r = await recallTurn(facts, sidPrefix, n);
+  const out: string[] = [];
+  out.push(`${r.runner}${r.kind === 'memory' ? ' memory' : ''}  「${r.title}」  ${r.kind === 'memory' ? 'entry' : 'turn'} #${n}${r.at ? `  ${r.at.slice(0, 16).replace('T', ' ')}` : ''}\n`);
+  if (r.kind === 'memory') {
+    out.push(`## ${r.question.trim()}\n\n${r.response.trim() || '(empty)'}\n`);
+    return out.join('\n');
+  }
+  out.push(`## Question\n\n${r.question.trim()}\n`);
+  out.push(`## Answer\n\n${r.response.trim() || '(none)'}\n`);
+  if (r.tools.length) {
+    out.push(`## Tools (${r.tools.length})\n`);
+    for (const t of r.tools) {
       out.push(`- ${t.name}${t.paths?.length ? `  ${t.paths.join(', ')}` : ''}`);
       if (t.op === 'edit' || t.op === 'write') out.push(t.call.slice(0, 1200).split('\n').map((l) => `    ${l}`).join('\n'));
     }
   }
   return out.join('\n');
+}
+
+// ─── for a host that shows the answers (the canvas): structured, not rendered ─
+
+interface FindHitJson { kind: 'turn' | 'memory'; session: string; runner: FactSession['runner']; title: string; cwd: string; file: string; turn: number; at: string | null; where: 'Q' | 'A' | 'M'; snippet: string; open: string }
+
+/** find, as data. `cwd` keeps only hits about that project (a session's
+ *  cwd, or a memory entry's own); `limit` defaults to 20. */
+async function findJson(phrase: string, opts: { scope?: 'q' | 'a' | 'm' | 'all'; limit?: number; cwd?: string } = {}): Promise<{ phrase: string; turns: number; sessions: number; hits: FindHitJson[] }> {
+  const facts = await ensureFresh();
+  let hits = await findHits(facts, phrase, opts.scope ?? 'all');
+  if (opts.cwd) {
+    const want = opts.cwd.replace(/[\\/]+$/, '');
+    hits = hits.filter((h) => { const c = h.turn.cwd ?? h.session.cwd; return c === want || c.startsWith(want + path.sep); });
+  }
+  // the limit applies per kind: memory entries carry their file's mtime as
+  // their time and would otherwise crowd every recent turn out of the list
+  const limit = opts.limit ?? 20;
+  const shown = [...hits.filter((h) => h.kind === 'memory').slice(0, limit), ...hits.filter((h) => h.kind === 'turn').slice(0, limit)];
+  return {
+    phrase, turns: hits.length, sessions: new Set(hits.map((h) => h.session.id)).size,
+    hits: shown.map((h) => ({ kind: h.kind, session: h.session.id, runner: h.session.runner, title: h.session.title, cwd: h.turn.cwd ?? h.session.cwd, file: h.session.file, turn: turnNumber(facts, h), at: h.turn.at ?? null, where: h.where, snippet: h.snippet, open: openLink(h) })),
+  };
+}
+
+/** recall, as data. */
+async function recallJson(session: string, n: number): Promise<RecalledTurn> {
+  return recallTurn(await ensureFresh(), session, n);
+}
+
+interface MemoryFileJson { id: string; runner: FactSession['runner']; file: string; title: string; cwd: string; entries: number; mtime: number; headings: string[] }
+
+/** The memory files the index holds, newest first, with their entries' headings. */
+async function memoriesJson(): Promise<MemoryFileJson[]> {
+  const facts = await ensureFresh();
+  return Object.values(facts.sessions)
+    .filter((x) => x.kind === 'memory')
+    .sort((a, b) => b.mtime - a.mtime)
+    .map((x) => ({ id: x.id, runner: x.runner, file: x.file, title: x.title, cwd: x.cwd, entries: x.turns.length, mtime: x.mtime, headings: x.turns.map((t) => t.q) }));
 }
 
 // ─── mcp ─────────────────────────────────────────────────────────────
@@ -895,7 +1127,7 @@ const CLI_VERSION = '0.1.0';
 const MCP_TOOLS = [
   { name: 'why_check', description: 'Cheap first question before editing a file: does this artifact have any history in local agent sessions? One line; history true/false.', inputSchema: { type: 'object', properties: { path: { type: 'string', description: 'file path (absolute or relative to cwd), URL, or arxiv:<id>' } }, required: ['path'] } },
   { name: 'why_file', description: 'The turns across local Claude Code, Codex, DeepSeek Harness, Pi and ThoughtDAG sessions that touched a file, URL or paper: when, what changed (Δ, observed), what was asked, what the answer said about it (≈, a candidate explanation, not a verified reason). Each hit carries a deep link.', inputSchema: { type: 'object', properties: { path: { type: 'string' }, include_read: { type: 'boolean', description: 'also list turns that only read it (default false)' }, limit: { type: 'number', description: 'max hits (default 10)' } }, required: ['path'] } },
-  { name: 'find', description: 'Where these exact words were asked (Q), answered (A) or attached (M) across local sessions and canvases. Exact, case-insensitive match; every hit is a verbatim snippet with a pointer.', inputSchema: { type: 'object', properties: { phrase: { type: 'string' }, in: { type: 'string', enum: ['q', 'a', 'm', 'all'] }, limit: { type: 'number' } }, required: ['phrase'] } },
+  { name: 'find', description: 'Where these exact words were asked (Q), answered (A) or attached (M) across local sessions, canvases and the memories Claude Code and Codex keep for themselves. Exact, case-insensitive match; every hit is a verbatim snippet with a pointer.', inputSchema: { type: 'object', properties: { phrase: { type: 'string' }, in: { type: 'string', enum: ['q', 'a', 'm', 'all'] }, limit: { type: 'number' } }, required: ['phrase'] } },
   { name: 'recall_turn', description: 'One turn in full — the question, the answer, the tool calls with their diffs — by session id (or prefix) and turn number as shown by why_file.', inputSchema: { type: 'object', properties: { session: { type: 'string' }, turn: { type: 'number' } }, required: ['session', 'turn'] } },
 ];
 
@@ -949,6 +1181,10 @@ export {
   factsForCheck,
   renderCheck,
   renderRecall,
+  recallTurn,
+  findJson,
+  recallJson,
+  memoriesJson,
   CLI_VERSION,
   MCP_TOOLS,
   mcpCall,

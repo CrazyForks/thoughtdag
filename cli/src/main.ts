@@ -26,6 +26,7 @@ import {
   hitsFor,
   renderWhy,
   findHits,
+  memoriesJson,
   renderFind,
   factsForCheck,
   renderCheck,
@@ -158,7 +159,8 @@ const USAGE = `thoughtdag — the why layer
   thoughtdag why --check <path> [--fresh] [--json]  one line: is there history here? exit 0 yes, 1 no (cheap; refreshes only a stale index)
   thoughtdag find "<phrase>" [--in q|a|m] [--limit N] [--json]
                                                    the turns where those words were asked (Q), answered (A) or attached (M)
-  thoughtdag recall <session> <n>                  one turn in full (session id or prefix)
+  thoughtdag recall <session> <n>                  one turn in full (session id or prefix); a memory entry by its memory id
+  thoughtdag memories                              the memory files the index holds (Claude Code memory directories, Codex memories)
   thoughtdag status                                what the index holds, and how much is evidence
   thoughtdag purge [--cache]                       delete everything this tool stored (--cache: only the interpretation and text caches)
   thoughtdag events <session-file> [--touches]     the canonical events of one source file, one JSON per line
@@ -187,7 +189,15 @@ async function main(argv: string[]): Promise<void> {
     const pct = (a: number, b: number) => (b ? `${((a / b) * 100).toFixed(1)}%` : '–');
     console.log(`${st.sessions} sessions in ${st.sources} files · ${st.turns} turns · ${artifactsLine(st.artifacts)} · built ${facts.builtAt.slice(0, 16).replace('T', ' ')}`);
     console.log(`evidence: ${st.touches} touches · ${st.changes} edits/writes, ${st.withChangeHead} with an observed change head (${pct(st.withChangeHead, st.changes)} of changes, ${pct(st.withChangeHead, st.touches)} of touches) · ${st.withMention} answers name the file (${pct(st.withMention, st.touches)}, candidates only)`);
+    if (st.memoryFiles) console.log(`memories: ${st.memoryFiles} file${st.memoryFiles === 1 ? '' : 's'} · ${st.memoryEntries} entr${st.memoryEntries === 1 ? 'y' : 'ies'} (Claude Code memory directories, Codex memories) · find and recall answer over them too`);
     console.log(`store: ${HOME} (0700) · fact-index.json + interpretation-cache.json + text-index.jsonl (0600)`);
+    return;
+  }
+  if (cmd === 'memories') {
+    // the memory files the index holds: a look at what the two agents wrote down
+    const files = await memoriesJson();
+    if (!files.length) { console.log('no memory files indexed (Claude Code keeps them under ~/.claude/projects/<project>/memory/, Codex under ~/.codex/memories/)'); return; }
+    for (const m of files) console.log(`${m.id}  ${m.runner}  ${m.entries} entr${m.entries === 1 ? 'y' : 'ies'}  「${m.title}」${m.cwd ? `  ${m.cwd}` : ''}\n    ${m.file}`);
     return;
   }
   if (cmd === 'purge') {

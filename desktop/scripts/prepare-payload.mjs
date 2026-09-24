@@ -54,6 +54,10 @@ for (const name of SERVER_DEPS) {
 rmSync(payload, { recursive: true, force: true });
 mkdirSync(payload, { recursive: true });
 cpSync(path.join(root, 'server.mjs'), path.join(payload, 'server.mjs'));
+// the why layer (the CLI's library) bundled for the shell's main process:
+// find, recall and the memory files, answered inside the app
+execSync('npm run desktop:why', { cwd: root, stdio: 'inherit' });
+cpSync(path.join(desktop, 'why.mjs'), path.join(payload, 'why.mjs'));
 // the shared agent runtime (Pi today), used by the shell's main process
 cpSync(path.join(root, 'runtime'), path.join(payload, 'runtime'), { recursive: true });
 // the one-command handoff files the app can install into agents

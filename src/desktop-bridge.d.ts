@@ -135,8 +135,48 @@ interface DesktopAgentsBridge {
   onEvent(cb: (payload: { runId: string; event: Record<string, unknown> & { type: string } }) => void): void;
 }
 
+// ── the why layer: what was asked, answered and remembered across the local agents ──
+/** One hit of find: a turn of a session, or an entry of a memory file. */
+interface WhyFindHit {
+  kind: 'turn' | 'memory';
+  session: string;
+  runner: 'claude-code' | 'codex' | 'dsh' | 'pi' | 'thoughtdag';
+  title: string;
+  /** the project the hit is about: the session's cwd, or a memory entry's own */
+  cwd: string;
+  file: string;
+  turn: number;
+  at: string | null;
+  where: 'Q' | 'A' | 'M';
+  snippet: string;
+  open: string;
+}
+interface WhyFindResult { phrase: string; turns: number; sessions: number; hits: WhyFindHit[] }
+/** One turn (or memory entry) in full. */
+interface WhyRecalledTurn {
+  kind: 'turn' | 'memory';
+  runner: WhyFindHit['runner'];
+  session: string;
+  title: string;
+  turn: number;
+  at?: string;
+  file: string;
+  cwd: string;
+  question: string;
+  response: string;
+  tools: { name: string; op?: string; paths?: string[]; call?: string }[];
+}
+interface WhyMemoryFile { id: string; runner: WhyFindHit['runner']; file: string; title: string; cwd: string; entries: number; mtime: number; headings: string[] }
+interface DesktopWhyBridge {
+  status(): Promise<{ available: boolean; home?: string; error?: string }>;
+  find(phrase: string, opts?: { scope?: 'q' | 'a' | 'm' | 'all'; limit?: number; cwd?: string }): Promise<WhyFindResult>;
+  recall(session: string, turn: number): Promise<WhyRecalledTurn>;
+  memories(): Promise<WhyMemoryFile[]>;
+}
+
 interface Window {
   desktop?: DesktopBridge;
+  desktopWhy?: DesktopWhyBridge;
   desktopSessions?: DesktopSessionsBridge;
   desktopLocal?: DesktopLocalBridge;
   desktopCanvas?: DesktopCanvasBridge;

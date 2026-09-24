@@ -331,6 +331,12 @@ function Canvas() {
     prevNodeCount.current = useStore.getState().nodes.length;
     setTimeout(() => rfInstance.current?.fitView({ duration: 300, padding: 0.2 }), 50);
   }, []);
+  // the memory page (rendered outside this component) switches canvases too
+  useEffect(() => {
+    const h = () => afterProjectSwitch();
+    window.addEventListener('td:project-switched', h);
+    return () => window.removeEventListener('td:project-switched', h);
+  }, [afterProjectSwitch]);
 
   // ── Content palette + canvas paste/drop: material lands where you point ──
   const lastMouse = useRef<{ x: number; y: number } | null>(null);

@@ -27,6 +27,19 @@ if (dataDirArg) {
 const ROOT = app.isPackaged
   ? path.join(process.resourcesPath, 'payload')
   : path.join(__dirname, '..');
+// The why layer as a library (cli/src/lib.ts bundled by `npm run desktop:why`;
+// the payload carries a copy): the index under ~/.thoughtdag, find, recall,
+// and the memory files. Loaded on first use — a query refreshes the index
+// when a source moved on, so the first call after a while can take a moment.
+const WHY_FILE = app.isPackaged ? path.join(ROOT, 'why.mjs') : path.join(__dirname, 'why.mjs');
+let whyModule = null;
+function whyLib() {
+  if (!whyModule) {
+    whyModule = import(require('url').pathToFileURL(WHY_FILE).href).then((m) => { m.setQuiet?.(true); return m; });
+    whyModule.catch(() => { whyModule = null; });
+  }
+  return whyModule;
+}
 let serverProc = null;
 let win = null;
 
@@ -804,6 +817,15 @@ function setupAgents() {
     return r.canceled || !r.filePaths?.[0] ? null : r.filePaths[0];
   });
   ipcMain.handle('agents:write-materials', async (_e, cwd, files) => agentOps.writeMaterials(cwd, files));
+
+  // ── the why layer: what was asked, answered and remembered across the local agents ──
+  ipcMain.handle('why:status', async () => {
+    try { const w = await whyLib(); return { available: true, home: w.HOME }; }
+    catch (e) { return { available: false, error: e instanceof Error ? e.message : String(e) }; }
+  });
+  ipcMain.handle('why:find', async (_e, phrase, opts) => (await whyLib()).findJson(String(phrase ?? ''), opts && typeof opts === 'object' ? opts : {}));
+  ipcMain.handle('why:recall', async (_e, session, turn) => (await whyLib()).recallJson(String(session ?? ''), Number(turn)));
+  ipcMain.handle('why:memories', async () => (await whyLib()).memoriesJson());
 }
 
 function codexAppServer() {

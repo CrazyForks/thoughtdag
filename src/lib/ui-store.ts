@@ -22,6 +22,7 @@ interface ConfirmRequest {
 
 const WEB_SEARCH_KEY = 'thoughtdag.webSearch';
 const SCHOLAR_SEARCH_KEY = 'thoughtdag.scholarSearch';
+const RECALL_KEY = 'thoughtdag.recall';
 const MODEL_KEY = 'thoughtdag.model';
 const EFFORT_KEY = 'thoughtdag.agentEffort';
 /** The effort level for the next agent turn, in that runtime's own words; '' = the runtime's own default. */
@@ -36,6 +37,8 @@ interface UiState {
   tutorialOpen: boolean;
   /** Global switches: expose tool groups to the model (it still decides when to use them). */
   webSearchEnabled: boolean;
+  /** recall past conversations and memories into a new ask (the why layer); off by default, per-node snapshot like the search switches */
+  recallEnabled: boolean;
   scholarSearchEnabled: boolean;
   mcpEnabled: boolean;
   autoRefreshPaused: boolean;
@@ -62,6 +65,7 @@ interface UiState {
   resolveConfirm: (ok: boolean) => void;
   setTutorialOpen: (open: boolean) => void;
   setWebSearchEnabled: (enabled: boolean) => void;
+  setRecallEnabled: (enabled: boolean) => void;
   setScholarSearchEnabled: (enabled: boolean) => void;
   setMcpEnabled: (enabled: boolean) => void;
   setAutoRefreshPaused: (paused: boolean) => void;
@@ -174,6 +178,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   confirmRequest: null,
   tutorialOpen: false,
   webSearchEnabled: localStorage.getItem(WEB_SEARCH_KEY) !== 'off',
+  recallEnabled: localStorage.getItem(RECALL_KEY) === 'on',
   scholarSearchEnabled: localStorage.getItem(SCHOLAR_SEARCH_KEY) !== 'off',
   // MCP is parked until the personalization system is designed (external
   // knowledge needs its own provenance surface first) — hidden AND off.
@@ -192,6 +197,10 @@ export const useUiStore = create<UiState>((set, get) => ({
   setTutorialOpen: (open) => {
     if (!open) localStorage.setItem('thoughtdag.tutorialDone', '1');
     set({ tutorialOpen: open });
+  },
+  setRecallEnabled: (enabled) => {
+    localStorage.setItem(RECALL_KEY, enabled ? 'on' : 'off');
+    set({ recallEnabled: enabled });
   },
   setWebSearchEnabled: (enabled) => {
     localStorage.setItem(WEB_SEARCH_KEY, enabled ? 'on' : 'off');

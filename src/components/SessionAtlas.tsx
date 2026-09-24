@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import RecallResults from './ui/RecallResults';
+import MemoryLibrary from './ui/MemoryLibrary';
+import AgentMemoryFiles from './ui/AgentMemoryFiles';
+import { whyBridge } from '../lib/why-bridge';
 import { createPortal } from 'react-dom';
 import { AppWindow, Archive, ArrowDownUp, Link2, Folder, FolderOpen, Loader2, Plug, RefreshCw, RotateCcw, Search, Square, SquareCheckBig, SquareTerminal, Import, Trash2, X, Inbox } from 'lucide-react';
 import { scanSessions, groupByCwd, disabledRoots, setRootDisabled, type SessionCard, type AtlasGroup } from '../lib/atlas/discover';
@@ -148,8 +152,13 @@ function SourcesDialog({ roots, counts, onChanged, onClose }: {
   );
 }
 
-export default function SessionAtlas({ onClose, onSwitched, focusSessionId }: { onClose: () => void; onSwitched: () => void; focusSessionId?: string }) {
+export default function SessionAtlas({ onClose, onSwitched, focusSessionId, initialTab }: { onClose: () => void; onSwitched: () => void; focusSessionId?: string; initialTab?: 'sessions' | 'memory' }) {
   const t = useT();
+  // two pages of one surface: the conversations (this atlas) and memory —
+  // ThoughtDAG's own library beside what the other agents wrote down. The
+  // search box above both asks the why layer for the exact words.
+  const [tab, setTab] = useState<'sessions' | 'memory'>(initialTab ?? 'sessions');
+  const canRecall = !!whyBridge();
   const projects = useProjects((s) => s.projects);
   const activeSessionId = useProjects((s) => s.projects.find((p) => p.id === s.activeId)?.sourceSession?.sessionId);
   const isDesktop = !!window.desktopSessions;
@@ -436,7 +445,43 @@ export default function SessionAtlas({ onClose, onSwitched, focusSessionId }: { 
             <X size={18} strokeWidth={1.75} />
           </button>
         </div>
+        <div className="flex items-center gap-3 px-5 py-2 border-b border-line shrink-0" data-atlas-tabs>
+          <div className="flex items-center bg-wash rounded-lg p-0.5 shrink-0">
+            {(['sessions', 'memory'] as const).map((k) => (
+              <button
+                key={k}
+                onClick={() => setTab(k)}
+                className={`text-xs px-3 py-1 rounded-md transition-colors ${tab === k ? 'bg-card text-ink shadow-sm font-medium' : 'text-ink-muted hover:text-ink'}`}
+                data-atlas-tab={k}
+                aria-pressed={tab === k}
+              >
+                {t(k === 'sessions' ? 'atlas.tabSessions' : 'atlas.tabMemory')}
+              </button>
+            ))}
+          </div>
+          {canRecall && (
+            <div className="flex items-center gap-1.5 border border-line rounded-lg px-2.5 py-1 bg-card flex-1 max-w-[520px]">
+              <Search size={13} strokeWidth={1.75} className="text-ink-faint shrink-0" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t('atlas.searchPlaceholder')}
+                className="text-sm bg-transparent focus:outline-none w-full text-ink placeholder:text-ink-faint"
+                data-atlas-search
+              />
+            </div>
+          )}
+        </div>
 
+        {tab === 'memory' ? (
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4" data-atlas-memory>
+            {canRecall && query.trim().length >= 2 && <RecallResults phrase={query} onOpened={() => { onClose(); onSwitched(); }} />}
+            <div className="grid grid-cols-2 gap-8 items-start">
+              <MemoryLibrary />
+              <AgentMemoryFiles />
+            </div>
+          </div>
+        ) : (
         <div className="flex-1 flex min-h-0">
           {/* left: recent work first (the "where was I" answer), then the
               external world's folders, then the native region */}
@@ -500,6 +545,7 @@ export default function SessionAtlas({ onClose, onSwitched, focusSessionId }: { 
 
           {/* right: the selected group's sessions, or native canvases */}
           <div className="flex-1 overflow-y-auto p-4">
+            {canRecall && query.trim().length >= 2 && <RecallResults phrase={query} onOpened={() => { onClose(); onSwitched(); }} />}
             {selected === 'canvases' ? (
               <div className="space-y-1.5">
                 {projects.filter((p) => !p.archived).sort((a, b) => b.updatedAt - a.updatedAt).map((p) => (
@@ -568,6 +614,7 @@ export default function SessionAtlas({ onClose, onSwitched, focusSessionId }: { 
                     empty the atlas must stay reachable to be undone */}
                 {(cards?.length ?? 0) > 0 && (
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  {!canRecall && (
                   <div className="flex items-center gap-1.5 border border-line rounded-lg px-2 py-1 bg-card">
                     <Search size={13} strokeWidth={1.75} className="text-ink-faint shrink-0" />
                     <input
@@ -578,6 +625,7 @@ export default function SessionAtlas({ onClose, onSwitched, focusSessionId }: { 
                       data-atlas-filter
                     />
                   </div>
+                  )}
                   {runners.map((r) => (
                     <button
                       key={r}
@@ -727,6 +775,7 @@ export default function SessionAtlas({ onClose, onSwitched, focusSessionId }: { 
             )}
           </div>
         </div>
+        )}
         {picked.size >= 2 && !mergePick && (
           <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-10 bg-surface border border-line rounded-xl shadow-lg px-4 py-2.5 flex items-center gap-3" data-atlas-merge-bar>
             <span className="text-xs text-ink-muted whitespace-nowrap">{fmt(t('atlas.mergeSelected'), { n: picked.size })}</span>

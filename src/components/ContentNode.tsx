@@ -12,6 +12,7 @@ import { Markdown } from './Markdown';
 import { countTokens } from '../utils';
 import { useT, fmt } from '../i18n';
 import { isViewerMode } from '../lib/viewer';
+import { recallSourceLine } from '../lib/recall';
 
 // Content nodes: canvas material, not turns. A note (markdown), a file
 // (attachments) or a link (stamped web snapshot) that never generates — it
@@ -198,6 +199,12 @@ export default function ContentNode({ id, data, selected }: NodeProps<ThoughtNod
       {/* Body: grows with content by default; when the card is resized the
           body becomes the scroll region (wheel scrolls text, not zoom) */}
       <div className="px-4 py-3 nodrag flex-1 min-h-0 overflow-y-auto nowheel">
+        {/* a quote from the why layer says where it came from, above its text */}
+        {kind === 'note' && data.recallSource && (
+          <div className="text-2xs text-ink-faint font-mono truncate mb-1.5" title={data.recallSource.file} data-recall-source>
+            {fmt(t('node.recallSource'), { s: recallSourceLine(data.recallSource) })}
+          </div>
+        )}
         {kind === 'note' && (
           editing ? (
             <textarea

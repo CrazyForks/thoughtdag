@@ -57,6 +57,15 @@ contextBridge.exposeInMainWorld('desktopAgents', {
   onEvent: (cb) => { ipcRenderer.on('agents:event', (_e, payload) => cb(payload)); },
 });
 
+// The why layer: search across every local agent's sessions and the
+// memories Claude Code and Codex keep, recall one turn or entry in full.
+contextBridge.exposeInMainWorld('desktopWhy', {
+  status: () => ipcRenderer.invoke('why:status'),
+  find: (phrase, opts) => ipcRenderer.invoke('why:find', phrase, opts),
+  recall: (session, turn) => ipcRenderer.invoke('why:recall', session, turn),
+  memories: () => ipcRenderer.invoke('why:memories'),
+});
+
 contextBridge.exposeInMainWorld('desktopLocal', {
   open: (p) => ipcRenderer.invoke('local:open', p),
   image: (p) => ipcRenderer.invoke('local:image', p),

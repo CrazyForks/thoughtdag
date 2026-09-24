@@ -29,6 +29,16 @@ export function sweepRecentSessions(): void {
   void sweep?.();
 }
 
+// The deep-link opener, once the mirror is running: a why hit's
+// thoughtdag://open?… link, followed from inside the app (the recall
+// results). Before the mirror starts there is nothing to open with.
+let opener: ((url: string) => Promise<void>) | null = null;
+export async function openWhyLink(url: string): Promise<boolean> {
+  if (!opener) return false;
+  await opener(url);
+  return true;
+}
+
 export function startLiveMirror(): void {
   const bridge = window.desktopSessions;
   if (!bridge || started) return;
@@ -169,6 +179,7 @@ export function startLiveMirror(): void {
     else if (result.kind === 'imported') toast('success', fmt(t('toast.importedChats'), { n: 1, m: result.nodeCount }), 8000);
     if (result && turn) await focusTurn(turn);
   };
+  opener = openDeepLink;
   bridge.onDeepLink?.((url) => { void openDeepLink(url); });
   void (async () => {
     const { bootProjects } = await import('../../store/projects');

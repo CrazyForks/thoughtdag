@@ -11,6 +11,7 @@ import { toast, useUiStore } from '../lib/ui-store';
 import { getModelsOnce, reconcileModelId } from '../lib/use-models';
 import { contextLengthFor } from '../lib/runtime-providers';
 import { memoryContextBlock, judgeMemory } from '../lib/memory';
+import { fetchRecallItems, recallContextBlock } from '../lib/recall';
 import { t, fmt } from '../i18n';
 import { isViewerMode } from '../lib/viewer';
 import type { Reference } from '../types';
@@ -228,6 +229,28 @@ export async function runNodeGeneration(
       if (messages[i].role === 'assistant') { insertAt = i + 1; break; }
     }
     messages = [...messages.slice(0, insertAt), memBlock, ...messages.slice(insertAt)];
+  }
+
+  // Recall (the node's 回忆 switch): the why layer's exact-word hits for this
+  // question ride in as listed, priced, removable items — never a hidden
+  // injection. Items already on the node (a rerun, or some pruned by the
+  // person) are used as they stand; a fresh ask searches. Same seat as the
+  // memory block: after the last answer, before the question.
+  const recallOn = !selfData?.stepKind && !selfData?.digestOf && (selfData?.recall ?? useUiStore.getState().recallEnabled);
+  if (recallOn && isCurrent()) {
+    let items = selfData?.recallItems;
+    if (!items) {
+      const { useProjects } = await import('./projects');
+      items = await fetchRecallItems(question, { excludeSession: useProjects.getState().activeId });
+      if (!isCurrent()) return;
+      set((state) => ({ nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, recallItems: items } } : n)) }));
+    }
+    const block = recallContextBlock(items);
+    if (block) {
+      let at = messages.length - 1;
+      for (let i = messages.length - 1; i >= 0; i--) { if (messages[i].role === 'assistant') { at = i + 1; break; } }
+      messages = [...messages.slice(0, at), block, ...messages.slice(at)];
+    }
   }
 
   try {

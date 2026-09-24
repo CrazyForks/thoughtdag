@@ -876,6 +876,9 @@ const WHY_PROMPT = `ThoughtDAG why layer. The tools why_check, why_file, why_fin
 - why_find(phrase) finds where exact words were asked or answered; why_recall(session, turn) reads one turn in full.
 Cite what you learn briefly; do not restate whole turns.`
 
+/** the loaded why library, for the HTTP routes the canvas asks (null until installWhyLayer ran) */
+let whyLib = null
+
 async function installWhyLayer(ctx, config) {
   const wantTools = config?.whyTools !== false
   const wantPrompt = config?.whyPrompt !== false
@@ -891,6 +894,7 @@ async function installWhyLayer(ctx, config) {
     return
   }
   whyStatus.loaded = true
+  whyLib = why
   const ask = async (mcpName, args, cwd) => {
     const a = { ...args }
     for (const k of PATH_ARGS) if (typeof a[k] === 'string') a[k] = resolveAgainst(cwd, a[k])
@@ -996,6 +1000,22 @@ export async function apply(ctx, config) {
         return sendJson(res, 200, { session: sessionSummary(session) })
       }
       if (path === '/why/status' && req.method === 'GET') return sendJson(res, 200, whyStatus)
+      // ── the why layer for the canvas: find across sessions and memories, recall one turn or entry, list the memory files ──
+      if (path.startsWith('/why/') && req.method === 'GET') {
+        if (!whyLib) return sendJson(res, 503, { error: 'why layer not loaded', ...whyStatus })
+        if (path === '/why/find') {
+          const phrase = url.searchParams.get('phrase') ?? ''
+          const scope = url.searchParams.get('scope') ?? 'all'
+          const limit = Number(url.searchParams.get('limit') ?? 20) || 20
+          const cwd = url.searchParams.get('cwd') ?? undefined
+          return sendJson(res, 200, await whyLib.findJson(phrase, { scope, limit, ...(cwd ? { cwd } : {}) }))
+        }
+        if (path === '/why/recall') {
+          try { return sendJson(res, 200, await whyLib.recallJson(url.searchParams.get('session') ?? '', Number(url.searchParams.get('turn') ?? 0))) }
+          catch (e) { return sendJson(res, 404, { error: e instanceof Error ? e.message : String(e) }) }
+        }
+        if (path === '/why/memories') return sendJson(res, 200, await whyLib.memoriesJson())
+      }
       if (path === '/version' && req.method === 'GET') return sendJson(res, 200, { version: PLUGIN_VERSION, latest: await latestPluginVersion(), checkedAt: latestLookup.at || null })
       // ── the other agents' session files ──
       if (path === '/roots' && req.method === 'GET') {

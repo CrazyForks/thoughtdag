@@ -1,4 +1,5 @@
-import { Globe, GraduationCap } from 'lucide-react';
+import { Globe, GraduationCap, History } from 'lucide-react';
+import { hasWhy } from '../../lib/why-bridge';
 import { useUiStore } from '../../lib/ui-store';
 import { useModels } from '../../lib/use-models';
 import { directWithoutSearch } from '../../lib/direct-llm';
@@ -12,6 +13,11 @@ export default function SearchToggles({ size = 16 }: { size?: number }) {
   const setWeb = useUiStore((s) => s.setWebSearchEnabled);
   const scholar = useUiStore((s) => s.scholarSearchEnabled);
   const setScholar = useUiStore((s) => s.setScholarSearchEnabled);
+  // recall: the why layer's exact words from past conversations and memories,
+  // brought into the ask as listed items; only where a local index answers
+  const recall = useUiStore((s) => s.recallEnabled);
+  const setRecall = useUiStore((s) => s.setRecallEnabled);
+  const recallAvailable = hasWhy();
   const t = useT();
   // no key, no button: search that cannot run must not be offerable
   // (the capabilities panel is the one place that says why)
@@ -57,6 +63,18 @@ export default function SearchToggles({ size = 16 }: { size?: number }) {
       >
         <GraduationCap size={size} strokeWidth={1.75} />
       </button>
+      {recallAvailable && (
+        <button
+          type="button"
+          onClick={() => setRecall(!recall)}
+          title={recall ? t('toolbar.recall') : t('toolbar.recallOff')}
+          className={`transition-colors shrink-0 rounded-full w-8 h-8 flex items-center justify-center ${recall ? 'text-accent bg-accent/15 ring-1 ring-accent/40 hover:bg-accent/25' : 'text-ink-muted opacity-50 hover:opacity-90 hover:bg-line'}`}
+          data-recall-toggle
+          aria-pressed={recall}
+        >
+          <History size={size} strokeWidth={1.75} />
+        </button>
+      )}
     </>
   );
 }

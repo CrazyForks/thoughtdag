@@ -14,10 +14,11 @@
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
-    "desktop": "npm run build && cd desktop && electron .",
+    "desktop": "npm run build && npm run desktop:why && cd desktop && electron .",
     "cli:build": "esbuild cli/src/main.ts --bundle --platform=node --format=esm --target=node20 --define:import.meta.env={} --outfile=cli/dist/thoughtdag.mjs --log-level=warning",
     "dsh:build": "node dsh/scripts/build.mjs .",
-    "test:live-log": "node scripts/test-live-log.mjs"
+    "test:live-log": "node scripts/test-live-log.mjs",
+    "desktop:why": "esbuild cli/src/lib.ts --bundle --platform=node --format=esm --target=node20 --define:import.meta.env={} --outfile=desktop/why.mjs --log-level=warning"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.8",

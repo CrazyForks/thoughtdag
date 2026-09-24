@@ -11,6 +11,7 @@ import { isViewerMode } from '../../lib/viewer';
 import RoleLine from './RoleLine';
 import AgentSessionLine from './AgentSessionLine';
 import AttachmentsSection from './AttachmentsSection';
+import RecallSection from './RecallSection';
 import QuestionSection from './QuestionSection';
 import ResponseSection from './ResponseSection';
 import HighlightsSection from './HighlightsSection';
@@ -37,6 +38,8 @@ export default function FocusPanel({ onFocusNode }: { onFocusNode?: (id: string)
   // The width lives in ui-store so the canvas toolbar can offset itself.
   const panelWidth = useUiStore((s) => s.panelWidth);
   const setPanelWidth = useUiStore((s) => s.setPanelWidth);
+  // the recall switch's current default, for a node asked before it existed
+  const recallEnabled = useUiStore((s) => s.recallEnabled);
   const [resizing, setResizing] = useState(false);
 
   const onResizePointerDown = (e: React.PointerEvent) => {
@@ -162,6 +165,8 @@ export default function FocusPanel({ onFocusNode }: { onFocusNode?: (id: string)
           setAttachmentRenderMode={setAttachmentRenderMode}
           getInheritedAttachments={getInheritedAttachments}
         />
+
+        <RecallSection nodeId={selectedNodeId!} items={data.recallItems} recallOn={data.recall ?? recallEnabled} />
 
         <HighlightsSection
           key={`h-${selectedNodeId}`}

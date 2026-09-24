@@ -76,6 +76,27 @@ export interface ApprovalRequest {
 }
 
 /** One tool call of a running agent turn, as the node shows it live. */
+/** One thing recall brought into a node's context: a turn of some agent's
+    session or an entry of a memory file, quoted verbatim (clipped), with its
+    price and source. Excluded items stay listed but leave the prompt. */
+export interface RecallItem {
+  id: string;
+  kind: 'turn' | 'memory';
+  runner: string;
+  session: string;
+  turn: number;
+  title: string;
+  at?: string;
+  cwd: string;
+  file: string;
+  open: string;
+  /** the words of the question that found it */
+  matched: string[];
+  text: string;
+  tokens: number;
+  excluded?: boolean;
+}
+
 export interface AgentTraceEntry {
   id: string;
   name: string;
@@ -121,6 +142,10 @@ export interface ThoughtData extends Record<string, unknown> {
   model?: string; // per-node LLM override; undefined = follow the global picker
   webSearch?: boolean; // may this node's generation use web search? (snapshotted at ask time; undefined = legacy, follow global)
   scholarSearch?: boolean; // same for arXiv / Semantic Scholar tools
+  /** may this node's generation recall past conversations and memories (the why layer)? snapshotted at ask time like the search switches */
+  recall?: boolean;
+  /** what recall brought in for this node: listed, priced, removable; reused as they stand on a rerun */
+  recallItems?: RecallItem[];
   autoRerun?: boolean; // regenerate in place whenever an upstream ancestor finishes (generic primitive)
   /** Transient: a regeneration is streaming and data.response still holds
       the OLD text (cleared on the first new chunk) — display shows the live
@@ -138,6 +163,9 @@ export interface ThoughtData extends Record<string, unknown> {
   };
   /** Transient: the tool calls of the agent turn running now, in order. */
   agentTrace?: AgentTraceEntry[];
+  /** A note cited from the why layer: which agent's turn or memory entry
+      it quotes. Provenance for the reader; the note's text is the quote. */
+  recallSource?: { kind: 'turn' | 'memory'; runner: string; session: string; turn: number; title: string; file: string; at?: string; open: string; cwd: string };
   /** Transient: an agent runtime is waiting for the person's decision on one action. */
   /** Transient: approvals the agent is waiting on, oldest first. A model can
       ask for several at once (parallel tool calls); each is answered on its

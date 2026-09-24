@@ -58,6 +58,7 @@ export const createLlmSlice: StateCreator<StoreState, [], [], LlmSlice> = (set, 
         // the input, so reruns of this node keep behaving the same way
         webSearch: useUiStore.getState().webSearchEnabled,
         scholarSearch: useUiStore.getState().scholarSearchEnabled,
+        recall: useUiStore.getState().recallEnabled,
       },
     };
 
@@ -217,6 +218,7 @@ export const createLlmSlice: StateCreator<StoreState, [], [], LlmSlice> = (set, 
           autoRerunRounds: rounds,
           webSearch: useUiStore.getState().webSearchEnabled,
           scholarSearch: useUiStore.getState().scholarSearchEnabled,
+          recall: useUiStore.getState().recallEnabled,
         },
       });
       newEdges.push(follow ? {
@@ -303,6 +305,7 @@ export const createLlmSlice: StateCreator<StoreState, [], [], LlmSlice> = (set, 
         roleMode: 'inherit', isRoot: false, isBranch: false,
         webSearch: useUiStore.getState().webSearchEnabled,
         scholarSearch: useUiStore.getState().scholarSearchEnabled,
+        recall: useUiStore.getState().recallEnabled,
       },
     };
     const newEdges: ThoughtEdge[] = parents.map((pid) => ({
@@ -495,6 +498,7 @@ export const createLlmSlice: StateCreator<StoreState, [], [], LlmSlice> = (set, 
         isBranch: false,
         webSearch: useUiStore.getState().webSearchEnabled,
         scholarSearch: useUiStore.getState().scholarSearchEnabled,
+        recall: useUiStore.getState().recallEnabled,
       },
     };
 
