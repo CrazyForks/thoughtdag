@@ -453,7 +453,7 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
               <BookOpen size={60} strokeWidth={2} />
             </span>
           ) : glyphSeal ? (
-            <span className={`w-28 h-28 rounded-[2rem] text-7xl font-bold flex items-center justify-center border-4 border-card shadow-lg ${glyphSeal.solid}${staleRing}`}>
+            <span title={takeawayType && takeawayType !== 'insight' ? badgeTitle : undefined} data-map-seal={takeawayType ?? 'insight'} className={`w-28 h-28 rounded-[2rem] text-7xl font-bold flex items-center justify-center border-4 border-card shadow-lg ${glyphSeal.solid}${staleRing}`}>
               <span className={glyphSeal.nudge}>{glyphSeal.glyph}</span>
             </span>
           ) : (
