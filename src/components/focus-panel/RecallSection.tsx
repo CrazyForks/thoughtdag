@@ -11,13 +11,13 @@ import type { RecallItem, RecallMeta } from '../../types';
 // removable. What you read here is what the model read — an excluded item
 // stays listed (struck through) and leaves the prompt on the next run.
 
-export default function RecallSection({ nodeId, items, meta, recallOn }: { nodeId: string; items: RecallItem[] | undefined; meta?: RecallMeta; recallOn: boolean }) {
+export default function RecallSection({ nodeId, items, meta, recallOn, decided }: { nodeId: string; items: RecallItem[] | undefined; meta?: RecallMeta; recallOn: boolean; decided?: { web: number; scholar: number; recall: number; judge: string } }) {
   const t = useT();
   const [open, setOpen] = useState(true);
   const [unfolded, setUnfolded] = useState<string | null>(null);
   const [more, setMore] = useState<'idle' | 'busy' | 'none'>('idle');
   const recallLimit = useUiStore((s) => s.recallLimit);
-  if (!recallOn && !items?.length) return null;
+  if (!recallOn && !items?.length && !decided) return null;
   const loadMore = async () => {
     setMore('busy');
     try { const n = await recallMore(nodeId); setMore(n === 0 ? 'none' : 'idle'); } catch { setMore('idle'); }
@@ -40,6 +40,7 @@ export default function RecallSection({ nodeId, items, meta, recallOn }: { nodeI
       </button>
       {open && (
         <div className="mt-2 space-y-1">
+          {decided && <p className="text-2xs text-ink-faint" data-switches-decided>{fmt(t('panel.switchesDecided'), { w: decided.web.toFixed(2), s: decided.scholar.toFixed(2), r: decided.recall.toFixed(2), j: decided.judge })}</p>}
           {!items && <p className="text-2xs text-ink-faint italic">{t('panel.recallEmpty')}</p>}
           {items && items.length === 0 && <p className="text-2xs text-ink-faint italic">{t('panel.recallNone')}</p>}
           {meta && (meta.corrections.length > 0 || meta.judge || meta.judgeError) && (

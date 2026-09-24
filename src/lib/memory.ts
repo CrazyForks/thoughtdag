@@ -3,6 +3,7 @@ import { getModelsOnce } from './use-models';
 import { toast, useUiStore } from './ui-store';
 import { generateId } from '../utils';
 import { t, fmt } from '../i18n';
+import { judgeAvailable, decideMemory, MEMORY_DURABLE_BAR, MEMORY_STATED_BAR } from './judge';
 
 // Ambient long-term memory. The contract, agreed 2026-07:
 //   - the model decides what to WRITE (a cheap background judge per turn)
@@ -128,13 +129,31 @@ export function judgeMemory(question: string, response: string, projectName?: st
   void (async () => {
     try {
       const bg = (await getModelsOnce())?.default ?? undefined;
-      const existing = memories.slice(0, 40).map((m) => `${m.id}: ${m.text}`).join('\n') || '(none)';
-      const raw = await llmCall([
-        { role: 'user', content: `Existing memory entries:\n${existing}\n\nExchange:\nUser: ${question.slice(0, 2000)}\nAssistant: ${response.slice(0, 2000)}\n\n${JUDGE_PROMPT}` },
-      ], undefined, bg);
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (!match) return;
-      const verdict = JSON.parse(match[0]) as JudgeVerdict;
+      let verdict: JudgeVerdict;
+      if (judgeAvailable()) {
+        // With a judge: the DECISION is a typed one with calibrated bars
+        // (durable? which kind? did the user say it? does an entry cover
+        // it?), and the model is called only to phrase what was admitted —
+        // most exchanges never reach the model at all.
+        const d = await decideMemory(question, response, memories.slice(0, 40));
+        if (d.durable < MEMORY_DURABLE_BAR || d.category === 'none') return;
+        if (d.category === 'identity' && d.stated < MEMORY_STATED_BAR) return;
+        const covered = d.covers ? memories.find((m) => m.id === d.covers) : undefined;
+        const ask = covered
+          ? `This memory entry about the user exists: "${covered.text}". The exchange below adds to or changes it. Rewrite the entry as ONE short sentence in the language the user writes in, keeping what still holds. Output only the sentence.`
+          : `Record the durable fact about the user that the exchange below reveals (kind: ${d.category}) as ONE short sentence in the language the user writes in. Output only the sentence.`;
+        const raw = await llmCall([{ role: 'user', content: `${ask}\n\nExchange:\nUser: ${question.slice(0, 2000)}\nAssistant: ${response.slice(0, 2000)}` }], undefined, bg);
+        const text = raw.trim().split('\n').map((l) => l.trim()).find((l) => l.length > 1)?.replace(/^["“「]|["”」]$/g, '') ?? '';
+        verdict = { action: covered ? 'update' : 'add', ...(covered ? { id: covered.id } : {}), text, category: d.category, evidence: d.stated >= MEMORY_STATED_BAR ? 'stated' : 'inferred' };
+      } else {
+        const existing = memories.slice(0, 40).map((m) => `${m.id}: ${m.text}`).join('\n') || '(none)';
+        const raw = await llmCall([
+          { role: 'user', content: `Existing memory entries:\n${existing}\n\nExchange:\nUser: ${question.slice(0, 2000)}\nAssistant: ${response.slice(0, 2000)}\n\n${JUDGE_PROMPT}` },
+        ], undefined, bg);
+        const match = raw.match(/\{[\s\S]*\}/);
+        if (!match) return;
+        verdict = JSON.parse(match[0]) as JudgeVerdict;
+      }
       if (verdict.action !== 'add' && verdict.action !== 'update') return;
       const fresh = useUiStore.getState().memories; // re-read: turns may race
       if (admissionCheck(verdict, fresh, projectName) !== null) return;

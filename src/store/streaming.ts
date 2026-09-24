@@ -12,6 +12,7 @@ import { getModelsOnce, reconcileModelId } from '../lib/use-models';
 import { contextLengthFor } from '../lib/runtime-providers';
 import { memoryContextBlock, judgeMemory } from '../lib/memory';
 import { fetchRecallItems, recallContextBlock } from '../lib/recall';
+import { judgeAvailable, decideTakeaway, decideSwitches, SWITCH_ON } from '../lib/judge';
 import { t, fmt } from '../i18n';
 import { isViewerMode } from '../lib/viewer';
 import type { Reference } from '../types';
@@ -25,8 +26,15 @@ import type { StoreState } from './types';
 // across plaques and classifications aware of what the thinking already
 // ruled out or decided — the lines read as one progression, not islands.
 export const SUMMARY_MIN_CHARS = 400;
-export function generateSummary(nodeId: string, question: string, response: string, setSummary: (id: string, summary: string, forResponse: string, type?: string, topic?: string) => void, mapLines?: string[]) {
+export function generateSummary(nodeId: string, question: string, response: string, setSummary: (id: string, summary: string, forResponse: string, type?: string, topic?: string, confidence?: number) => void, mapLines?: string[]) {
   if (response.length < SUMMARY_MIN_CHARS) return;
+  // With a judge, the MOVE (rule-out, decision, pivot, open, plain step) is a
+  // typed decision with a probability; the model's own tag stands in when
+  // no judge answers. The takeaway line is still the model's — a judge
+  // does not write.
+  const judged: Promise<{ kind: string; p: number } | null> = judgeAvailable()
+    ? decideTakeaway(question, response).then((d) => ({ kind: d.kind, p: d.p })).catch(() => null)
+    : Promise.resolve(null);
   const mapBlock = mapLines && mapLines.length > 0
     ? `Takeaway lines already on the map, along this node's ancestor path (oldest first):\n${mapLines.join('\n')}\n\nUse those lines ONLY to align terminology and avoid repeating them. Classify this exchange's epistemic move on its own merits, independent of the lines above.\n\n`
     : '';
@@ -40,12 +48,15 @@ export function generateSummary(nodeId: string, question: string, response: stri
     const line = raw.trim().split('\n')[0].trim();
     const three = line.match(/^(INSIGHT|RULEOUT|DECISION|PIVOT|OPEN)\s*[|｜:：]\s*([^|｜]+?)\s*[|｜]\s*(.+)$/is);
     const two = three ? null : line.match(/^(INSIGHT|RULEOUT|DECISION|PIVOT|OPEN)[:：|｜]\s*(.+)$/is);
-    const type = (three?.[1] ?? two?.[1])?.toLowerCase() ?? 'insight';
+    const modelType = (three?.[1] ?? two?.[1])?.toLowerCase() ?? 'insight';
     const topic = three ? three[2].trim() : undefined;
     const text = three ? three[3].trim() : (two ? two[2].trim() : line);
-    // target the version this summary was computed FOR, not whichever
-    // version the user has navigated to since
-    setSummary(nodeId, text, response, type, topic);
+    return judged.then((j) => {
+      // target the version this summary was computed FOR, not whichever
+      // version the user has navigated to since
+      if (j) setSummary(nodeId, text, response, j.kind, topic, j.p);
+      else setSummary(nodeId, text, response, modelType, topic);
+    });
   }).catch(() => {});
 }
 
@@ -217,6 +228,23 @@ export async function runNodeGeneration(
   // must stay faithful to the material (no personalization), and
   // fingerprints never see this block (memory edits must not mark answers
   // stale; the block is assembled at generation time, after buildContext).
+  // Auto switches: instead of the fixed toggles, the judge decides which
+  // tools this question wants (three yes/no questions, one call), sets the
+  // node's flags, and the probabilities stay on the node for the panel.
+  // Decided once per node: a rerun keeps what was decided.
+  {
+    const cur = get().nodes.find((n) => n.id === nodeId)?.data;
+    if (cur && !cur.stepKind && !cur.digestOf && !cur.switchesDecided && useUiStore.getState().autoSwitches && judgeAvailable()) {
+      try {
+        const d = await decideSwitches(question);
+        if (!isCurrent()) return;
+        const webCap = (await getModelsOnce())?.capabilities?.webSearch ?? true;
+        set((state) => ({ nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data,
+          webSearch: webCap && d.web >= SWITCH_ON, scholarSearch: d.scholar >= SWITCH_ON, recall: d.recall >= SWITCH_ON,
+          switchesDecided: { web: d.web, scholar: d.scholar, recall: d.recall, judge: `${d.provider}${d.model ? ` · ${d.model}` : ''}${d.calibrated ? '' : ' · uncalibrated'}` } } } : n)) }));
+      } catch { /* the fixed switches stand */ }
+    }
+  }
   const selfData = get().nodes.find((n) => n.id === nodeId)?.data;
   const memBlock = !selfData?.stepKind && !selfData?.digestOf ? memoryContextBlock() : null;
   if (memBlock) {

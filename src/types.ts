@@ -161,6 +161,8 @@ export interface ThoughtData extends Record<string, unknown> {
   /** what recall brought in for this node: listed, priced, removable; reused as they stand on a rerun */
   recallItems?: RecallItem[];
   recallMeta?: RecallMeta;
+  /** the switches were set by the judge for this ask (auto mode): the probabilities it gave */
+  switchesDecided?: { web: number; scholar: number; recall: number; judge: string };
   autoRerun?: boolean; // regenerate in place whenever an upstream ancestor finishes (generic primitive)
   /** Transient: a regeneration is streaming and data.response still holds
       the OLD text (cleared on the first new chunk) — display shows the live
@@ -260,6 +262,8 @@ export interface ThoughtData extends Record<string, unknown> {
       decision | pivot | open. Auto-labeled by the takeaway judge; display
       layer only. */
   summaryTypes?: (string | undefined | null)[];
+  /** the judge's probability for the type, parallel to summaryTypes; absent when a model's tag was taken as-is */
+  summaryTypeConfidences?: (number | undefined | null)[];
   /** Micro topic per version (≤6 CJK chars / ≤14 latin): the noun phrase the
       narrow surfaces show — timeline tooltips, unbadged plaques. Written by
       the same judge call as the summary; display layer only. Older canvases

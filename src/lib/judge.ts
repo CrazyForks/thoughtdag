@@ -53,6 +53,69 @@ export const JUDGE_LABELS: Record<JudgeProviderId, string> = {
   none: '—', openrouter: 'OpenRouter · Jev', typesafe: 'TypeSafe · Jev', cloudflare: 'Cloudflare · Jev', custom: 'System One endpoint', llm: 'chat model',
 };
 
+// ── the decisions the app asks, in one place ──
+// Each is a typed question set with its thresholds spelled out, so what the
+// judge decides and where the bar sits can be read here, not hunted down.
+
+/** Before an ask, with auto switches on: which tools this question wants. */
+export async function decideSwitches(question: string): Promise<{ web: number; scholar: number; recall: number; provider: JudgeProviderId; model: string; calibrated: boolean }> {
+  const r = await judge({ question }, {
+    web: { type: 'noul', instructions: 'Does answering `question` need current information from the web — recent events, prices, versions, availability, live data — rather than general knowledge?' },
+    scholar: { type: 'noul', instructions: 'Does `question` call for academic literature: papers, citations, studies, formal results?' },
+    recall: { type: 'noul', instructions: 'Does `question` refer to something the user discussed, decided or worked on before — their own projects, past conversations, earlier choices — rather than asking about the world in general?' },
+  });
+  const p = (k: string) => r.answers[k]?.noul ?? 0;
+  return { web: p('web'), scholar: p('scholar'), recall: p('recall'), provider: r.provider, model: r.model, calibrated: r.calibrated };
+}
+
+/** The bar a switch turns on at. */
+export const SWITCH_ON = 0.5;
+
+/** After an answer: is there something durable to remember, and what kind. */
+export interface MemoryVerdictJudged { durable: number; category: 'preference' | 'identity' | 'project' | 'none'; categoryP: number; stated: number; covers: string | null; coversP: number; provider: JudgeProviderId; model: string; calibrated: boolean }
+export async function decideMemory(question: string, response: string, existing: { id: string; text: string }[]): Promise<MemoryVerdictJudged> {
+  const criteria: Record<string, string> = Object.fromEntries(existing.slice(0, 40).map((m) => [m.id, m.text.slice(0, 160)]));
+  criteria.none = 'no existing entry covers this';
+  const r = await judge(
+    { exchange: { user: question.slice(0, 2000), assistant: response.slice(0, 2000) }, existing_entries: existing.slice(0, 40).map((m) => m.text.slice(0, 160)) },
+    {
+      durable: { type: 'noul', instructions: 'Does `exchange` reveal something DURABLE about the user — how they like things done, who they are, or what they are working on — that would still matter in a later, unrelated session? Not: content questions, one-off task details, general knowledge, facts about this workspace, verbatim text, credentials.' },
+      category: { type: 'choice', instructions: 'If `exchange` reveals something durable about the user, which kind?', criteria: { preference: 'how they like things done: language, style, format, tools, models', identity: 'who they are: role, field, expertise, long-term research agenda', project: 'what they are working on right now', none: 'nothing durable about the user here' } },
+      stated: { type: 'noul', instructions: 'Did the user state this about themselves in so many words in `exchange`, rather than it being inferred from their behaviour?' },
+      covers: { type: 'choice', instructions: 'Which entry in `existing_entries`, if any, already covers the same topic as what `exchange` reveals (so an update fits better than a new entry)?', criteria },
+    },
+  );
+  const cat = r.answers.category; const cov = r.answers.covers;
+  const category = (cat?.choice ?? 'none') as MemoryVerdictJudged['category'];
+  return {
+    durable: r.answers.durable?.noul ?? 0, category, categoryP: cat?.probabilities?.[category] ?? 0,
+    stated: r.answers.stated?.noul ?? 0,
+    covers: cov?.choice && cov.choice !== 'none' ? cov.choice : null, coversP: cov?.choice ? cov.probabilities?.[cov.choice] ?? 0 : 0,
+    provider: r.provider, model: r.model, calibrated: r.calibrated,
+  };
+}
+/** Memory is written only above this bar; identity also needs the user to have said it. */
+export const MEMORY_DURABLE_BAR = 0.6;
+export const MEMORY_STATED_BAR = 0.7;
+
+/** The move an exchange makes on the map. */
+export type TakeawayKind = 'insight' | 'ruleout' | 'decision' | 'pivot' | 'open';
+export async function decideTakeaway(question: string, response: string): Promise<{ kind: TakeawayKind; p: number; provider: JudgeProviderId; model: string; calibrated: boolean }> {
+  const r = await judge({ exchange: { user: question.slice(0, 3000), assistant: response.slice(0, 4000) } }, {
+    kind: { type: 'choice', instructions: 'What kind of move does `exchange` make in the line of thinking?', criteria: {
+      ruleout: 'something is ruled out, rejected or shown not to work',
+      decision: 'a choice is made between alternatives, a course is settled',
+      pivot: 'the direction, framing or goal changes',
+      open: 'a question is raised or left unresolved, next steps are asked for',
+      insight: 'an ordinary step: an explanation, a result, information, no decisive move',
+    } },
+  });
+  const a = r.answers.kind;
+  const kind = (a?.choice ?? 'insight') as TakeawayKind;
+  return { kind, p: a?.probabilities?.[kind] ?? 0, provider: r.provider, model: r.model, calibrated: r.calibrated };
+}
+
+
 /** The key the app already holds for OpenRouter (a runtime provider), if any. */
 export function storedOpenRouterKey(): string {
   try {
@@ -84,7 +147,7 @@ interface Wire { url: string; headers: Record<string, string>; body: unknown; di
 function wireFor(s: JudgeSettings, state: unknown, questions: Record<string, JudgeQuestion>): Wire {
   switch (s.provider) {
     case 'openrouter':
-      return { url: 'https://openrouter.ai/api/v1/systemone', headers: { Authorization: `Bearer ${s.openrouterKey || storedOpenRouterKey()}`, 'HTTP-Referer': 'https://chenxiachan.github.io/thoughtdag/', 'X-Title': 'ThoughtDAG' }, body: { model: 'typesafe/jev-latest', state, questions }, direct: true };
+      return { url: 'https://openrouter.ai/api/v1/systemone', headers: { Authorization: `Bearer ${s.openrouterKey || storedOpenRouterKey()}`, 'HTTP-Referer': 'https://chenxiachan.github.io/thoughtdag/', 'X-Title': 'ThoughtDAG' }, body: { model: 'typesafe/jev-1.13', state, questions }, direct: true };
     case 'typesafe':
       return { url: 'https://api.typesafe.ai/v1/systemone', headers: { Authorization: `Bearer ${s.typesafeKey}` }, body: { model: 'jev-latest', state, questions }, direct: false };
     case 'cloudflare':

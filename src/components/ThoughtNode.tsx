@@ -333,6 +333,7 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
   // it instead of raw text; the full answer lives one double-click away.
   const versionSummary = activeSummary(data);
   const takeawayType = data.summaryTypes?.[data.responseIndex] ?? undefined;
+  const takeawayConfidence = data.summaryTypeConfidences?.[data.responseIndex] ?? undefined;
   // Reasoning of the ACTIVE version (models that emit it); display only
   const versionReasoning = data.reasonings?.[data.responseIndex] ?? undefined;
   // Only the rare, high-signal moves wear a badge — a map where every node
@@ -349,6 +350,7 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
     insight: { glyph: '✦', cls: 'text-sky-600 bg-sky-500/10', solid: 'bg-sky-500 text-white', key: 'takeaway.insight' },
   };
   const badge = takeawayType && takeawayType !== 'insight' && TYPE_BADGE[takeawayType] ? TYPE_BADGE[takeawayType] : null;
+  const badgeTitle = badge ? (takeawayConfidence !== undefined ? `${t(badge.key as Parameters<typeof t>[0])} · ${fmt(t('takeaway.judged'), { p: takeawayConfidence.toFixed(2) })}` : t(badge.key as Parameters<typeof t>[0])) : undefined;
   // The glyph seal: typed moves keep their seal; insight sparks; evaluators
   // wear their red eye; everything else is a neutral waypoint dot
   const glyphSeal = takeawayType && TYPE_BADGE[takeawayType]
@@ -416,7 +418,7 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
         // (no translucency — edges passing behind must not bleed through),
         // glyph sized for map distance
         <span
-          title={t(badge.key as Parameters<typeof t>[0])}
+          title={badgeTitle}
           className={`absolute -top-5 -left-5 w-14 h-14 rounded-2xl text-4xl font-bold flex items-center justify-center border-2 border-card shadow-md z-10 ${badge.solid}`}
           data-map-badge
         >
@@ -793,7 +795,7 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
               <div className="px-3 py-2.5 bg-surface rounded-xl nopan" title={t('node.summaryTitle')}>
                 <span className="text-2xs bg-wash text-ink-faint px-1.5 py-0.5 rounded-full">{t('node.summaryLabel')}</span>
                 {badge && (
-                  <span title={t(badge.key as Parameters<typeof t>[0])} className={`text-2xs px-1.5 py-0.5 rounded-full ml-1.5 font-medium ${badge.cls}`}>
+                  <span title={badgeTitle} data-takeaway-badge className={`text-2xs px-1.5 py-0.5 rounded-full ml-1.5 font-medium ${badge.cls}`}>
                     {badge.glyph} {t(badge.key as Parameters<typeof t>[0])}
                   </span>
                 )}

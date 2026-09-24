@@ -51,7 +51,7 @@ export const createHighlightSlice: StateCreator<StoreState, [], [], HighlightSli
     }));
   },
 
-  setSummary: (nodeId: string, summary: string, forResponse: string, type?: string, topic?: string) => {
+  setSummary: (nodeId: string, summary: string, forResponse: string, type?: string, topic?: string, confidence?: number) => {
     set((state) => ({
       nodes: state.nodes.map((n) => {
         if (n.id !== nodeId) return n;
@@ -63,7 +63,9 @@ export const createHighlightSlice: StateCreator<StoreState, [], [], HighlightSli
         summaryTypes[idx] = type ?? 'insight';
         const summaryTopics = [...(n.data.summaryTopics ?? [])];
         summaryTopics[idx] = topic;
-        return { ...n, data: { ...n.data, summaries, summaryTypes, summaryTopics } };
+        const summaryTypeConfidences = [...(n.data.summaryTypeConfidences ?? [])];
+        summaryTypeConfidences[idx] = confidence;
+        return { ...n, data: { ...n.data, summaries, summaryTypes, summaryTopics, summaryTypeConfidences } };
       }),
     }));
   },

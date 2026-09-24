@@ -1,5 +1,6 @@
-import { Globe, GraduationCap, History } from 'lucide-react';
+import { Globe, GraduationCap, History, Wand2 } from 'lucide-react';
 import { hasWhy } from '../../lib/why-bridge';
+import { judgeAvailable } from '../../lib/judge';
 import { useUiStore } from '../../lib/ui-store';
 import { useModels } from '../../lib/use-models';
 import { directWithoutSearch } from '../../lib/direct-llm';
@@ -18,6 +19,12 @@ export default function SearchToggles({ size = 16 }: { size?: number }) {
   const recall = useUiStore((s) => s.recallEnabled);
   const setRecall = useUiStore((s) => s.setRecallEnabled);
   const recallAvailable = hasWhy();
+  // auto: the judge decides the three per ask; the toggles then show as
+  // its to set, and touching one hands control back
+  const judgeCfg = useUiStore((s) => s.judge);
+  const autoPossible = judgeAvailable(judgeCfg);
+  const auto = useUiStore((s) => s.autoSwitches) && autoPossible;
+  const setAuto = useUiStore((s) => s.setAutoSwitches);
   const t = useT();
   // no key, no button: search that cannot run must not be offerable
   // (the capabilities panel is the one place that says why)
@@ -37,14 +44,15 @@ export default function SearchToggles({ size = 16 }: { size?: number }) {
           on
             ? 'text-accent bg-accent/15 ring-1 ring-accent/40 hover:bg-accent/25'
             : 'text-ink-muted opacity-50 hover:opacity-90 hover:bg-line'
-        }`;
+        }${auto ? ' opacity-30 ring-0' : ''}`;
+  const manual = (fn: () => void) => { if (auto) setAuto(false); fn(); };
 
   return (
     <>
       {webAvailable && (
         <button
           type="button"
-          onClick={() => { if (!noSearchLane) setWeb(!web); }}
+          onClick={() => { if (!noSearchLane) manual(() => setWeb(!web)); }}
           disabled={noSearchLane}
           title={noSearchLane ? t('toolbar.searchUnavailableLane') : web ? t('toolbar.webSearch') : t('toolbar.webSearchOff')}
           className={cls(web)}
@@ -55,7 +63,7 @@ export default function SearchToggles({ size = 16 }: { size?: number }) {
       )}
       <button
         type="button"
-        onClick={() => { if (!noSearchLane) setScholar(!scholar); }}
+        onClick={() => { if (!noSearchLane) manual(() => setScholar(!scholar)); }}
         disabled={noSearchLane}
         title={noSearchLane ? t('toolbar.searchUnavailableLane') : scholar ? t('toolbar.scholarSearch') : t('toolbar.scholarSearchOff')}
         className={cls(scholar)}
@@ -66,13 +74,25 @@ export default function SearchToggles({ size = 16 }: { size?: number }) {
       {recallAvailable && (
         <button
           type="button"
-          onClick={() => setRecall(!recall)}
+          onClick={() => manual(() => setRecall(!recall))}
           title={recall ? t('toolbar.recall') : t('toolbar.recallOff')}
           className={`transition-colors shrink-0 rounded-full w-8 h-8 flex items-center justify-center ${recall ? 'text-accent bg-accent/15 ring-1 ring-accent/40 hover:bg-accent/25' : 'text-ink-muted opacity-50 hover:opacity-90 hover:bg-line'}`}
           data-recall-toggle
           aria-pressed={recall}
         >
           <History size={size} strokeWidth={1.75} />
+        </button>
+      )}
+      {autoPossible && (
+        <button
+          type="button"
+          onClick={() => setAuto(!auto)}
+          title={auto ? t('toolbar.auto') : t('toolbar.autoOff')}
+          className={`transition-colors shrink-0 rounded-full w-8 h-8 flex items-center justify-center ${auto ? 'text-accent bg-accent/15 ring-1 ring-accent/40 hover:bg-accent/25' : 'text-ink-muted opacity-50 hover:opacity-90 hover:bg-line'}`}
+          data-auto-toggle
+          aria-pressed={auto}
+        >
+          <Wand2 size={size} strokeWidth={1.75} />
         </button>
       )}
     </>
