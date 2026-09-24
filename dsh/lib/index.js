@@ -1016,6 +1016,9 @@ export async function apply(ctx, config) {
         }
         if (path === '/why/memories') return sendJson(res, 200, await whyLib.memoriesJson())
         if (path === '/why/suggest') return sendJson(res, 200, await whyLib.suggestJson(url.searchParams.get('term') ?? '', Number(url.searchParams.get('limit') ?? 8) || 8))
+        if (path === '/why/topics') return sendJson(res, 200, await whyLib.topicsJson())
+        if (path === '/why/by-topic') return sendJson(res, 200, await whyLib.byTopicJson((url.searchParams.get('ids') ?? '').split(',').filter(Boolean), { minP: Number(url.searchParams.get('minP') ?? 0.6) || 0.6, limit: Number(url.searchParams.get('limit') ?? 60) || 60 }))
+        if (path === '/why/sample') return sendJson(res, 200, await whyLib.sampleQuestions(Number(url.searchParams.get('n') ?? 120) || 120))
       }
       if (path === '/version' && req.method === 'GET') return sendJson(res, 200, { version: PLUGIN_VERSION, latest: await latestPluginVersion(), checkedAt: latestLookup.at || null })
       // ── the other agents' session files ──
@@ -1041,6 +1044,14 @@ export async function apply(ctx, config) {
         return sendJson(res, 200, await rangeOfFile(abs, url.searchParams.get('start'), url.searchParams.get('length')))
       }
       // ── link snapshots: the SPA's /api/fetch-url on the harness's bounded fetcher ──
+      // ── topics: the table and the labelling job (POST) ──
+      if (path.startsWith('/why/') && req.method === 'POST') {
+        if (!whyLib) return sendJson(res, 503, { error: 'why layer not loaded', ...whyStatus })
+        const body = await readJson(req)
+        if (path === '/why/topics') return sendJson(res, 200, await whyLib.setTopics(Array.isArray(body?.topics) ? body.topics : []))
+        if (path === '/why/label/start') { try { return sendJson(res, 200, await whyLib.labelStart(body?.call, body?.opts ?? {})) } catch (e) { return sendJson(res, 400, { error: e instanceof Error ? e.message : String(e) }) } }
+        if (path === '/why/label/stop') return sendJson(res, 200, whyLib.labelStop())
+      }
       // ── the judge (a System One decision endpoint) forwarded for the canvas; the key rides in the request ──
       if (path === '/judge' && req.method === 'POST') {
         const body = await readJson(req)

@@ -10,6 +10,7 @@ import {
 } from '../../lib/runtime-providers';
 import { useT, fmt, useI18n } from '../../i18n';
 import { API_BASE } from '../../lib/constants';
+import JudgeSettings from './JudgeSettings';
 
 // The model-interface manager: one door for every way in. Presets carry a
 // baseURL and a key page; the model list is always fetched live from the
@@ -258,6 +259,9 @@ export default function ApiKeyModal() {
                 {!data?.capabilities?.webSearch && ` ${t('provider.noSearchNote')}`}
               </p>
             )}
+
+            {/* the judge: a decision endpoint, configured beside the model keys because it is one more key */}
+            <JudgeSettings />
 
             <button onClick={() => setAdding(true)} className="flex items-center gap-1.5 text-xs text-accent hover:bg-accent/10 px-3 py-1.5 rounded-lg transition-colors" data-provider-add>
               <Plus size={14} strokeWidth={1.75} /> {t('provider.add')}

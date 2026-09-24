@@ -65,6 +65,12 @@ contextBridge.exposeInMainWorld('desktopWhy', {
   recall: (session, turn) => ipcRenderer.invoke('why:recall', session, turn),
   memories: () => ipcRenderer.invoke('why:memories'),
   suggest: (term, k) => ipcRenderer.invoke('why:suggest', term, k),
+  topics: () => ipcRenderer.invoke('why:topics'),
+  setTopics: (topics) => ipcRenderer.invoke('why:set-topics', topics),
+  labelStart: (call, opts) => ipcRenderer.invoke('why:label-start', call, opts),
+  labelStop: () => ipcRenderer.invoke('why:label-stop'),
+  byTopic: (ids, opts) => ipcRenderer.invoke('why:by-topic', ids, opts),
+  sample: (n) => ipcRenderer.invoke('why:sample', n),
 });
 
 contextBridge.exposeInMainWorld('desktopLocal', {

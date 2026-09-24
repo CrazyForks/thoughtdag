@@ -57,20 +57,6 @@ export const JUDGE_LABELS: Record<JudgeProviderId, string> = {
 // Each is a typed question set with its thresholds spelled out, so what the
 // judge decides and where the bar sits can be read here, not hunted down.
 
-/** Before an ask, with auto switches on: which tools this question wants. */
-export async function decideSwitches(question: string): Promise<{ web: number; scholar: number; recall: number; provider: JudgeProviderId; model: string; calibrated: boolean }> {
-  const r = await judge({ question }, {
-    web: { type: 'noul', instructions: 'Does answering `question` need current information from the web — recent events, prices, versions, availability, live data — rather than general knowledge?' },
-    scholar: { type: 'noul', instructions: 'Does `question` call for academic literature: papers, citations, studies, formal results?' },
-    recall: { type: 'noul', instructions: 'Does `question` refer to something the user discussed, decided or worked on before — their own projects, past conversations, earlier choices — rather than asking about the world in general?' },
-  });
-  const p = (k: string) => r.answers[k]?.noul ?? 0;
-  return { web: p('web'), scholar: p('scholar'), recall: p('recall'), provider: r.provider, model: r.model, calibrated: r.calibrated };
-}
-
-/** The bar a switch turns on at. */
-export const SWITCH_ON = 0.5;
-
 /** After an answer: is there something durable to remember, and what kind. */
 export interface MemoryVerdictJudged { durable: number; category: 'preference' | 'identity' | 'project' | 'none'; categoryP: number; stated: number; covers: string | null; coversP: number; provider: JudgeProviderId; model: string; calibrated: boolean }
 export async function decideMemory(question: string, response: string, existing: { id: string; text: string }[]): Promise<MemoryVerdictJudged> {
@@ -140,6 +126,16 @@ export function judgeAvailable(s: JudgeSettings = judgeSettings()): boolean {
   }
 }
 
+/** The judge as the host reaches it (topic labelling runs there): url,
+ *  headers and model, nothing kept. Null without a judge, or with the
+ *  chat-model stand-in (too slow for thousands of turns). */
+export function judgeCall(s: JudgeSettings = judgeSettings()): WhyJudgeCall | null {
+  if (!judgeAvailable(s) || s.provider === 'llm' || s.provider === 'none') return null;
+  const w = wireFor(s, {}, {});
+  const model = (w.body as { model?: string }).model;
+  return { url: w.url, headers: w.headers, ...(model ? { model } : {}), ...(s.provider === 'cloudflare' ? { wrap: 'cloudflare' as const } : {}) };
+}
+
 // ── transport ──
 
 interface Wire { url: string; headers: Record<string, string>; body: unknown; direct: boolean; unwrap?: (j: unknown) => unknown }
@@ -178,10 +174,22 @@ function normalize(raw: unknown): { model: string; answers: Record<string, Judge
   return { model: j.model ?? '', answers: j.answers, usage: j.usage };
 }
 
+/** Text as the judge can take it: a slice can halve an emoji into a lone
+ *  surrogate, which the endpoints reject as invalid Unicode; control
+ *  characters go the same way. Applied to every string in the state. */
+export function cleanForJudge<T>(v: T): T {
+  // eslint-disable-next-line no-control-regex -- the control range is the point
+  if (typeof v === 'string') return v.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '') as T;
+  if (Array.isArray(v)) return v.map(cleanForJudge) as T;
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, cleanForJudge(x)])) as T;
+  return v;
+}
+
 /** Ask the configured judge. Throws when none is configured or the call fails. */
-export async function judge(state: unknown, questions: Record<string, JudgeQuestion>, opts: { settings?: JudgeSettings; signal?: AbortSignal } = {}): Promise<JudgeResult> {
+export async function judge(rawState: unknown, questions: Record<string, JudgeQuestion>, opts: { settings?: JudgeSettings; signal?: AbortSignal } = {}): Promise<JudgeResult> {
   const s = opts.settings ?? judgeSettings();
   if (!judgeAvailable(s)) throw new Error('no judge configured');
+  const state = cleanForJudge(rawState);
   const t0 = Date.now();
   if (s.provider === 'llm') {
     const r = await llmJudge(state, questions);

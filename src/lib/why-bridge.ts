@@ -4,7 +4,7 @@
 // where nothing can answer, so the UI hides what it cannot offer.
 import { IN_HARNESS } from './embedded';
 
-export type WhyBridge = Pick<DesktopWhyBridge, 'find' | 'recall' | 'memories' | 'suggest'>;
+export type WhyBridge = Pick<DesktopWhyBridge, 'find' | 'recall' | 'memories' | 'suggest' | 'topics' | 'setTopics' | 'labelStart' | 'labelStop' | 'byTopic' | 'sample'>;
 
 let cached: WhyBridge | null | undefined;
 
@@ -13,6 +13,11 @@ export function whyBridge(): WhyBridge | null {
   if (window.desktopWhy) { cached = window.desktopWhy; return cached; }
   const api = (import.meta.env.VITE_DSH_BRIDGE as string | undefined)?.replace(/\/+$/, '');
   if (IN_HARNESS && api) {
+    const post = async <T,>(path: string, body: unknown): Promise<T> => {
+      const r = await fetch(`${api}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(body ?? {}) });
+      if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? `${path}: ${r.status}`);
+      return r.json() as Promise<T>;
+    };
     const get = async <T,>(path: string, params: Record<string, string>): Promise<T> => {
       const q = new URLSearchParams(params).toString();
       const r = await fetch(`${api}${path}${q ? `?${q}` : ''}`, { credentials: 'same-origin' });
@@ -24,6 +29,12 @@ export function whyBridge(): WhyBridge | null {
       recall: (session, turn) => get('/why/recall', { session, turn: String(turn) }),
       memories: () => get('/why/memories', {}),
       suggest: (term, k) => get('/why/suggest', { term, limit: String(k ?? 8) }),
+      topics: () => get('/why/topics', {}),
+      setTopics: (topics) => post('/why/topics', { topics }),
+      labelStart: (call, opts) => post('/why/label/start', { call, opts }),
+      labelStop: () => post('/why/label/stop', {}),
+      byTopic: (ids, opts = {}) => get('/why/by-topic', { ids: ids.join(','), minP: String(opts.minP ?? 0.6), limit: String(opts.limit ?? 60) }),
+      sample: (n) => get('/why/sample', { n: String(n ?? 120) }),
     };
     return cached;
   }

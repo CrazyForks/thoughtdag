@@ -1169,6 +1169,168 @@ async function suggestJson(term: string, k = 8): Promise<{ term: string; known: 
   return { term, known, suggestions: out.slice(0, k) };
 }
 
+// ─── topics: what a turn is about, as a judge's typed labels ─────────────
+// A person names their themes (a short table); a System One judge answers,
+// for every turn in the text index, one yes/no per theme; the labels live
+// in <home>/topics.json keyed by source and turn. Recall then reaches a
+// turn by what it is about, not only by the words it shares. Labelling
+// runs here in the host, in the background, and reports progress; the
+// judge's key rides in the call and is not kept.
+
+interface Topic { id: string; name: string; description: string }
+interface TopicsFile { version: number; topics: Topic[]; labels: Record<string, Record<string, number>>; labeledAt: Record<string, string>; updatedAt: string }
+const TOPICS_FILE = path.join(HOME, 'topics.json');
+const TOPICS_VERSION = 1;
+const emptyTopics = (): TopicsFile => ({ version: TOPICS_VERSION, topics: [], labels: {}, labeledAt: {}, updatedAt: '' });
+// its own version, apart from the index's: the table outlives reindexing
+const loadTopics = async (): Promise<TopicsFile> => {
+  try { const v = JSON.parse(await fsp.readFile(TOPICS_FILE, 'utf8')) as TopicsFile; return v.version === TOPICS_VERSION ? { ...emptyTopics(), ...v } : emptyTopics(); } catch { return emptyTopics(); }
+};
+const turnKey = (k: string, i: number): string => `${k}#${i}`;
+
+/** How the host reaches the judge: the same wire the canvas uses. */
+interface JudgeCall { url: string; headers: Record<string, string>; model?: string; wrap?: 'cloudflare' }
+/** A slice can halve an emoji into a lone surrogate, which the endpoints reject as invalid Unicode; control characters go too. */
+const cleanForJudge = (s: string): string => s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+async function systemOne(call: JudgeCall, state: unknown, questions: Record<string, unknown>): Promise<Record<string, { noul?: number; choice?: string; probabilities?: Record<string, number> }>> {
+  const body = call.wrap === 'cloudflare' ? { model: call.model ?? 'typesafe/jev', input: { state, questions } } : { ...(call.model ? { model: call.model } : {}), state, questions };
+  const r = await fetch(call.url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...call.headers }, body: JSON.stringify(body), signal: AbortSignal.timeout(90_000) });
+  const text = await r.text();
+  let j: { answers?: Record<string, { noul?: number }>; result?: { answers?: Record<string, { noul?: number }> }; error?: unknown } = {};
+  try { j = JSON.parse(text); } catch { throw new Error(`judge answered ${r.status} with non-JSON`); }
+  if (!r.ok) throw new Error(typeof j.error === 'string' ? j.error : (j.error as { message?: string })?.message ?? `HTTP ${r.status}`);
+  const answers = (call.wrap === 'cloudflare' ? j.result?.answers : j.answers) ?? {};
+  return answers;
+}
+
+interface LabelStatus { running: boolean; done: number; total: number; labeled: number; errors: number; startedAt: string | null; finishedAt: string | null; lastError: string | null; stopRequested: boolean }
+const labelStatus: LabelStatus = { running: false, done: 0, total: 0, labeled: 0, errors: 0, startedAt: null, finishedAt: null, lastError: null, stopRequested: false };
+
+/** The topic table with counts and the labelling job's state. */
+async function topicsJson(): Promise<{ topics: (Topic & { count: number })[]; labeled: number; turns: number; status: LabelStatus }> {
+  const tf = await loadTopics();
+  const text = await loadText();
+  const turns = Object.values(text.sessions).reduce((n, c) => n + c, 0);
+  const counts = new Map<string, number>();
+  for (const per of Object.values(tf.labels)) for (const [id, p] of Object.entries(per)) if (p >= 0.6) counts.set(id, (counts.get(id) ?? 0) + 1);
+  return { topics: tf.topics.map((t) => ({ ...t, count: counts.get(t.id) ?? 0 })), labeled: Object.keys(tf.labels).length, turns, status: { ...labelStatus } };
+}
+
+/** Replace the topic table; labels of removed topics go, the rest stay. */
+async function setTopics(topics: { id?: string; name: string; description?: string }[]): Promise<Topic[]> {
+  const tf = await loadTopics();
+  const clean: Topic[] = topics.filter((t) => t.name?.trim()).map((t) => ({ id: (t.id && /^[a-z0-9_-]{1,40}$/.test(t.id) ? t.id : shortHash(t.name.trim().toLowerCase())), name: t.name.trim().slice(0, 60), description: (t.description ?? '').trim().slice(0, 240) }));
+  const keep = new Set(clean.map((t) => t.id));
+  for (const [k, per] of Object.entries(tf.labels)) { for (const id of Object.keys(per)) if (!keep.has(id)) delete per[id]; if (!Object.keys(per).length) { delete tf.labels[k]; delete tf.labeledAt[k]; } }
+  tf.topics = clean; tf.updatedAt = new Date().toISOString();
+  await writePrivate(TOPICS_FILE, tf);
+  return clean;
+}
+
+/** Label every unlabelled turn (or one missing a newer topic) with the judge, in the background. */
+async function labelStart(call: JudgeCall, opts: { batch?: number; max?: number } = {}): Promise<LabelStatus> {
+  if (labelStatus.running) return { ...labelStatus };
+  const tf = await loadTopics();
+  if (!tf.topics.length) throw new Error('no topics to label with');
+  const batch = Math.max(1, Math.min(16, opts.batch ?? 8));
+  Object.assign(labelStatus, { running: true, done: 0, total: 0, labeled: 0, errors: 0, startedAt: new Date().toISOString(), finishedAt: null, lastError: null, stopRequested: false });
+  void (async () => {
+    try {
+      // what still needs labels: a turn with no label for some current topic.
+      // Two passes, so the index never sits in memory: the keys first (the
+      // newest-indexed `max` of them), then their text as it streams by.
+      const needs = (t: TextLine): boolean => {
+        const have = tf.labels[turnKey(t.k, t.i)];
+        if (have && tf.topics.every((tp) => tp.id in have)) return false;
+        return (t.q?.trim().length ?? 0) + (t.a?.trim().length ?? 0) >= 40;
+      };
+      const open = async (): Promise<ReturnType<typeof createInterface> | null> => { try { await fsp.access(TEXT_LINES); return createInterface({ input: createReadStream(TEXT_LINES, { encoding: 'utf8', highWaterMark: 1 << 20 }) }); } catch { return null; } };
+      const keys: string[] = [];
+      const first = await open();
+      if (first) for await (const line of first) { let t: TextLine; try { t = JSON.parse(line) as TextLine; } catch { continue; } if (needs(t)) keys.push(turnKey(t.k, t.i)); }
+      const chosen = new Set(opts.max ? keys.slice(-opts.max) : keys);
+      const pending: TextLine[] = [];
+      const second = chosen.size ? await open() : null;
+      if (second) for await (const line of second) { let t: TextLine; try { t = JSON.parse(line) as TextLine; } catch { continue; } if (chosen.has(turnKey(t.k, t.i))) pending.push(t); }
+      pending.reverse();
+      labelStatus.total = pending.length;
+      let sinceWrite = 0;
+      for (let at = 0; at < pending.length && !labelStatus.stopRequested; at += batch) {
+        const group = pending.slice(at, at + batch);
+        const state: Record<string, { q: string; a: string }> = {};
+        const questions: Record<string, unknown> = {};
+        group.forEach((t, gi) => {
+          state[`t${gi}`] = { q: cleanForJudge((t.q ?? '').slice(0, 300)), a: cleanForJudge((t.a ?? '').slice(0, 700)) };
+          for (const tp of tf.topics) questions[`t${gi}_${tp.id}`] = { type: 'noul', instructions: `Is the turn \`t${gi}\` about the topic "${tp.name}"${tp.description ? ` (${tp.description})` : ''}?` };
+        });
+        try {
+          const answers = await systemOne(call, state, questions);
+          group.forEach((t, gi) => {
+            const key = turnKey(t.k, t.i);
+            const per = tf.labels[key] ?? {};
+            for (const tp of tf.topics) { const p = answers[`t${gi}_${tp.id}`]?.noul; if (typeof p === 'number') per[tp.id] = Math.round(p * 100) / 100; }
+            tf.labels[key] = per; tf.labeledAt[key] = new Date().toISOString();
+            labelStatus.labeled++;
+          });
+        } catch (e) {
+          labelStatus.errors++; labelStatus.lastError = e instanceof Error ? e.message : String(e);
+          if (labelStatus.errors >= 5 && labelStatus.labeled === 0) break; // a dead key or endpoint: stop early
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+        labelStatus.done = Math.min(pending.length, at + group.length);
+        sinceWrite += group.length;
+        if (sinceWrite >= 80) { tf.updatedAt = new Date().toISOString(); await writePrivate(TOPICS_FILE, tf); sinceWrite = 0; }
+      }
+      tf.updatedAt = new Date().toISOString();
+      await writePrivate(TOPICS_FILE, tf);
+    } catch (e) {
+      labelStatus.lastError = e instanceof Error ? e.message : String(e);
+    } finally {
+      labelStatus.running = false; labelStatus.finishedAt = new Date().toISOString();
+    }
+  })();
+  return { ...labelStatus };
+}
+function labelStop(): LabelStatus { if (labelStatus.running) labelStatus.stopRequested = true; return { ...labelStatus }; }
+
+/** The turns labelled with any of these topics (probability at or above minP), strongest and newest first. */
+async function byTopicJson(topicIds: string[], opts: { minP?: number; limit?: number } = {}): Promise<{ hits: (FindHitJson & { topics: Record<string, number> })[]; total: number }> {
+  const tf = await loadTopics();
+  const facts = await loadFacts();
+  const minP = opts.minP ?? 0.6;
+  const want = new Set(topicIds);
+  const rows: { key: string; k: string; i: number; score: number; topics: Record<string, number> }[] = [];
+  for (const [key, per] of Object.entries(tf.labels)) {
+    let score = 0; const topics: Record<string, number> = {};
+    for (const [id, p] of Object.entries(per)) if (want.has(id) && p >= minP) { score = Math.max(score, p); topics[id] = p; }
+    if (!score) continue;
+    const hash = key.lastIndexOf('#');
+    rows.push({ key, k: key.slice(0, hash), i: Number(key.slice(hash + 1)), score, topics });
+  }
+  const hits: (FindHitJson & { topics: Record<string, number> })[] = [];
+  for (const r of rows) {
+    const session = facts.sessions[r.k]; const turn = session?.turns.find((t) => t.i === r.i);
+    if (!session || !turn) continue;
+    hits.push({ kind: session.kind === 'memory' ? 'memory' : 'turn', session: session.id, runner: session.runner, title: session.title, cwd: turn.cwd ?? session.cwd, file: session.file, turn: turnNumber(facts, { session, sourceKey: r.k, turn }), at: turn.at ?? null, where: 'Q', snippet: turn.q.slice(0, 200), open: openLink({ session, turn }), topics: r.topics, _score: r.score } as FindHitJson & { topics: Record<string, number>; _score: number });
+  }
+  hits.sort((a, b) => ((b as { _score?: number })._score ?? 0) - ((a as { _score?: number })._score ?? 0) || (b.at ?? '').localeCompare(a.at ?? ''));
+  const total = hits.length;
+  return { hits: hits.slice(0, opts.limit ?? 60).map((h) => { const { _score, ...rest } = h as typeof h & { _score?: number }; void _score; return rest; }), total };
+}
+
+/** A sample of the questions people asked, for proposing topics. */
+async function sampleQuestions(n = 120): Promise<string[]> {
+  const out: string[] = [];
+  let lines: ReturnType<typeof createInterface> | null = null;
+  try { await fsp.access(TEXT_LINES); lines = createInterface({ input: createReadStream(TEXT_LINES, { encoding: 'utf8', highWaterMark: 1 << 20 }) }); } catch { return out; }
+  const all: string[] = [];
+  for await (const line of lines) { let t: TextLine; try { t = JSON.parse(line) as TextLine; } catch { continue; } const q = (t.q ?? '').trim(); if (q.length >= 20 && q.length <= 400) all.push(q); }
+  // spread across the whole history, not the newest slice
+  const step = Math.max(1, Math.floor(all.length / n));
+  for (let i = 0; i < all.length && out.length < n; i += step) out.push(all[i].slice(0, 200));
+  return out;
+}
+
 /** The memory files the index holds, newest first, with their entries' headings. */
 async function memoriesJson(): Promise<MemoryFileJson[]> {
   const facts = await ensureFresh();
@@ -1248,6 +1410,12 @@ export {
   recallJson,
   memoriesJson,
   suggestJson,
+  topicsJson,
+  setTopics,
+  labelStart,
+  labelStop,
+  byTopicJson,
+  sampleQuestions,
   CLI_VERSION,
   MCP_TOOLS,
   mcpCall,

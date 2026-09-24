@@ -28,6 +28,8 @@ import {
   findHits,
   memoriesJson,
   suggestJson,
+  topicsJson,
+  byTopicJson,
   renderFind,
   factsForCheck,
   renderCheck,
@@ -163,6 +165,7 @@ const USAGE = `thoughtdag — the why layer
   thoughtdag recall <session> <n>                  one turn in full (session id or prefix); a memory entry by its memory id
   thoughtdag memories                              the memory files the index holds (Claude Code memory directories, Codex memories)
   thoughtdag suggest <term> [--limit N] [--json]   what a mistyped term could have meant: near words from the indexed text
+  thoughtdag topics [--of <id>] [--json]           the topic table and its labels (named and labelled from the app)
   thoughtdag status                                what the index holds, and how much is evidence
   thoughtdag purge [--cache]                       delete everything this tool stored (--cache: only the interpretation and text caches)
   thoughtdag events <session-file> [--touches]     the canonical events of one source file, one JSON per line
@@ -203,6 +206,17 @@ async function main(argv: string[]): Promise<void> {
     if (r.known) console.log(`"${r.term}" occurs ${r.known} time${r.known === 1 ? '' : 's'} as written`);
     if (!r.suggestions.length) { console.log(r.known ? '' : `nothing within reach of "${r.term}"`); return; }
     for (const s of r.suggestions) console.log(`  ${s.term}  ×${s.count}  (${s.distance} edit${s.distance === 1 ? '' : 's'})`);
+    return;
+  }
+  if (cmd === 'topics') {
+    // the topic table and how much of the index carries labels; --of <id> lists a topic's turns
+    const of = value('of');
+    if (of) { const r = await byTopicJson([of], { limit: Number(value('limit') ?? 20) || 20 }); if (flag('json')) { console.log(JSON.stringify(r)); return; } console.log(`${r.total} turns`); for (const h of r.hits) console.log(`${(h.at ?? '').slice(0, 10)}  ${h.runner}  「${h.title.slice(0, 50)}」  #${h.turn}  ${Object.entries(h.topics).map(([k, p]) => `${k}=${p}`).join(' ')}`); return; }
+    const r = await topicsJson();
+    if (flag('json')) { console.log(JSON.stringify(r)); return; }
+    if (!r.topics.length) { console.log('no topics yet — name them in the app (memory page), then label'); return; }
+    for (const t of r.topics) console.log(`${t.id}  ${t.name}  ×${t.count}${t.description ? `  — ${t.description}` : ''}`);
+    console.log(`labelled ${r.labeled} of ${r.turns} turns${r.status.running ? ` (running: ${r.status.done}/${r.status.total})` : ''}`);
     return;
   }
   if (cmd === 'memories') {

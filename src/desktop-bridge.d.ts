@@ -174,7 +174,21 @@ interface DesktopWhyBridge {
   memories(): Promise<WhyMemoryFile[]>;
   /** near words from the indexed text for a mistyped term */
   suggest(term: string, k?: number): Promise<WhySuggestions>;
+  /** the topic table, its counts, and the labelling job's state */
+  topics(): Promise<WhyTopics>;
+  setTopics(topics: { id?: string; name: string; description?: string }[]): Promise<WhyTopic[]>;
+  /** label every unlabelled turn with the judge, in the background; the judge's key rides in `call` and is not kept */
+  labelStart(call: WhyJudgeCall, opts?: { batch?: number; max?: number }): Promise<WhyLabelStatus>;
+  labelStop(): Promise<WhyLabelStatus>;
+  /** turns labelled with any of these topics */
+  byTopic(ids: string[], opts?: { minP?: number; limit?: number }): Promise<{ hits: (WhyFindHit & { topics: Record<string, number> })[]; total: number }>;
+  /** a spread of past questions, for proposing topics */
+  sample(n?: number): Promise<string[]>;
 }
+interface WhyTopic { id: string; name: string; description: string }
+interface WhyLabelStatus { running: boolean; done: number; total: number; labeled: number; errors: number; startedAt: string | null; finishedAt: string | null; lastError: string | null; stopRequested: boolean }
+interface WhyTopics { topics: (WhyTopic & { count: number })[]; labeled: number; turns: number; status: WhyLabelStatus }
+interface WhyJudgeCall { url: string; headers: Record<string, string>; model?: string; wrap?: 'cloudflare' }
 interface WhySuggestions { term: string; known: number; suggestions: { term: string; count: number; distance: number }[] }
 
 interface Window {

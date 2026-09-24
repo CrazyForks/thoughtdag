@@ -12,7 +12,8 @@ import { getModelsOnce, reconcileModelId } from '../lib/use-models';
 import { contextLengthFor } from '../lib/runtime-providers';
 import { memoryContextBlock, judgeMemory } from '../lib/memory';
 import { fetchRecallItems, recallContextBlock } from '../lib/recall';
-import { judgeAvailable, decideTakeaway, decideSwitches, SWITCH_ON } from '../lib/judge';
+import { fillCards } from '../lib/recall-cards';
+import { judgeAvailable, decideTakeaway } from '../lib/judge';
 import { t, fmt } from '../i18n';
 import { isViewerMode } from '../lib/viewer';
 import type { Reference } from '../types';
@@ -228,23 +229,6 @@ export async function runNodeGeneration(
   // must stay faithful to the material (no personalization), and
   // fingerprints never see this block (memory edits must not mark answers
   // stale; the block is assembled at generation time, after buildContext).
-  // Auto switches: instead of the fixed toggles, the judge decides which
-  // tools this question wants (three yes/no questions, one call), sets the
-  // node's flags, and the probabilities stay on the node for the panel.
-  // Decided once per node: a rerun keeps what was decided.
-  {
-    const cur = get().nodes.find((n) => n.id === nodeId)?.data;
-    if (cur && !cur.stepKind && !cur.digestOf && !cur.switchesDecided && useUiStore.getState().autoSwitches && judgeAvailable()) {
-      try {
-        const d = await decideSwitches(question);
-        if (!isCurrent()) return;
-        const webCap = (await getModelsOnce())?.capabilities?.webSearch ?? true;
-        set((state) => ({ nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data,
-          webSearch: webCap && d.web >= SWITCH_ON, scholarSearch: d.scholar >= SWITCH_ON, recall: d.recall >= SWITCH_ON,
-          switchesDecided: { web: d.web, scholar: d.scholar, recall: d.recall, judge: `${d.provider}${d.model ? ` · ${d.model}` : ''}${d.calibrated ? '' : ' · uncalibrated'}` } } } : n)) }));
-      } catch { /* the fixed switches stand */ }
-    }
-  }
   const selfData = get().nodes.find((n) => n.id === nodeId)?.data;
   const memBlock = !selfData?.stepKind && !selfData?.digestOf ? memoryContextBlock() : null;
   if (memBlock) {
@@ -270,10 +254,11 @@ export async function runNodeGeneration(
     if (!items) {
       const { useProjects } = await import('./projects');
       const { recallLimit, recallBudget } = useUiStore.getState();
-      const out = await fetchRecallItems(question, { excludeSession: useProjects.getState().activeId, limit: recallLimit, budget: recallBudget });
+      const out = await fetchRecallItems(question, { excludeSession: useProjects.getState().activeId, limit: recallLimit, budget: recallBudget, model: requestedModel });
       items = out.items;
       if (!isCurrent()) return;
       set((state) => ({ nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, recallItems: out.items, recallMeta: out.meta } } : n)) }));
+      fillCards(nodeId, out.items);
     }
     const block = recallContextBlock(items);
     if (block) {

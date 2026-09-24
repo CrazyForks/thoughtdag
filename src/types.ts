@@ -97,6 +97,11 @@ export interface RecallItem {
   excluded?: boolean;
   /** the judge's probability that this bears on the question, when a judge ranked the pool */
   relevance?: number;
+  /** the condensed card a cheap model wrote for this turn (cached); the model reads it instead of the text */
+  card?: string;
+  cardTokens?: number;
+  /** the topics this item was reached by (names), when recall matched by topic */
+  topics?: string[];
 }
 
 /** How one recall ran: what it corrected, who ranked, how wide it looked. */
@@ -109,6 +114,12 @@ export interface RecallMeta {
   total: number;
   /** candidates the judge held irrelevant (below the floor) */
   dropped?: number;
+  /** candidates the judge found only somewhat relevant, not brought in; one click brings them */
+  heldBack?: { session: string; turn: number; relevance: number; open: string }[];
+  /** the token budget this recall worked within */
+  budget?: number;
+  /** the topics the judge held the question to be about, whose turns joined the pool */
+  topics?: { id: string; name: string; p: number }[];
 }
 
 export interface AgentTraceEntry {
@@ -161,8 +172,6 @@ export interface ThoughtData extends Record<string, unknown> {
   /** what recall brought in for this node: listed, priced, removable; reused as they stand on a rerun */
   recallItems?: RecallItem[];
   recallMeta?: RecallMeta;
-  /** the switches were set by the judge for this ask (auto mode): the probabilities it gave */
-  switchesDecided?: { web: number; scholar: number; recall: number; judge: string };
   autoRerun?: boolean; // regenerate in place whenever an upstream ancestor finishes (generic primitive)
   /** Transient: a regeneration is streaming and data.response still holds
       the OLD text (cleared on the first new chunk) — display shows the live

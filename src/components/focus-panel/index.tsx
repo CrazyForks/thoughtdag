@@ -12,6 +12,7 @@ import RoleLine from './RoleLine';
 import AgentSessionLine from './AgentSessionLine';
 import AttachmentsSection from './AttachmentsSection';
 import RecallSection from './RecallSection';
+import RelatedSection from './RelatedSection';
 import QuestionSection from './QuestionSection';
 import ResponseSection from './ResponseSection';
 import HighlightsSection from './HighlightsSection';
@@ -166,7 +167,8 @@ export default function FocusPanel({ onFocusNode }: { onFocusNode?: (id: string)
           getInheritedAttachments={getInheritedAttachments}
         />
 
-        <RecallSection nodeId={selectedNodeId!} items={data.recallItems} meta={data.recallMeta} recallOn={data.recall ?? recallEnabled} decided={data.switchesDecided} />
+        <RecallSection nodeId={selectedNodeId!} items={data.recallItems} meta={data.recallMeta} recallOn={data.recall ?? recallEnabled} />
+        <RelatedSection key={`rel-${selectedNodeId}`} question={data.question} answer={data.response ?? ''} />
 
         <HighlightsSection
           key={`h-${selectedNodeId}`}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, History, Loader2, X, RotateCcw } from 'lucide-react';
 import { useStore } from '../../store';
-import { recallSourceLine, recallTokens, recallMore } from '../../lib/recall';
+import { recallSourceLine, recallTokens, recallMore, recallHeld } from '../../lib/recall';
 import { useUiStore } from '../../lib/ui-store';
 import { JUDGE_LABELS, type JudgeProviderId } from '../../lib/judge';
 import { useT, fmt } from '../../i18n';
@@ -11,13 +11,14 @@ import type { RecallItem, RecallMeta } from '../../types';
 // removable. What you read here is what the model read — an excluded item
 // stays listed (struck through) and leaves the prompt on the next run.
 
-export default function RecallSection({ nodeId, items, meta, recallOn, decided }: { nodeId: string; items: RecallItem[] | undefined; meta?: RecallMeta; recallOn: boolean; decided?: { web: number; scholar: number; recall: number; judge: string } }) {
+export default function RecallSection({ nodeId, items, meta, recallOn }: { nodeId: string; items: RecallItem[] | undefined; meta?: RecallMeta; recallOn: boolean }) {
   const t = useT();
   const [open, setOpen] = useState(true);
   const [unfolded, setUnfolded] = useState<string | null>(null);
   const [more, setMore] = useState<'idle' | 'busy' | 'none'>('idle');
+  const [heldBusy, setHeldBusy] = useState(false);
   const recallLimit = useUiStore((s) => s.recallLimit);
-  if (!recallOn && !items?.length && !decided) return null;
+  if (!recallOn && !items?.length) return null;
   const loadMore = async () => {
     setMore('busy');
     try { const n = await recallMore(nodeId); setMore(n === 0 ? 'none' : 'idle'); } catch { setMore('idle'); }
@@ -40,13 +41,19 @@ export default function RecallSection({ nodeId, items, meta, recallOn, decided }
       </button>
       {open && (
         <div className="mt-2 space-y-1">
-          {decided && <p className="text-2xs text-ink-faint" data-switches-decided>{fmt(t('panel.switchesDecided'), { w: decided.web.toFixed(2), s: decided.scholar.toFixed(2), r: decided.recall.toFixed(2), j: decided.judge })}</p>}
           {!items && <p className="text-2xs text-ink-faint italic">{t('panel.recallEmpty')}</p>}
           {items && items.length === 0 && <p className="text-2xs text-ink-faint italic">{t('panel.recallNone')}</p>}
-          {meta && (meta.corrections.length > 0 || meta.judge || meta.judgeError) && (
+          {meta && (meta.corrections.length > 0 || meta.judge || meta.judgeError || meta.topics?.length) && (
             <div className="text-2xs text-ink-faint space-y-0.5 pb-1" data-recall-meta>
               {meta.corrections.map((c) => <div key={c.from}>{fmt(t('panel.recallCorrected'), { a: c.from, b: c.to })}{c.p !== undefined ? ` · ${c.p.toFixed(2)}` : ''}</div>)}
-              {meta.judge && <div>{fmt(t('panel.recallJudge'), { j: `${JUDGE_LABELS[meta.judge.provider as JudgeProviderId] ?? meta.judge.provider}${meta.judge.model ? ` · ${meta.judge.model}` : ''}` })} · {t(meta.judge.calibrated ? 'judge.calibrated' : 'judge.uncalibrated')} · {fmt(t('panel.recallPool'), { n: meta.pool, m: meta.total })}{meta.dropped ? ` · ${fmt(t('panel.recallDropped'), { n: meta.dropped })}` : ''}</div>}
+              {meta.judge && <div>{fmt(t('panel.recallJudge'), { j: `${JUDGE_LABELS[meta.judge.provider as JudgeProviderId] ?? meta.judge.provider}${meta.judge.model ? ` · ${meta.judge.model}` : ''}` })} · {t(meta.judge.calibrated ? 'judge.calibrated' : 'judge.uncalibrated')} · {fmt(t('panel.recallPool'), { n: meta.pool, m: meta.total })}{meta.dropped ? ` · ${fmt(t('panel.recallDropped'), { n: meta.dropped })}` : ''}{meta.budget ? ` · ${fmt(t('panel.recallBudget'), { b: meta.budget })}` : ''}</div>}
+              {!!meta.topics?.length && <div data-recall-topics>{fmt(t('panel.recallTopics'), { t: meta.topics.map((x) => `${x.name} ${x.p.toFixed(2)}`).join(' · ') })}</div>}
+              {!!meta.heldBack?.length && (
+                <div className="flex items-center gap-2" data-recall-held>
+                  <span>{fmt(t('panel.recallHeld'), { n: meta.heldBack.length })}</span>
+                  <button onClick={() => { setHeldBusy(true); void recallHeld(nodeId).finally(() => setHeldBusy(false)); }} disabled={heldBusy} className="text-accent hover:bg-accent/10 px-1.5 py-0.5 rounded disabled:opacity-50" data-recall-held-add>{heldBusy ? '…' : t('panel.recallHeldAdd')}</button>
+                </div>
+              )}
               {meta.judgeError && <div className="text-amber-600">{fmt(t('panel.recallJudgeFailed'), { e: meta.judgeError })}</div>}
             </div>
           )}
@@ -55,7 +62,7 @@ export default function RecallSection({ nodeId, items, meta, recallOn, decided }
               <div className="flex items-start gap-2">
                 <button onClick={() => setUnfolded(unfolded === i.id ? null : i.id)} className="flex-1 min-w-0 text-left">
                   <div className={`text-2xs font-mono text-ink-faint truncate ${i.excluded ? 'line-through' : ''}`} title={i.file}>{recallSourceLine({ kind: i.kind, runner: i.runner, session: i.session, turn: i.turn, title: i.title, file: i.file, at: i.at, open: i.open, cwd: i.cwd })}</div>
-                  <div className="text-2xs text-ink-muted mt-0.5 truncate">{i.relevance !== undefined && <span className="text-accent mr-1.5" data-recall-relevance>{fmt(t('panel.recallRelevance'), { p: i.relevance.toFixed(2) })}</span>}{fmt(t('panel.recallMatched'), { w: i.matched.join(' · ') })} · {i.tokens} tok</div>
+                  <div className="text-2xs text-ink-muted mt-0.5 truncate">{i.relevance !== undefined && <span className="text-accent mr-1.5" data-recall-relevance>{fmt(t('panel.recallRelevance'), { p: i.relevance.toFixed(2) })}</span>}{i.matched.length ? `${fmt(t('panel.recallMatched'), { w: i.matched.join(' · ') })} · ` : ''}{i.topics?.length ? <span data-recall-item-topics>{fmt(t('panel.recallTopic'), { t: i.topics.join(' · ') })} · </span> : null}{i.card ? <span data-recall-card>{fmt(t('panel.recallCard'), { n: i.cardTokens ?? 0 })}</span> : `${i.tokens} tok`}</div>
                 </button>
                 <button
                   onClick={() => toggle(i.id)}
@@ -67,7 +74,7 @@ export default function RecallSection({ nodeId, items, meta, recallOn, decided }
                 </button>
               </div>
               {unfolded === i.id && (
-                <div className="mt-1.5 text-2xs text-ink-muted leading-relaxed whitespace-pre-wrap break-words max-h-[220px] overflow-y-auto border-l-2 border-line pl-2 nowheel" data-recall-item-text>{i.text}</div>
+                <div className="mt-1.5 text-2xs text-ink-muted leading-relaxed whitespace-pre-wrap break-words max-h-[220px] overflow-y-auto border-l-2 border-line pl-2 nowheel" data-recall-item-text>{i.card && <div className="mb-1.5 text-ink"><span className="text-ink-faint">{t('panel.recallCardLabel')} </span>{i.card}</div>}{i.text}</div>
               )}
             </div>
           ))}

@@ -26,7 +26,6 @@ const RECALL_KEY = 'thoughtdag.recall';
 const RECALL_LIMIT_KEY = 'thoughtdag.recallLimit';
 const RECALL_BUDGET_KEY = 'thoughtdag.recallBudget';
 const JUDGE_KEY = 'thoughtdag.judge';
-const AUTO_SWITCHES_KEY = 'thoughtdag.autoSwitches';
 const MODEL_KEY = 'thoughtdag.model';
 const EFFORT_KEY = 'thoughtdag.agentEffort';
 /** The effort level for the next agent turn, in that runtime's own words; '' = the runtime's own default. */
@@ -46,8 +45,6 @@ interface UiState {
   /** how many items one recall brings in, and the token budget they share */
   recallLimit: number;
   recallBudget: number;
-  /** the judge decides web / scholar / recall per ask instead of the fixed switches */
-  autoSwitches: boolean;
   /** the judge (a System One decision endpoint) recall and other judgements may ask */
   judge: import('./judge').JudgeSettings;
   scholarSearchEnabled: boolean;
@@ -80,7 +77,6 @@ interface UiState {
   setRecallLimit: (n: number) => void;
   setRecallBudget: (n: number) => void;
   setJudge: (patch: Partial<import('./judge').JudgeSettings>) => void;
-  setAutoSwitches: (on: boolean) => void;
   setScholarSearchEnabled: (enabled: boolean) => void;
   setMcpEnabled: (enabled: boolean) => void;
   setAutoRefreshPaused: (paused: boolean) => void;
@@ -194,7 +190,6 @@ export const useUiStore = create<UiState>((set, get) => ({
   tutorialOpen: false,
   webSearchEnabled: localStorage.getItem(WEB_SEARCH_KEY) !== 'off',
   recallEnabled: localStorage.getItem(RECALL_KEY) === 'on',
-  autoSwitches: localStorage.getItem(AUTO_SWITCHES_KEY) === 'on',
   recallLimit: Number(localStorage.getItem(RECALL_LIMIT_KEY)) || 6,
   recallBudget: Number(localStorage.getItem(RECALL_BUDGET_KEY)) || 4000,
   judge: (() => { try { const raw = localStorage.getItem(JUDGE_KEY); return raw ? { provider: 'none', openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '', ...JSON.parse(raw) } : { provider: 'none' as const, openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' }; } catch { return { provider: 'none' as const, openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' }; } })(),
@@ -217,7 +212,6 @@ export const useUiStore = create<UiState>((set, get) => ({
     if (!open) localStorage.setItem('thoughtdag.tutorialDone', '1');
     set({ tutorialOpen: open });
   },
-  setAutoSwitches: (on) => { localStorage.setItem(AUTO_SWITCHES_KEY, on ? 'on' : 'off'); set({ autoSwitches: on }); },
   setRecallLimit: (n) => { localStorage.setItem(RECALL_LIMIT_KEY, String(n)); set({ recallLimit: n }); },
   setRecallBudget: (n) => { localStorage.setItem(RECALL_BUDGET_KEY, String(n)); set({ recallBudget: n }); },
   setJudge: (patch) => set((s) => { const judge = { ...s.judge, ...patch }; localStorage.setItem(JUDGE_KEY, JSON.stringify(judge)); return { judge }; }),

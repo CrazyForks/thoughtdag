@@ -3,6 +3,7 @@ import RecallResults from './ui/RecallResults';
 import MemoryLibrary from './ui/MemoryLibrary';
 import AgentMemoryFiles from './ui/AgentMemoryFiles';
 import RecallSettings from './ui/RecallSettings';
+import TopicsPanel from './ui/TopicsPanel';
 import { whyBridge } from '../lib/why-bridge';
 import { createPortal } from 'react-dom';
 import { AppWindow, Archive, ArrowDownUp, Link2, Folder, FolderOpen, Loader2, Plug, RefreshCw, RotateCcw, Search, Square, SquareCheckBig, SquareTerminal, Import, Trash2, X, Inbox } from 'lucide-react';
@@ -481,6 +482,7 @@ export default function SessionAtlas({ onClose, onSwitched, focusSessionId, init
               <MemoryLibrary />
               <AgentMemoryFiles />
             </div>
+            <TopicsPanel onOpened={() => { onClose(); onSwitched(); }} />
             <RecallSettings />
           </div>
         ) : (

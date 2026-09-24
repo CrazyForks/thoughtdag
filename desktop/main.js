@@ -827,6 +827,12 @@ function setupAgents() {
   ipcMain.handle('why:recall', async (_e, session, turn) => (await whyLib()).recallJson(String(session ?? ''), Number(turn)));
   ipcMain.handle('why:memories', async () => (await whyLib()).memoriesJson());
   ipcMain.handle('why:suggest', async (_e, term, k) => (await whyLib()).suggestJson(String(term ?? ''), Number(k) || 8));
+  ipcMain.handle('why:topics', async () => (await whyLib()).topicsJson());
+  ipcMain.handle('why:set-topics', async (_e, topics) => (await whyLib()).setTopics(Array.isArray(topics) ? topics : []));
+  ipcMain.handle('why:label-start', async (_e, call, opts) => (await whyLib()).labelStart(call, opts && typeof opts === 'object' ? opts : {}));
+  ipcMain.handle('why:label-stop', async () => (await whyLib()).labelStop());
+  ipcMain.handle('why:by-topic', async (_e, ids, opts) => (await whyLib()).byTopicJson(Array.isArray(ids) ? ids.map(String) : [], opts && typeof opts === 'object' ? opts : {}));
+  ipcMain.handle('why:sample', async (_e, n) => (await whyLib()).sampleQuestions(Number(n) || 120));
 }
 
 function codexAppServer() {
