@@ -1099,6 +1099,7 @@ export const en = {
   'memory.catProject': 'project',
   'memory.kindManual': 'manual',
   'memory.kindImported': 'imported',
+  'mp.subtitle': 'Your profile, one dossier per project, and their sources. The search above covers all of it.',
   'mp.settings': 'Settings',
   'mp.recallOn': 'Recall past conversations when asking',
   'mp.recallOnHint': 'Before sending, find the dossiers and conversations that bear on the question and bring them into the context. Can be turned off per node.',

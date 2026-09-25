@@ -1098,6 +1098,7 @@ export const zh: Record<keyof typeof en, string> = {
   'memory.catProject': '项目',
   'memory.kindManual': '手动',
   'memory.kindImported': '导入',
+  'mp.subtitle': '你的画像、每个项目的档案，和它们的来源。上面的搜索覆盖全部。',
   'mp.settings': '设置',
   'mp.recallOn': '提问时回忆过去的对话',
   'mp.recallOnHint': '发送前按问题找相关档案与对话，带进上下文。节点上可逐次关。',

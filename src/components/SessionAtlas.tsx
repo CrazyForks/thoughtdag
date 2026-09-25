@@ -377,8 +377,8 @@ export default function SessionAtlas({ onClose, onSwitched, focusSessionId, init
       <div className="bg-surface border border-line rounded-2xl shadow-2xl w-full max-w-[980px] h-[min(680px,90vh)] flex flex-col overflow-hidden">
         <div className="flex items-start gap-3 px-5 pt-4 pb-3 border-b border-line">
           <div className="flex-1 min-w-0">
-            <div className="text-base font-semibold text-ink">{t('atlas.title')}</div>
-            <div className="text-xs text-ink-muted mt-0.5">{t('atlas.subtitle')}</div>
+            <div className="text-base font-semibold text-ink">{t(tab === 'memory' ? 'memory.managerTitle' : 'atlas.title')}</div>
+            <div className="text-xs text-ink-muted mt-0.5">{t(tab === 'memory' ? 'mp.subtitle' : 'atlas.subtitle')}</div>
             {changes.size > 0 && (
               <div className="text-xs mt-1 flex items-center gap-2" data-atlas-changes>
                 <span className="text-accent">
@@ -423,13 +423,14 @@ export default function SessionAtlas({ onClose, onSwitched, focusSessionId, init
           {isDesktop && (
           <button
             onClick={() => setSourcesOpen(true)}
+            hidden={tab === 'memory'}
             className="flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink border border-line rounded-lg px-2.5 py-1.5 hover:bg-wash transition-colors"
             data-atlas-sources
           >
             <Plug size={14} strokeWidth={1.75} /> {t('atlas.sources')}
           </button>
           )}
-          {isDesktop && (
+          {isDesktop && tab !== 'memory' && (
           <button
             onClick={() => void refresh()}
             disabled={scanning}

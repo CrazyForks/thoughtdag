@@ -17,6 +17,7 @@
 
 | 页面 | 说明 |
 |---|---|
+| [记忆](/zh/guides/memory) | 你的画像、每个主题一份档案、提问时的回忆，以及背后的判断模型 |
 | [模型、工具与记忆](/zh/guides/models-tools) | 连接模型，启用搜索或 MCP，并管理角色与环境记忆 |
 | [Why 层：CLI 与 MCP](/zh/guides/why-layer) | 安装本地查询层，使用命令，并接入只读 MCP 工具 |
 | [Agent 对话地图](/zh/guides/session-atlas) | 把本地 Agent 会话作为持续更新、可独立整理的图镜像打开 |

@@ -79,6 +79,26 @@ A source deployment can still connect providers entirely through the interface. 
 
 A custom service must expose compatible model-list and generation interfaces. Its catalog, capabilities, limits, pricing, and data handling are determined by that service. Additional MCP servers are configured separately in `mcp.config.json`.
 
+## Decision model {#decision-model}
+
+The decision model is the fast-thinking half of ThoughtDAG: it never writes an answer, it decides — is this excerpt relevant, is this line a decision, does this upstream change bear on that answer — in about half a second, with calibrated probabilities. Recall, map badges, staleness and memory admission all rest on it; with it off, each falls back to a rule.
+
+It speaks the System One contract (`POST /v1/systemone`: a state plus typed questions, probabilities back), which Jev-class models implement. Open the model picker (top right) → the **Decision model · fast thinking** row → the switch is on by default; click the row to configure:
+
+| Route | What to enter | Notes |
+|---|---|---|
+| OpenRouter | nothing, if OpenRouter is already among your model connections; else an OpenRouter key | The saved key is used automatically. Model `typesafe/jev-1.13`. Billed by input tokens, roughly a fraction of a cent per decision. |
+| TypeSafe | a TypeSafe API key | The official endpoint; requests go through the local proxy. |
+| Cloudflare Workers AI | account id and an API token with Workers AI access | Model `typesafe/jev`; through the local proxy. |
+| Self-hosted | the URL of any `/v1/systemone` server, key optional | Open reproductions such as Kev, Laya or Von, on your own machine or LAN. |
+| Chat model | nothing | Your current answering model answers the same questions as JSON. Works, but slower, costs output tokens, and the numbers are opinions, not calibrated probabilities. |
+
+**Test** sends one tiny decision and reports the model, the latency and whether it is calibrated. A decision that does not answer within six seconds trips a one-minute breaker: the app says so, and every decision uses its rule until then.
+
+Below the switch, **amount** sets how much recall may bring into an ask: lean 4k, standard 12k, generous 40k input tokens (a small context window caps at two fifths of itself).
+
+What leaves the machine: the question and the candidate excerpts of that one decision, to the route you chose. Nothing else, and nothing when the decision model is off.
+
 ## Connect local agent sessions
 
 Model connections answer “which endpoint generates this response.” Session Atlas brings local agent sessions into a mirror canvas that you can inspect and reorganize. In the desktop app, **Session Atlas → Sources** can re-detect directories and **Enable/Update** the command that opens a session in ThoughtDAG.
