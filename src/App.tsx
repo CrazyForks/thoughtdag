@@ -684,9 +684,17 @@ function Canvas() {
   const viewerLoadError = useUiStore((s) => s.viewerLoadError);
   const staleCount = useStore((s) => shownStaleIds(s).length);
   const livePanelWidth = useUiStore((s) => s.panelWidth);
-  const selectedKind = nodes.find((nd) => nd.id === selectedNodeId)?.data.stepKind;
+  // The panel exists only while its node does: a node deleted, undone or
+  // switched away from under the selection must take the panel — and the
+  // toolbar's shift for it — with it, not only the X button.
+  const selectedNode = nodes.find((nd) => nd.id === selectedNodeId);
+  const selectedKind = selectedNode?.data.stepKind;
   const selectedIsContent = isContentKind(selectedKind) || selectedKind === 'frame';
-  const panelOpen = panelMode && !!selectedNodeId && !isParadigm && !selectedIsContent;
+  const panelOpen = panelMode && !!selectedNode && !isParadigm && !selectedIsContent;
+  useEffect(() => {
+    // a selection that names no node is stale; drop it so nothing else keys off it
+    if (selectedNodeId && !selectedNode) useStore.getState().setSelectedNodeId(null);
+  }, [selectedNodeId, selectedNode]);
   const multiSelected = selectedNodeIds.length > 1;
   const batchDelete = useStore((s) => s.batchDelete);
 
@@ -1531,6 +1539,7 @@ function Canvas() {
         <div
           className="absolute top-4 z-10 flex gap-1.5 items-center transition-[right] duration-200"
           style={{ right: panelOpen ? livePanelWidth + PANEL_INSET + 12 : 16 }}
+          data-top-toolbar
         >
           <span className="bg-card/90 backdrop-blur border border-line rounded-lg h-8 px-3 flex items-center gap-1.5 shadow-sm text-ink-muted text-xs font-medium" data-viewer-badge>
             <Eye size={14} strokeWidth={1.75} /> {t('viewer.badge')}
@@ -1569,6 +1578,7 @@ function Canvas() {
       <div
         className="absolute top-4 z-10 flex gap-1.5 items-center transition-[right] duration-200"
         style={{ right: panelOpen ? livePanelWidth + PANEL_INSET + 12 : 16 }}
+        data-top-toolbar
       >
         {isParadigm && (
           <>
