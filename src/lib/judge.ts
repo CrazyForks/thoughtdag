@@ -7,6 +7,7 @@
 // Off by default. Everything that asks the judge falls back to rules when
 // no judge answers, so the app works the same without one.
 import { llmCall } from './api';
+import { storedProviders } from './runtime-providers';
 import { toast, useUiStore } from './ui-store';
 import { t, fmt } from '../i18n';
 
@@ -151,10 +152,9 @@ export async function decideStaleness(cases: StaleCase[]): Promise<Record<string
 /** The key the app already holds for OpenRouter (a runtime provider), if any. */
 export function storedOpenRouterKey(): string {
   try {
-    const raw = localStorage.getItem('thoughtdag.runtimeProviders');
-    if (!raw) return '';
-    const list = JSON.parse(raw) as { baseURL?: string; apiKey?: string }[];
-    return list.find((p) => /openrouter\.ai/i.test(p.baseURL ?? '') && p.apiKey)?.apiKey ?? '';
+    // the providers saved in the model picker (one storage, one reader —
+    // the earlier copy here read a key that never existed)
+    return storedProviders().find((p) => (p.preset === 'openrouter' || /openrouter\.ai/i.test(p.baseURL ?? '')) && p.apiKey)?.apiKey ?? '';
   } catch { return ''; }
 }
 

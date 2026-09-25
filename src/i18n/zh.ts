@@ -729,7 +729,7 @@ export const zh: Record<keyof typeof en, string> = {
   'judge.token': 'API token',
   'judge.url': '地址',
   'judge.urlHint': '任何实现 POST /v1/systemone 的服务，本机的也行。',
-  'judge.openrouterStored': '沿用已保存的 OpenRouter key',
+  'judge.openrouterStored': '已带入模型接入里保存的 OpenRouter key，在这里改动只影响判断模型。',
   'judge.openrouterHint': '留空则沿用模型接入里保存的 OpenRouter key。按输入 token 计费，输出免费。',
   'judge.typesafeHint': 'TypeSafe 的 key。请求经本机代理转发。',
   'judge.cloudflareHint': '账户 ID 与有 Workers AI 权限的 token。请求经本机代理转发。',

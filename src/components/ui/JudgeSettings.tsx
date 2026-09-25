@@ -89,7 +89,7 @@ export default function JudgeSettings() {
           )}
           {(choosing || !configured) && (
             <div className="space-y-2">
-              {(judgeCfg.provider === 'openrouter' || judgeCfg.provider === 'none') && field(t('judge.key'), judgeCfg.openrouterKey, (v) => setJudge({ openrouterKey: v }), { secret: true, placeholder: storedKey ? t('judge.openrouterStored') : 'sk-or-…', hint: t('judge.openrouterHint') })}
+              {(judgeCfg.provider === 'openrouter' || judgeCfg.provider === 'none') && field(t('judge.key'), judgeCfg.openrouterKey || storedKey, (v) => setJudge({ openrouterKey: v }), { secret: true, placeholder: 'sk-or-…', hint: usingStored ? t('judge.openrouterStored') : t('judge.openrouterHint') })}
               {judgeCfg.provider === 'typesafe' && field(t('judge.key'), judgeCfg.typesafeKey, (v) => setJudge({ typesafeKey: v }), { secret: true, hint: t('judge.typesafeHint') })}
               {judgeCfg.provider === 'cloudflare' && (<>
                 {field(t('judge.account'), judgeCfg.cloudflareAccount, (v) => setJudge({ cloudflareAccount: v }))}

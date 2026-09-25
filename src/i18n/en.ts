@@ -730,7 +730,7 @@ export const en = {
   'judge.token': 'API token',
   'judge.url': 'Endpoint',
   'judge.urlHint': 'Anything that serves POST /v1/systemone, this machine included.',
-  'judge.openrouterStored': 'Using the saved OpenRouter key',
+  'judge.openrouterStored': 'The OpenRouter key saved with your model providers is filled in; a change here affects the decision model only.',
   'judge.openrouterHint': 'Leave empty to use the OpenRouter key saved under model access. Billed per input token; output is free.',
   'judge.typesafeHint': 'Your TypeSafe key. Requests go through the local proxy.',
   'judge.cloudflareHint': 'Account ID and a token with Workers AI access. Requests go through the local proxy.',
