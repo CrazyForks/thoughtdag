@@ -254,8 +254,7 @@ export async function runNodeGeneration(
     let items = selfData?.recallItems;
     if (!items) {
       const { useProjects } = await import('./projects');
-      const { recallLimit, recallBudget } = useUiStore.getState();
-      const out = await fetchRecallItems(question, { excludeSession: useProjects.getState().activeId, limit: recallLimit, budget: recallBudget, model: requestedModel });
+            const out = await fetchRecallItems(question, { excludeSession: useProjects.getState().activeId, model: requestedModel });
       items = out.items;
       if (!isCurrent()) return;
       set((state) => ({ nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, recallItems: out.items, recallMeta: out.meta } } : n)) }));

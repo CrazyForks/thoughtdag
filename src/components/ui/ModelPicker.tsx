@@ -260,7 +260,7 @@ function JudgeRow({ onOpen }: { onOpen: () => void }) {
   return (
     <div className="border-t border-line mt-1 pt-1" data-picker-judge-row data-judge-state={!on ? 'off' : !configured ? 'no-api' : tripped ? 'tripped' : 'on'}>
       <div className="px-3 py-1.5 flex items-center gap-2">
-        <button onClick={onOpen} className="flex-1 min-w-0 text-left flex items-center gap-2 group" title={t('judge.where')} data-picker-judge>
+        <button onClick={onOpen} className="flex-1 min-w-0 text-left flex items-center gap-2 group" title={t('judge.does')} data-picker-judge>
           <Scale size={13} strokeWidth={1.75} className="shrink-0 text-accent" />
           <span className="min-w-0">
             <span className="block text-xs text-ink font-medium group-hover:text-accent">{t('judge.rowTitle')}</span>

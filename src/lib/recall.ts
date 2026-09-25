@@ -78,8 +78,10 @@ export async function openHit(hit: Pick<WhyFindHit, 'kind' | 'open'>): Promise<b
 // question is broken into the terms worth looking up: latin words of some
 // length and runs of CJK, minus filler. Nothing is injected silently.
 
-export const RECALL_BUDGET_TOKENS = 4000;
-export const RECALL_MAX_ITEMS = 6;
+/** Without a judge nothing ranks by relevance, so the pool is capped by count as well as budget; with one, only the budget and the probabilities decide. */
+export const RECALL_SANITY_CAP = 12;
+/** "More" brings this many further candidates within half the budget again. */
+export const RECALL_MORE = 6;
 const RECALL_MAX_TERMS = 4;
 const ITEM_CAP_CHARS = 2400;
 const STOP = new Set(['the', 'and', 'for', 'with', 'that', 'this', 'from', 'what', 'which', 'about', 'have', 'does', 'into', 'your', 'you', 'are', 'was', 'were', 'how', 'why', 'when', 'where', 'can', 'could', 'should', 'would', 'please', 'help', 'need', 'want', 'tell', 'explain', 'like', 'just', 'also', 'then', 'than', 'them', 'they', 'there', 'here', 'some', 'any', 'all', 'our', 'out', 'not', 'but', 'use', 'used', 'using', 'make', 'made', 'get', 'got', 'one', 'two', 'new', 'old', 'now', 'let', 'lets', 'me', 'my', 'we', 'us', 'it', 'its', 'is', 'be', 'to', 'of', 'in', 'on', 'at', 'by', 'as', 'or', 'an', 'a', 'do', 'did', 'has', 'had', 'been', 'being', 'will', 'more', 'most', 'many', 'much', 'very', 'really', 'thing', 'things', 'something', 'anything', 'everything', 'know', 'think', 'see', 'look', 'find', 'give', 'take', 'same', 'other', 'another', 'each', 'every', 'between', 'before', 'after', 'again', 'still', 'over', 'under', 'only', 'first', 'last', 'next', 'previous', 'earlier', 'later', 'time', 'times', 'today', 'yesterday', 'tomorrow']);
@@ -108,10 +110,10 @@ export interface RecallOptions {
   excludeSession?: string | null;
   /** items already on the node (session#turn keys): skipped, so "more" adds new ones */
   excludeKeys?: Set<string>;
-  /** without a judge: how many items, and their budget */
+  /** a cap on items and a budget for one round ("more" passes smaller ones); the defaults follow the policy */
   limit?: number;
   budget?: number;
-  /** with a judge: the budget follows the model's window (a share, capped) */
+  /** the answering model: its window sets the budget (a fifth of it, capped) */
   model?: string;
 }
 export interface RecallOutcome { items: RecallItem[]; meta: RecallMeta }
@@ -124,7 +126,7 @@ export const RECALL_POOL_JUDGED = 40;
  *  listed as held back, one click away; below HOLD it is dropped. */
 export const RELEVANCE_KEEP = 0.5;
 export const RELEVANCE_HOLD = 0.3;
-/** …and the budget follows the model's window: a fifth of it, capped. */
+/** …and the budget follows the answering model's window: a fifth of it, capped — the same with or without a judge. */
 export const RECALL_BUDGET_SHARE = 0.2;
 export const RECALL_BUDGET_MAX = 12000;
 export function judgedBudget(model?: string): number {
@@ -177,8 +179,8 @@ export async function fetchRecallItems(question: string, opts: RecallOptions = {
   const bridge = whyBridge();
   if (!bridge) return { items: [], meta };
   const judged = judgeAvailable();
-  const limit = judged ? Infinity : (opts.limit ?? RECALL_MAX_ITEMS);
-  const budget = judged ? judgedBudget(opts.model) : (opts.budget ?? RECALL_BUDGET_TOKENS);
+  const limit = opts.limit ?? (judged ? Infinity : RECALL_SANITY_CAP);
+  const budget = opts.budget ?? judgedBudget(opts.model);
   const poolSize = judged ? RECALL_POOL_JUDGED : RECALL_POOL;
   meta.budget = budget;
   const terms = recallTerms(question);
@@ -324,10 +326,9 @@ export async function recallMore(nodeId: string): Promise<number> {
   const st = useStore.getState();
   const node = st.nodes.find((n) => n.id === nodeId);
   if (!node) return 0;
-  const { recallLimit, recallBudget } = useUiStore.getState();
   const have = node.data.recallItems ?? [];
   const { useProjects } = await import('../store/projects');
-  const out = await fetchRecallItems(node.data.question, { excludeSession: useProjects.getState().activeId, excludeKeys: new Set(have.map(keyOf)), limit: recallLimit, budget: recallBudget, model: node.data.model ?? useUiStore.getState().selectedModel ?? undefined });
+  const out = await fetchRecallItems(node.data.question, { excludeSession: useProjects.getState().activeId, excludeKeys: new Set(have.map(keyOf)), limit: RECALL_MORE, budget: Math.floor(judgedBudget(node.data.model ?? useUiStore.getState().selectedModel ?? undefined) / 2), model: node.data.model ?? useUiStore.getState().selectedModel ?? undefined });
   if (!out.items.length) return 0;
   useStore.setState((s) => ({
     nodes: s.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, recallItems: [...(n.data.recallItems ?? []), ...out.items], recallMeta: { ...(n.data.recallMeta ?? { corrections: [], pool: 0, total: 0 }), ...out.meta, corrections: [...(n.data.recallMeta?.corrections ?? []), ...out.meta.corrections] } } } : n)),

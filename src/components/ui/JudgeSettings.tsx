@@ -17,10 +17,6 @@ export default function JudgeSettings() {
   const t = useT();
   const judgeCfg = useUiStore((s) => s.judge);
   const setJudge = useUiStore((s) => s.setJudge);
-  const recallLimit = useUiStore((s) => s.recallLimit);
-  const setRecallLimit = useUiStore((s) => s.setRecallLimit);
-  const recallBudget = useUiStore((s) => s.recallBudget);
-  const setRecallBudget = useUiStore((s) => s.setRecallBudget);
   const [testing, setTesting] = useState(false);
   const [test, setTest] = useState<{ ok: true; r: JudgeResult } | { ok: false; error: string } | null>(null);
   const [choosing, setChoosing] = useState(false);
@@ -68,12 +64,12 @@ export default function JudgeSettings() {
       <div className="flex items-center gap-2">
         <Scale size={14} strokeWidth={1.75} className="text-accent" />
         <span className="text-sm font-medium text-ink flex-1">{t('judge.enable')}</span>
-        <span className="text-ink-faint cursor-help" title={t('judge.where')} data-judge-info><Info size={13} strokeWidth={1.75} /></span>
+        <span className="text-ink-faint cursor-help" title={t('judge.does')} data-judge-info><Info size={13} strokeWidth={1.75} /></span>
         <button role="switch" aria-checked={on} onClick={toggle} className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${on ? 'bg-accent' : 'bg-line-strong'}`} data-judge-toggle>
           <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-4' : ''}`} />
         </button>
       </div>
-      <p className="text-2xs text-ink-faint mt-1 leading-relaxed">{t('judge.benefit')}</p>
+      <p className="text-2xs text-ink-faint mt-1 leading-relaxed">{t('judge.oneLine')}</p>
 
       {on && (
         <div className="mt-2 space-y-2" data-judge-body>
@@ -118,13 +114,6 @@ export default function JudgeSettings() {
         </div>
       )}
 
-      <div className="mt-3 pt-2 border-t border-line/70 flex items-center gap-4 text-xs text-ink flex-wrap" data-recall-settings>
-        <span className="text-2xs text-ink-faint">{t(on && configured ? 'recall.settingsHintJudged' : 'recall.settingsHint')}</span>
-        <label className="flex items-center gap-1.5 shrink-0"><span className="text-ink-muted">{t('recall.limit')}</span>
-          <select value={recallLimit} onChange={(e) => setRecallLimit(Number(e.target.value))} className="bg-wash border border-line rounded-md px-2 py-1 text-xs" data-recall-limit>{[3, 6, 12].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
-        <label className="flex items-center gap-1.5 shrink-0"><span className="text-ink-muted">{t('recall.budget')}</span>
-          <select value={recallBudget} onChange={(e) => setRecallBudget(Number(e.target.value))} className="bg-wash border border-line rounded-md px-2 py-1 text-xs" data-recall-budget>{[2000, 4000, 8000].map((n) => <option key={n} value={n}>{n / 1000}k tok</option>)}</select></label>
-      </div>
     </div>
   );
 }

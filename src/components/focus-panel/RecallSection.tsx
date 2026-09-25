@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight, History, Loader2, X, RotateCcw } from 'lucide-react';
 import { useStore } from '../../store';
 import { recallTokens, recallMore, recallHeld } from '../../lib/recall';
-import { useUiStore } from '../../lib/ui-store';
 import { JUDGE_LABELS, type JudgeProviderId } from '../../lib/judge';
 import { useT, fmt } from '../../i18n';
 import type { RecallItem, RecallMeta } from '../../types';
@@ -27,7 +26,6 @@ export default function RecallSection({ nodeId, items, meta, recallOn }: { nodeI
   const [unfolded, setUnfolded] = useState<string | null>(null);
   const [more, setMore] = useState<'idle' | 'busy' | 'none'>('idle');
   const [heldBusy, setHeldBusy] = useState(false);
-  const recallLimit = useUiStore((s) => s.recallLimit);
   if (!recallOn && !items?.length) return null;
   const loadMore = async () => {
     setMore('busy');
@@ -94,7 +92,7 @@ export default function RecallSection({ nodeId, items, meta, recallOn }: { nodeI
               {excerpts && (
                 <button onClick={() => void loadMore()} disabled={more !== 'idle'} className="text-2xs text-accent hover:bg-accent/10 px-1.5 py-0.5 rounded-md disabled:opacity-50 flex items-center gap-1" data-recall-more>
                   {more === 'busy' && <Loader2 size={11} className="animate-spin" />}
-                  {more === 'none' ? t('panel.recallNoMore') : fmt(t('panel.recallMore'), { n: recallLimit })}
+                  {more === 'none' ? t('panel.recallNoMore') : t('panel.recallMore')}
                 </button>
               )}
             </div>
