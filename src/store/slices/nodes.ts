@@ -10,6 +10,19 @@ import { toast } from '../../lib/ui-store';
 import { t, fmt } from '../../i18n';
 import type { StoreState, NodeSlice } from '../types';
 import { condenseGuard } from '../../lib/condense-guard';
+import { activeAbortControllers } from '../streaming';
+
+// A node that goes while it is still generating takes its stream with it:
+// the Stop button went with the card, so the only way to end the call is
+// here (#49). The stream's own writes to a removed node are no-ops.
+const abortGenerations = (ids: Iterable<string>): void => {
+  for (const id of ids) {
+    const controller = activeAbortControllers.get(id);
+    if (!controller) continue;
+    controller.abort();
+    activeAbortControllers.delete(id);
+  }
+};
 
 export const createNodeSlice: StateCreator<StoreState, [], [], NodeSlice> = (set, get) => ({
   nodes: [],
@@ -29,6 +42,7 @@ export const createNodeSlice: StateCreator<StoreState, [], [], NodeSlice> = (set
     const { edges } = get();
     const descendants = getDescendantIds(nodeId, edges);
     const removeIds = new Set([nodeId, ...descendants]);
+    abortGenerations(removeIds);
     set((state) => ({
       nodes: state.nodes.filter((n) => !removeIds.has(n.id)),
       edges: state.edges.filter((e) => !removeIds.has(e.source) && !removeIds.has(e.target)),
@@ -462,6 +476,7 @@ export const createNodeSlice: StateCreator<StoreState, [], [], NodeSlice> = (set
     get().logEvent('delete', nodeIds[0], { n: nodeIds.length });
     get().pushHistory();
     const removeSet = new Set(nodeIds);
+    abortGenerations(removeSet);
     set((state) => ({
       nodes: state.nodes.filter((n) => !removeSet.has(n.id)),
       edges: state.edges.filter((e) => !removeSet.has(e.source) && !removeSet.has(e.target)),
