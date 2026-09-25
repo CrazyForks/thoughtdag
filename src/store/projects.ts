@@ -3,6 +3,7 @@ import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
 import { useStore } from './index';
 import { activeAbortControllers } from './streaming';
 import { flushPendingWrites } from '../lib/persistence';
+import { resetMemoryWriteCaps } from '../lib/memory';
 import { buildRuleOutRuleIn } from '../lib/paradigms/rule-out-rule-in';
 import { toast } from '../lib/ui-store';
 import { t } from '../i18n';
@@ -242,6 +243,7 @@ export async function switchProject(id: string): Promise<void> {
   try {
     await drainGenerations();
     await flushPendingWrites();
+    resetMemoryWriteCaps(); // a canvas visit is one memory session (#47)
     suppressTouch = true;
     useStore.persist.setOptions({ name: projectStorageKey(id) });
     await useStore.persist.rehydrate();

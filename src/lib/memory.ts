@@ -41,9 +41,14 @@ export interface MemoryEntry {
 //               it is merged with the conversations themselves; bar 0.7.
 //   Never stored: product mechanics, one-off task details, verbatim blocks,
 //   credentials (pattern-blocked below as a code-level backstop).
-const SESSION_ADD_CAP = 3; // auto-writes per canvas per session; updates free
+const SESSION_ADD_CAP = 3; // auto-writes per canvas per visit; updates free
 const CREDENTIAL_PATTERN = /sk-[a-zA-Z0-9_-]{8,}|api[ _-]?key|password|token|secret/i;
+// keyed by canvas id; cleared when the canvas is switched, so one canvas's
+// three writes never silence the others and a return visit starts over (#47)
 const sessionAddCounts = new Map<string, number>();
+export function resetMemoryWriteCaps(): void { sessionAddCounts.clear(); }
+/** The canvas a generation ran on: the cap's key, and the `from` tag on what it files. */
+export interface MemoryCanvas { id: string; name: string }
 
 /** The [Memory] context block: the two documents, or null when disabled/empty. */
 export function memoryContextBlock(): ContextMessage | null {
@@ -98,7 +103,7 @@ interface JudgeVerdict {
 export function admissionCheck(
   verdict: JudgeVerdict,
   existing: { id: string; text: string }[],
-  projectName: string | undefined,
+  canvas: MemoryCanvas | undefined,
 ): string | null {
   const text = (verdict.text ?? '').trim();
   if (!text) return 'empty';
@@ -109,7 +114,7 @@ export function admissionCheck(
   if (category === 'identity' && verdict.evidence !== 'stated') return 'identity-inferred';
   if (verdict.action === 'add') {
     if (existing.some((m) => m.text === text)) return 'duplicate';
-    const capKey = projectName ?? '(none)';
+    const capKey = canvas?.id ?? '(none)';
     if ((sessionAddCounts.get(capKey) ?? 0) >= SESSION_ADD_CAP) return 'session-cap';
   }
   if (verdict.action === 'update' && !existing.some((m) => m.id === verdict.id)) return 'unknown-id';
@@ -169,7 +174,7 @@ async function mergeProfileFact(kind: ProfileKind, text: string): Promise<void> 
  * Fire-and-forget write judge, called after ordinary generations. Runs on
  * the server's default model (cheap/free tier), never the flagship pick.
  */
-export function judgeMemory(question: string, response: string, projectName?: string): void {
+export function judgeMemory(question: string, response: string, canvas?: MemoryCanvas): void {
   migrateLegacyMemories();
   const { memoryEnabled } = useUiStore.getState();
   if (!memoryEnabled || question.trim().length < 8) return;
@@ -201,14 +206,14 @@ export function judgeMemory(question: string, response: string, projectName?: st
         verdict = JSON.parse(match[0]) as JudgeVerdict;
       }
       if (verdict.action !== 'add' && verdict.action !== 'update') return;
-      if (admissionCheck(verdict, existing, projectName) !== null) return;
+      if (admissionCheck(verdict, existing, canvas) !== null) return;
       const text = (verdict.text ?? '').trim();
       const category = verdict.category as MemoryCategory;
       if (verdict.action === 'add') {
-        const capKey = projectName ?? '(none)';
+        const capKey = canvas?.id ?? '(none)';
         sessionAddCounts.set(capKey, (sessionAddCounts.get(capKey) ?? 0) + 1);
       }
-      if (category === 'project') await fileProjectFact(text, projectName);
+      if (category === 'project') await fileProjectFact(text, canvas?.name);
       else await mergeProfileFact(category === 'identity' ? 'identity' : 'preferences', text);
     } catch { /* background judge failures are silent by design */ }
   })();

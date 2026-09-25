@@ -492,7 +492,15 @@ export async function runNodeGeneration(
     onSuccess?.(response);
     get().pushHistory();
     generateSummary(nodeId, question, response, get().setSummary, collectMapLines(nodeId, get().nodes, get().edges));
-    if (!selfData?.stepKind && !selfData?.digestOf) judgeMemory(question, response);
+    if (!selfData?.stepKind && !selfData?.digestOf) {
+      // the memory judge counts its writes per canvas (#47); the project
+      // store imports this module, so it is reached lazily here
+      void import('./projects').then(({ useProjects }) => {
+        const { projects, activeId } = useProjects.getState();
+        const active = projects.find((p) => p.id === activeId);
+        judgeMemory(question, response, active ? { id: active.id, name: active.name } : undefined);
+      });
+    }
     triggerAutoReruns(set, get, nodeId);
     triggerParadigmCascade(get, nodeId);
   } catch (err) {
