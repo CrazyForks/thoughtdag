@@ -32,6 +32,17 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    // a patch: the 0.5 entry below stays the announcement, this one is history only
+    version: '0.5.1',
+    date: '2026-09-26',
+    announce: false,
+    lead: {
+      zh: '0.5 之后的一批修正。删除正在生成的节点时，那一轮生成随之中止，不再在后台跑完。记忆的自动写入上限按画布分开计，切换画布后重新计；之前是全局三条写满就静默。档案更新只带走模型读过的那几条待归档事实，更新期间新归档的保留下来；档案文件的写入排队进行，不再互相覆盖。why 层不再把执行失败的文件操作算作改动足迹，更新后索引会重建一次。判断模型直接沿用模型接入里保存的 OpenRouter key，不再显示为空、测试不可点。',
+      en: 'A round of fixes after 0.5. Deleting a node that is still generating stops that generation instead of letting it run on in the background. The memory judge\'s automatic-write cap counts per canvas and starts over on a canvas switch; it used to be one global count of three, after which memory went quiet. A dossier update takes only the filed facts the model read and keeps anything filed while it was writing; dossier writes queue instead of overwriting one another. The why layer no longer counts a file operation the harness answered with an error as a change, and the index rebuilds once. The decision model uses the OpenRouter key saved with your model providers, instead of showing an empty field with a disabled test.',
+    },
+    items: [],
+  },
+  {
     version: '0.5.0',
     date: '2026-09-26',
     announce: true,
