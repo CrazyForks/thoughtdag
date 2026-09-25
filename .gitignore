@@ -48,3 +48,11 @@ docs/.vitepress/cache/
 # npm pack output (the publish workflow packs in CI)
 dsh/*.tgz
 desktop/why.mjs
+
+# Private memory screenshots: local only, never publish
+/docs/memory-page-en.png
+/docs/memory-page-zh.png
+/docs/recall-panel-en.png
+/docs/recall-panel-zh.png
+/docs/memory-dossier-en.png
+/docs/memory-dossier-zh.png

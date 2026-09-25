@@ -19,15 +19,11 @@
 
 > Everything you discussed in Pi, Codex, Claude Code and DeepSeek Harness now forms one whole you can recall. When you ask, what matters rides in with the question, across agents and across time.
 
-<img src="docs/memory-page-en.png" alt="The memory page: you (preferences and identity), one dossier per project with how much is new, and a dossier opened with its sections and sources" width="100%"/>
-
 - **Fragments become a thread.** The threshold you settled in Codex yesterday and the approach you ruled out in Claude Code last week are there when you ask on the canvas today. Every topic keeps a dossier: what it is, what was decided, where it stands, what is still open, each line pointing back to the turn it came from. Your own profile is two documents, preferences and identity, rewritten as you go rather than piled up.
 - **Recall as you ask.** With recall on, ThoughtDAG works out which topics a question touches and brings their dossiers in whole; a question about a detail brings a few verbatim excerpts too. The panel shows what came in and what it cost, item by item; strike one and it stays out.
 - **Fast thinking, slow thinking.** The slow-thinking model writes your answers. A fast-thinking model decides: is this relevant, is this line a decision, does this change bear on that answer. Half a second, calibrated probabilities, one switch in the model picker, on by default. Without one, every decision falls back to a rule and nothing stops working.
 - **Connect a fast-thinking model.** A Jev-class decision model runs through the aggregator access you already saved, through the official endpoint, or from a self-hosted server. [How to connect one →](https://chenxiachan.github.io/thoughtdag/docs/setup#decision-model)
 - **All of it stays local.** The index, topic labels and dossiers live in `~/.thoughtdag`; your profile lives in the app's own storage. A decision sends only the question and the candidate excerpts, to the access you chose.
-
-<p align="center"><img src="docs/recall-panel-en.png" alt="The side panel after a broad question: recall brought two dossiers, listed as cards with their cost, the numbers folded under 'how it was chosen'" width="420"/></p>
 
 [The memory guide →](https://chenxiachan.github.io/thoughtdag/docs/guides/memory)
 
