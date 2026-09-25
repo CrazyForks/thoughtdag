@@ -78,14 +78,17 @@ export async function openHit(hit: Pick<WhyFindHit, 'kind' | 'open'>): Promise<b
 // question is broken into the terms worth looking up: latin words of some
 // length and runs of CJK, minus filler. Nothing is injected silently.
 
-/** The three scales a person can pick, all in INPUT tokens brought into the ask: a share of the
- *  answering model's window, a cap (a million-token window is not an invitation to fill it), the
- *  budget when the window is unknown, a count cap without a judge, and how many "more" brings. */
+/** The three amounts a person can pick, in INPUT tokens brought into the ask. Sized by what
+ *  fits: a dossier runs ~600 tokens, an excerpt 200–600. Lean holds a dossier and five to eight
+ *  excerpts; standard two dossiers and some twenty; generous everything a judged pool of forty
+ *  keeps. A small window still caps at two fifths of itself. Without a judge the count cap
+ *  applies too, and "more" brings that many further. */
 export const RECALL_SCALES = {
-  lean: { share: 0.1, max: 6000, fallback: 3000, cap: 8, more: 4 },
-  standard: { share: 0.2, max: 12000, fallback: 6000, cap: 12, more: 6 },
-  generous: { share: 0.4, max: 40000, fallback: 16000, cap: 30, more: 12 },
+  lean: { budget: 4000, cap: 8, more: 4 },
+  standard: { budget: 12000, cap: 12, more: 6 },
+  generous: { budget: 40000, cap: 30, more: 12 },
 } as const;
+const WINDOW_GUARD = 0.4;
 export type RecallScale = keyof typeof RECALL_SCALES;
 const scale = () => RECALL_SCALES[useUiStore.getState().recallScale ?? 'standard'];
 const RECALL_MAX_TERMS = 4;
@@ -132,11 +135,11 @@ export const RECALL_POOL_JUDGED = 40;
  *  listed as held back, one click away; below HOLD it is dropped. */
 export const RELEVANCE_KEEP = 0.5;
 export const RELEVANCE_HOLD = 0.3;
-/** …and the budget follows the answering model's window: a fifth of it, capped — the same with or without a judge. */
+/** …and the budget is the picked amount, never more than two fifths of the answering model's window — the same with or without a judge. */
 export function judgedBudget(model?: string): number {
   const ctx = model ? contextLengthFor(model) : undefined;
   const sc = scale();
-  return ctx ? Math.min(sc.max, Math.floor(ctx * sc.share)) : sc.fallback;
+  return ctx ? Math.min(sc.budget, Math.floor(ctx * WINDOW_GUARD)) : sc.budget;
 }
 const keyOf = (h: { session: string; turn: number }) => `${h.session}#${h.turn}`;
 const isLatin = (w: string) => /^[A-Za-z]/.test(w);

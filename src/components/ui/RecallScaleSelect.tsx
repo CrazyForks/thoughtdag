@@ -10,7 +10,7 @@ export default function RecallScaleSelect() {
   const t = useT();
   const value = useUiStore((s) => s.recallScale);
   const set = useUiStore((s) => s.setRecallScale);
-  const k = (v: RecallScale) => `${Math.round(RECALL_SCALES[v].share * 100)}% · ≤${RECALL_SCALES[v].max / 1000}k`;
+  const k = (v: RecallScale) => `${RECALL_SCALES[v].budget / 1000}k`;
   return (
     <label className="inline-flex items-center gap-1 text-2xs text-ink-faint" title={t('recall.scaleHint')} data-recall-scale>
       <span>{t('recall.scale')}</span>

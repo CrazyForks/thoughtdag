@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, History, Loader2, X, RotateCcw } from 'lucide-react';
 import { useStore } from '../../store';
-import { recallTokens, recallMore, recallHeld, RECALL_SCALES } from '../../lib/recall';
+import { recallTokens, recallMore, recallHeld } from '../../lib/recall';
 import { JUDGE_LABELS, type JudgeProviderId } from '../../lib/judge';
 import RecallScaleSelect from '../ui/RecallScaleSelect';
-import { useUiStore } from '../../lib/ui-store';
 import { useT, fmt } from '../../i18n';
 import type { RecallItem, RecallMeta } from '../../types';
 
@@ -28,7 +27,6 @@ export default function RecallSection({ nodeId, items, meta, recallOn }: { nodeI
   const [unfolded, setUnfolded] = useState<string | null>(null);
   const [more, setMore] = useState<'idle' | 'busy' | 'none'>('idle');
   const [heldBusy, setHeldBusy] = useState(false);
-  const sharePct = useUiStore((s) => Math.round(RECALL_SCALES[s.recallScale ?? 'standard'].share * 100));
   if (!recallOn && !items?.length) return null;
   const loadMore = async () => {
     setMore('busy');
@@ -112,7 +110,7 @@ export default function RecallSection({ nodeId, items, meta, recallOn }: { nodeI
                   <button onClick={() => { setHeldBusy(true); void recallHeld(nodeId).finally(() => setHeldBusy(false)); }} disabled={heldBusy} className="text-accent hover:bg-accent/10 px-1.5 py-0.5 rounded disabled:opacity-50" data-recall-held-add>{heldBusy ? '…' : t('panel.recallHeldAdd')}</button>
                 </div>
               )}
-              {meta.budget ? <div className="flex items-center gap-2 flex-wrap">{fmt(t('panel.recallUsed'), { b: meta.budget, u: total, p: sharePct })}<RecallScaleSelect /></div> : null}
+              {meta.budget ? <div className="flex items-center gap-2 flex-wrap">{fmt(t('panel.recallUsed'), { b: meta.budget, u: total })}<RecallScaleSelect /></div> : null}
               {meta.judge && <div>{fmt(t('panel.recallJudge'), { j: JUDGE_LABELS[meta.judge.provider as JudgeProviderId] ?? meta.judge.provider })} · {t(meta.judge.calibrated ? 'judge.calibrated' : 'judge.uncalibrated')}</div>}
               {meta.judgeError && <div className="text-amber-600">{fmt(t('panel.recallJudgeFailed'), { e: meta.judgeError })}</div>}
             </div>
