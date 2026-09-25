@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { IN_HARNESS } from '../../lib/embedded';
 import { Check, ChevronDown, Cpu, KeyRound, RefreshCw, Info, Loader2 } from 'lucide-react';
 import { toast, useUiStore } from '../../lib/ui-store';
+import { profileLines } from '../../lib/profile';
 import { useModels, setModelsCache, ensureAgentsFresh, type ModelInfo } from '../../lib/use-models';
 import { AGENT_PROVIDER, isAgentModel } from '../../lib/agents/agent-runtime';
 import { refreshStoredProviders, pushProviders, storedProviders } from '../../lib/runtime-providers';
@@ -255,7 +256,7 @@ function GlobalCapabilities() {
   };
   const memoryEnabled = useUiStore((s) => s.memoryEnabled);
   const setMemoryEnabled = useUiStore((s) => s.setMemoryEnabled);
-  const memoryCount = useUiStore((s) => s.memories.length);
+  const memoryCount = useUiStore((s) => profileLines(s.profile).length);
   const setMemoryManagerOpen = useUiStore((s) => s.setMemoryManagerOpen);
   const caps = data?.capabilities;
   const visionModels = (data?.models ?? []).filter((m) => m.vision);

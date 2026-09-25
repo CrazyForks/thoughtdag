@@ -80,8 +80,9 @@ export async function decideMemory(question: string, response: string, existing:
     provider: r.provider, model: r.model, calibrated: r.calibrated,
   };
 }
-/** Memory is written only above this bar; identity also needs the user to have said it. */
+/** Memory is written only above this bar; identity also needs the user to have said it; project facts need more. */
 export const MEMORY_DURABLE_BAR = 0.6;
+export const MEMORY_PROJECT_BAR = 0.7;
 export const MEMORY_STATED_BAR = 0.7;
 
 /** The move an exchange makes on the map, and how settled what it arrives at is. */
@@ -112,6 +113,15 @@ export async function decideTakeaway(question: string, response: string): Promis
   const top = c?.probabilities ? Object.entries(c.probabilities).reduce((b, e) => (e[1] > b[1] ? e : b)) : null;
   const conclusive = top ? Math.max(0, Math.min(3, Number(top[0]) || 0)) : Math.max(0, Math.min(3, Math.round(c?.score ?? 1)));
   return { kind, p: a?.probabilities?.[kind] ?? 0, conclusive, conclusiveP: top ? top[1] : 0, provider: r.provider, model: r.model, calibrated: r.calibrated };
+}
+
+/** Does a question want a specific detail (excerpts help) or an overview (the dossier suffices)? */
+export const DETAIL_BAR = 0.5;
+export async function decideDetail(question: string): Promise<number> {
+  const r = await judge({ question: question.slice(0, 1500) }, {
+    detail: { type: 'noul', instructions: 'Does `question` ask for a specific detail from the past — a number, a date, a decision, a file or path, what exactly was said or done — rather than an overview or general understanding of a subject?' },
+  });
+  return r.answers.detail?.noul ?? 1;
 }
 
 /** "Upstream changed": does the change bear on this answer, so it should be regenerated? */

@@ -833,6 +833,12 @@ function setupAgents() {
   ipcMain.handle('why:label-stop', async () => (await whyLib()).labelStop());
   ipcMain.handle('why:by-topic', async (_e, ids, opts) => (await whyLib()).byTopicJson(Array.isArray(ids) ? ids.map(String) : [], opts && typeof opts === 'object' ? opts : {}));
   ipcMain.handle('why:sample', async (_e, n) => (await whyLib()).sampleQuestions(Number(n) || 120));
+  ipcMain.handle('why:dossiers', async () => (await whyLib()).dossiersJson());
+  ipcMain.handle('why:dossier', async (_e, id) => (await whyLib()).dossierJson(String(id)));
+  ipcMain.handle('why:set-dossier', async (_e, id, d) => (await whyLib()).setDossier(String(id), d && typeof d === 'object' ? d : {}));
+  ipcMain.handle('why:delete-dossier', async (_e, id) => (await whyLib()).deleteDossier(String(id)));
+  ipcMain.handle('why:dossier-pending', async (_e, id, item) => (await whyLib()).dossierAddPending(String(id), item && typeof item === 'object' ? item : { text: '' }));
+  ipcMain.handle('why:dossier-new', async (_e, id, opts) => (await whyLib()).dossierNewTurns(String(id), opts && typeof opts === 'object' ? opts : {}));
 }
 
 function codexAppServer() {

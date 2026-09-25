@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Info, Loader2, Scale } from 'lucide-react';
 import { useUiStore } from '../../lib/ui-store';
-import { judgeSelfTest, storedOpenRouterKey, type JudgeProviderId, type JudgeResult } from '../../lib/judge';
+import { judgeSelfTest, storedOpenRouterKey, type JudgeProviderId, type JudgeResult, judgeAvailable } from '../../lib/judge';
 import { useT, fmt } from '../../i18n';
 
 // The judge, configured where the other keys are: a System One decision
@@ -14,6 +14,11 @@ const PROVIDERS: JudgeProviderId[] = ['none', 'openrouter', 'typesafe', 'cloudfl
 export default function JudgeSettings() {
   const t = useT();
   const judgeCfg = useUiStore((s) => s.judge);
+  const recallLimit = useUiStore((s) => s.recallLimit);
+  const setRecallLimit = useUiStore((s) => s.setRecallLimit);
+  const recallBudget = useUiStore((s) => s.recallBudget);
+  const setRecallBudget = useUiStore((s) => s.setRecallBudget);
+  const hasJudge = judgeAvailable(judgeCfg);
   const setJudge = useUiStore((s) => s.setJudge);
   const [testing, setTesting] = useState(false);
   const [test, setTest] = useState<{ ok: true; r: JudgeResult } | { ok: false; error: string } | null>(null);
@@ -79,6 +84,13 @@ export default function JudgeSettings() {
             : <span className="text-2xs text-red-500" data-judge-test-result>{test.error}</span>)}
         </div>
       )}
+          <div className="mt-3 pt-2 border-t border-line/70 flex items-center gap-4 text-xs text-ink" data-recall-settings>
+        <span className="text-2xs text-ink-faint">{t(hasJudge ? 'recall.settingsHintJudged' : 'recall.settingsHint')}</span>
+        <label className="flex items-center gap-1.5 shrink-0"><span className="text-ink-muted">{t('recall.limit')}</span>
+          <select value={recallLimit} onChange={(e) => setRecallLimit(Number(e.target.value))} className="bg-wash border border-line rounded-md px-2 py-1 text-xs" data-recall-limit>{[3, 6, 12].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
+        <label className="flex items-center gap-1.5 shrink-0"><span className="text-ink-muted">{t('recall.budget')}</span>
+          <select value={recallBudget} onChange={(e) => setRecallBudget(Number(e.target.value))} className="bg-wash border border-line rounded-md px-2 py-1 text-xs" data-recall-budget>{[2000, 4000, 8000].map((n) => <option key={n} value={n}>{n / 1000}k tok</option>)}</select></label>
+      </div>
     </div>
   );
 }

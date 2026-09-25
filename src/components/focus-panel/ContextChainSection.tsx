@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, CornerDownRight, Link2, Paperclip, Quote, Sp
 import { useStore } from '../../store';
 import { shownStaleIds } from '../../lib/stale-judge';
 import { useUiStore } from '../../lib/ui-store';
+import { profileLines } from '../../lib/profile';
 import { countTokens } from '../../utils';
 import { referenceBlockContent } from '../../store/context-builder';
 import type { ContextPartition } from '../../lib/graph';
@@ -19,7 +20,8 @@ import type { ThoughtNode } from '../../types';
 function MemoryRow() {
   const t = useT();
   const enabled = useUiStore((s) => s.memoryEnabled);
-  const memories = useUiStore((s) => s.memories);
+  const profile = useUiStore((s) => s.profile);
+  const memories = useMemo(() => profileLines(profile).map((text, i) => ({ id: String(i), text })), [profile]);
   const setMemoryManagerOpen = useUiStore((s) => s.setMemoryManagerOpen);
   if (!enabled || memories.length === 0) return null;
   const tok = countTokens(memories.map((m) => m.text).join('\n'));

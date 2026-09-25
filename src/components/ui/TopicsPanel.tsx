@@ -16,7 +16,7 @@ import { useT, fmt } from '../../i18n';
 type Draft = { id?: string; name: string; description: string };
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-export default function TopicsPanel({ onOpened }: { onOpened?: () => void }) {
+export default function TopicsPanel({ onOpened, onChanged }: { onOpened?: () => void; onChanged?: () => void }) {
   const t = useT();
   const judgeCfg = useUiStore((s) => s.judge);
   const canLabel = !!judgeCall(judgeCfg);
@@ -35,15 +35,15 @@ export default function TopicsPanel({ onOpened }: { onOpened?: () => void }) {
   useEffect(() => {
     if (!running) return;
     const id = window.setInterval(() => void refresh(), 1500);
-    return () => window.clearInterval(id);
-  }, [running, refresh]);
+    return () => { window.clearInterval(id); onChanged?.(); };
+  }, [running, refresh, onChanged]);
   if (!hasWhy()) return null;
 
   const topics = info?.topics ?? [];
   const save = async (list: Draft[]) => {
     const b = whyBridge()!;
     setError(null);
-    try { await b.setTopics(list.filter((d) => d.name.trim())); setDraft(null); await refresh(); } catch (e) { setError(msg(e)); }
+    try { await b.setTopics(list.filter((d) => d.name.trim())); setDraft(null); await refresh(); onChanged?.(); } catch (e) { setError(msg(e)); }
   };
   const propose = async () => {
     setProposing(true); setError(null);

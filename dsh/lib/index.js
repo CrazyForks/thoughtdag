@@ -1019,6 +1019,9 @@ export async function apply(ctx, config) {
         if (path === '/why/topics') return sendJson(res, 200, await whyLib.topicsJson())
         if (path === '/why/by-topic') return sendJson(res, 200, await whyLib.byTopicJson((url.searchParams.get('ids') ?? '').split(',').filter(Boolean), { minP: Number(url.searchParams.get('minP') ?? 0.6) || 0.6, limit: Number(url.searchParams.get('limit') ?? 60) || 60 }))
         if (path === '/why/sample') return sendJson(res, 200, await whyLib.sampleQuestions(Number(url.searchParams.get('n') ?? 120) || 120))
+        if (path === '/why/dossiers') return sendJson(res, 200, await whyLib.dossiersJson())
+        if (path === '/why/dossier') return sendJson(res, 200, await whyLib.dossierJson(url.searchParams.get('id') ?? ''))
+        if (path === '/why/dossier/new') return sendJson(res, 200, await whyLib.dossierNewTurns(url.searchParams.get('id') ?? '', { limit: Number(url.searchParams.get('limit') ?? 120) || 120 }))
       }
       if (path === '/version' && req.method === 'GET') return sendJson(res, 200, { version: PLUGIN_VERSION, latest: await latestPluginVersion(), checkedAt: latestLookup.at || null })
       // ── the other agents' session files ──
@@ -1051,6 +1054,9 @@ export async function apply(ctx, config) {
         if (path === '/why/topics') return sendJson(res, 200, await whyLib.setTopics(Array.isArray(body?.topics) ? body.topics : []))
         if (path === '/why/label/start') { try { return sendJson(res, 200, await whyLib.labelStart(body?.call, body?.opts ?? {})) } catch (e) { return sendJson(res, 400, { error: e instanceof Error ? e.message : String(e) }) } }
         if (path === '/why/label/stop') return sendJson(res, 200, whyLib.labelStop())
+        if (path === '/why/dossier') return sendJson(res, 200, await whyLib.setDossier(String(body?.id ?? ''), body?.dossier ?? {}))
+        if (path === '/why/dossier/delete') { await whyLib.deleteDossier(String(body?.id ?? '')); return sendJson(res, 200, { ok: true }) }
+        if (path === '/why/dossier/pending') return sendJson(res, 200, await whyLib.dossierAddPending(String(body?.id ?? ''), body?.item ?? { text: '' }))
       }
       // ── the judge (a System One decision endpoint) forwarded for the canvas; the key rides in the request ──
       if (path === '/judge' && req.method === 'POST') {

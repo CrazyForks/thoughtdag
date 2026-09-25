@@ -103,6 +103,12 @@ interface UiState {
   setMemoryEnabled: (on: boolean) => void;
   memories: import('./memory').MemoryEntry[];
   setMemories: (entries: import('./memory').MemoryEntry[]) => void;
+  /** the person's memory as two documents (preferences, identity); the fragment list above only survives until it is folded in */
+  profile: import('./profile').Profile;
+  setProfile: (p: import('./profile').Profile) => void;
+  /** project facts no topic claimed, waiting to be filed */
+  memoryInbox: import('./profile').InboxItem[];
+  setMemoryInbox: (items: import('./profile').InboxItem[]) => void;
   memoryManagerOpen: boolean;
   releaseNotesOpen: boolean;
   setReleaseNotesOpen: (open: boolean) => void;
@@ -280,6 +286,13 @@ export const useUiStore = create<UiState>((set, get) => ({
     localStorage.setItem('thoughtdag.memory', JSON.stringify(entries));
     set({ memories: entries });
   },
+  profile: (() => {
+    const empty = { preferences: { text: '', updatedAt: null, changelog: [] }, identity: { text: '', updatedAt: null, changelog: [] } };
+    try { const raw = localStorage.getItem('thoughtdag.profile'); const p = raw ? JSON.parse(raw) : null; return p && typeof p === 'object' ? { ...empty, ...p } : empty; } catch { return empty; }
+  })(),
+  setProfile: (p) => { localStorage.setItem('thoughtdag.profile', JSON.stringify(p)); set({ profile: p }); },
+  memoryInbox: (() => { try { const raw = localStorage.getItem('thoughtdag.memoryInbox'); const v = raw ? JSON.parse(raw) : null; return Array.isArray(v) ? v : []; } catch { return []; } })(),
+  setMemoryInbox: (items) => { localStorage.setItem('thoughtdag.memoryInbox', JSON.stringify(items)); set({ memoryInbox: items }); },
   memoryManagerOpen: false,
   highlightsOverviewOpen: false,
   setHighlightsOverviewOpen: (open) => set({ highlightsOverviewOpen: open }),

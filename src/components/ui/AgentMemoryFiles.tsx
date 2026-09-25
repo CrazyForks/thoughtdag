@@ -18,8 +18,8 @@ const IMPORT_CAP = 800;
 export default function AgentMemoryFiles() {
   const t = useT();
   const selectedNodeId = useStore((s) => s.selectedNodeId);
-  const memories = useUiStore((s) => s.memories);
-  const setMemories = useUiStore((s) => s.setMemories);
+  const inbox = useUiStore((s) => s.memoryInbox);
+  const setInbox = useUiStore((s) => s.setMemoryInbox);
   const [files, setFiles] = useState<WhyMemoryFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openFile, setOpenFile] = useState<string | null>(null);
@@ -52,7 +52,7 @@ export default function AgentMemoryFiles() {
       const r = await whyBridge()!.recall(f.id, i);
       const body = r.response.trim().length > IMPORT_CAP ? r.response.trim().slice(0, IMPORT_CAP).trimEnd() + ' …' : r.response.trim();
       const text = body ? `${r.question.trim()}\n${body}` : r.question.trim();
-      setMemories([...memories, { id: generateId(), text, kind: 'imported', project: `${r.runner} · ${r.title}`, at: new Date().toISOString() }]);
+      setInbox([...inbox, { id: generateId(), text, at: new Date().toISOString(), from: `${r.runner} · ${r.title}` }]);
       toast('success', t('memory.importedOne'), 4000);
     } finally { setBusy(null); }
   };

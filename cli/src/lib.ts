@@ -1191,6 +1191,7 @@ const turnKey = (k: string, i: number): string => `${k}#${i}`;
 /** How the host reaches the judge: the same wire the canvas uses. */
 interface JudgeCall { url: string; headers: Record<string, string>; model?: string; wrap?: 'cloudflare' }
 /** A slice can halve an emoji into a lone surrogate, which the endpoints reject as invalid Unicode; control characters go too. */
+// eslint-disable-next-line no-control-regex -- the control range is the point
 const cleanForJudge = (s: string): string => s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
 async function systemOne(call: JudgeCall, state: unknown, questions: Record<string, unknown>): Promise<Record<string, { noul?: number; choice?: string; probabilities?: Record<string, number> }>> {
   const body = call.wrap === 'cloudflare' ? { model: call.model ?? 'typesafe/jev', input: { state, questions } } : { ...(call.model ? { model: call.model } : {}), state, questions };
@@ -1318,6 +1319,87 @@ async function byTopicJson(topicIds: string[], opts: { minP?: number; limit?: nu
   return { hits: hits.slice(0, opts.limit ?? 60).map((h) => { const { _score, ...rest } = h as typeof h & { _score?: number }; void _score; return rest; }), total };
 }
 
+// ─── dossiers: one maintained document per topic ─────────────────────
+// The readable answer to "what do we know about X": four sections (what it
+// is, decisions taken, where it stands, what is open), every sentence with
+// its sources, a changelog, and the set of turns it was built from so the
+// next update reads only what is new. Written by the canvas (the chat
+// model lives there); kept here so every client sees the same document.
+
+interface DossierSentence { text: string; src: string[] }
+interface DossierSource { session: string; turn: number; runner: string; title: string; at: string | null; open: string; kind: 'turn' | 'memory' }
+interface Dossier {
+  topicId: string;
+  sections: { what: DossierSentence[]; decisions: DossierSentence[]; now: DossierSentence[]; open: DossierSentence[] };
+  sources: Record<string, DossierSource>;
+  /** session#turn keys the document has read */
+  covered: string[];
+  /** facts the memory judge filed here, waiting to be merged */
+  pending: { id: string; text: string; at: string; from?: string }[];
+  changelog: { at: string; note: string }[];
+  builtAt: string | null;
+  updatedAt: string;
+}
+interface DossiersFile { version: number; byTopic: Record<string, Dossier> }
+const DOSSIERS_FILE = path.join(HOME, 'dossiers.json');
+const DOSSIERS_VERSION = 1;
+const emptyDossiers = (): DossiersFile => ({ version: DOSSIERS_VERSION, byTopic: {} });
+const loadDossiers = async (): Promise<DossiersFile> => {
+  try { const v = JSON.parse(await fsp.readFile(DOSSIERS_FILE, 'utf8')) as DossiersFile; return v.version === DOSSIERS_VERSION ? { ...emptyDossiers(), ...v } : emptyDossiers(); } catch { return emptyDossiers(); }
+};
+const emptyDossier = (topicId: string): Dossier => ({ topicId, sections: { what: [], decisions: [], now: [], open: [] }, sources: {}, covered: [], pending: [], changelog: [], builtAt: null, updatedAt: new Date().toISOString() });
+
+interface DossierSummary { topicId: string; name: string; built: boolean; builtAt: string | null; updatedAt: string; lead: string; sentences: number; covered: number; pending: number; newTurns: number; labeled: number }
+/** Every topic with its document's state: built or not, how much is new since. */
+async function dossiersJson(): Promise<DossierSummary[]> {
+  const [tf, df] = await Promise.all([loadTopics(), loadDossiers()]);
+  const out: DossierSummary[] = [];
+  for (const tp of tf.topics) {
+    const d = df.byTopic[tp.id];
+    // keys as the document stores them (session#turn), not the label file's source keys
+    const labeled = (await byTopicJson([tp.id], { limit: 5000 })).hits.map((h) => `${h.session}#${h.turn}`);
+    const covered = new Set(d?.covered ?? []);
+    const s = d?.sections;
+    const sentences = s ? s.what.length + s.decisions.length + s.now.length + s.open.length : 0;
+    out.push({ topicId: tp.id, name: tp.name, built: !!d?.builtAt, builtAt: d?.builtAt ?? null, updatedAt: d?.updatedAt ?? '', lead: s?.what[0]?.text ?? s?.now[0]?.text ?? '', sentences, covered: covered.size, pending: d?.pending.length ?? 0, newTurns: labeled.filter((k) => !covered.has(k)).length, labeled: labeled.length });
+  }
+  return out;
+}
+async function dossierJson(topicId: string): Promise<Dossier | null> { return (await loadDossiers()).byTopic[topicId] ?? null; }
+/** Replace a topic's document (the canvas wrote or edited it). */
+async function setDossier(topicId: string, d: Partial<Dossier>): Promise<Dossier> {
+  const df = await loadDossiers();
+  const cur = df.byTopic[topicId] ?? emptyDossier(topicId);
+  const next: Dossier = { ...cur, ...d, topicId, updatedAt: new Date().toISOString() };
+  df.byTopic[topicId] = next;
+  await writePrivate(DOSSIERS_FILE, df);
+  return next;
+}
+async function deleteDossier(topicId: string): Promise<void> { const df = await loadDossiers(); delete df.byTopic[topicId]; await writePrivate(DOSSIERS_FILE, df); }
+/** File a fact for a later merge (the memory judge's project facts). */
+async function dossierAddPending(topicId: string, item: { text: string; from?: string }): Promise<Dossier> {
+  const df = await loadDossiers();
+  const cur = df.byTopic[topicId] ?? emptyDossier(topicId);
+  cur.pending.push({ id: shortHash(`${Date.now()}:${item.text}`), text: item.text.slice(0, 400), at: new Date().toISOString(), ...(item.from ? { from: item.from } : {}) });
+  cur.updatedAt = new Date().toISOString();
+  df.byTopic[topicId] = cur;
+  await writePrivate(DOSSIERS_FILE, df);
+  return cur;
+}
+/** The topic's labelled turns the document has not read, newest first, with their text — what an update needs. */
+async function dossierNewTurns(topicId: string, opts: { limit?: number } = {}): Promise<{ hits: (FindHitJson & { topics: Record<string, number> })[]; excerpts: { key: string; q: string; a: string }[]; total: number }> {
+  const d = (await loadDossiers()).byTopic[topicId];
+  const covered = new Set(d?.covered ?? []);
+  const all = await byTopicJson([topicId], { limit: 5000 });
+  const fresh = all.hits.filter((h) => !covered.has(`${h.session}#${h.turn}`));
+  const sorted = fresh.sort((a, b) => (b.at ?? '').localeCompare(a.at ?? '')).slice(0, opts.limit ?? 120);
+  const excerpts: { key: string; q: string; a: string }[] = [];
+  for (const h of sorted) {
+    try { const r = await recallJson(h.session, h.turn); excerpts.push({ key: `${h.session}#${h.turn}`, q: r.question.replace(/\s+/g, ' ').slice(0, 300), a: r.response.replace(/\s+/g, ' ').slice(0, 600) }); } catch { /* a turn that fell out of the index */ }
+  }
+  return { hits: sorted, excerpts, total: fresh.length };
+}
+
 /** A sample of the questions people asked, for proposing topics. */
 async function sampleQuestions(n = 120): Promise<string[]> {
   const out: string[] = [];
@@ -1416,6 +1498,12 @@ export {
   labelStop,
   byTopicJson,
   sampleQuestions,
+  dossiersJson,
+  dossierJson,
+  setDossier,
+  deleteDossier,
+  dossierAddPending,
+  dossierNewTurns,
   CLI_VERSION,
   MCP_TOOLS,
   mcpCall,

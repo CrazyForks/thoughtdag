@@ -71,6 +71,12 @@ contextBridge.exposeInMainWorld('desktopWhy', {
   labelStop: () => ipcRenderer.invoke('why:label-stop'),
   byTopic: (ids, opts) => ipcRenderer.invoke('why:by-topic', ids, opts),
   sample: (n) => ipcRenderer.invoke('why:sample', n),
+  dossiers: () => ipcRenderer.invoke('why:dossiers'),
+  dossier: (id) => ipcRenderer.invoke('why:dossier', id),
+  setDossier: (id, d) => ipcRenderer.invoke('why:set-dossier', id, d),
+  deleteDossier: (id) => ipcRenderer.invoke('why:delete-dossier', id),
+  dossierPending: (id, item) => ipcRenderer.invoke('why:dossier-pending', id, item),
+  dossierNewTurns: (id, opts) => ipcRenderer.invoke('why:dossier-new', id, opts),
 });
 
 contextBridge.exposeInMainWorld('desktopLocal', {

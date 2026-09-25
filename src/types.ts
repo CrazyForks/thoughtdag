@@ -80,6 +80,8 @@ export interface ApprovalRequest {
     session or an entry of a memory file, quoted verbatim (clipped), with its
     price and source. Excluded items stay listed but leave the prompt. */
 export interface RecallItem {
+  /** a dossier item: the topic's maintained document, brought in whole */
+  dossier?: { topicId: string; name: string; updatedAt: string };
   id: string;
   kind: 'turn' | 'memory';
   runner: string;
@@ -120,6 +122,10 @@ export interface RecallMeta {
   budget?: number;
   /** the topics the judge held the question to be about, whose turns joined the pool */
   topics?: { id: string; name: string; p: number }[];
+  /** the judge's probability that the question asks for a specific detail (excerpts fetched) rather than an overview (dossier only) */
+  detail?: number;
+  /** the dossiers brought in, by topic name */
+  dossiers?: string[];
 }
 
 export interface AgentTraceEntry {

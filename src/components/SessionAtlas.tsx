@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import RecallResults from './ui/RecallResults';
-import MemoryLibrary from './ui/MemoryLibrary';
-import AgentMemoryFiles from './ui/AgentMemoryFiles';
-import RecallSettings from './ui/RecallSettings';
-import TopicsPanel from './ui/TopicsPanel';
+import MemoryPage from './ui/MemoryPage';
 import { whyBridge } from '../lib/why-bridge';
 import { createPortal } from 'react-dom';
 import { AppWindow, Archive, ArrowDownUp, Link2, Folder, FolderOpen, Loader2, Plug, RefreshCw, RotateCcw, Search, Square, SquareCheckBig, SquareTerminal, Import, Trash2, X, Inbox } from 'lucide-react';
@@ -477,13 +474,7 @@ export default function SessionAtlas({ onClose, onSwitched, focusSessionId, init
 
         {tab === 'memory' ? (
           <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4" data-atlas-memory>
-            {canRecall && query.trim().length >= 2 && <RecallResults phrase={query} onOpened={() => { onClose(); onSwitched(); }} />}
-            <div className="grid grid-cols-2 gap-8 items-start">
-              <MemoryLibrary />
-              <AgentMemoryFiles />
-            </div>
-            <TopicsPanel onOpened={() => { onClose(); onSwitched(); }} />
-            <RecallSettings />
+            <MemoryPage query={canRecall ? query : ''} onOpened={() => { onClose(); onSwitched(); }} />
           </div>
         ) : (
         <div className="flex-1 flex min-h-0">

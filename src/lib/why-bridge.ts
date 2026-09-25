@@ -4,7 +4,7 @@
 // where nothing can answer, so the UI hides what it cannot offer.
 import { IN_HARNESS } from './embedded';
 
-export type WhyBridge = Pick<DesktopWhyBridge, 'find' | 'recall' | 'memories' | 'suggest' | 'topics' | 'setTopics' | 'labelStart' | 'labelStop' | 'byTopic' | 'sample'>;
+export type WhyBridge = Pick<DesktopWhyBridge, 'find' | 'recall' | 'memories' | 'suggest' | 'topics' | 'setTopics' | 'labelStart' | 'labelStop' | 'byTopic' | 'sample' | 'dossiers' | 'dossier' | 'setDossier' | 'deleteDossier' | 'dossierPending' | 'dossierNewTurns'>;
 
 let cached: WhyBridge | null | undefined;
 
@@ -35,6 +35,12 @@ export function whyBridge(): WhyBridge | null {
       labelStop: () => post('/why/label/stop', {}),
       byTopic: (ids, opts = {}) => get('/why/by-topic', { ids: ids.join(','), minP: String(opts.minP ?? 0.6), limit: String(opts.limit ?? 60) }),
       sample: (n) => get('/why/sample', { n: String(n ?? 120) }),
+      dossiers: () => get('/why/dossiers', {}),
+      dossier: (id) => get('/why/dossier', { id }),
+      setDossier: (id, dossier) => post('/why/dossier', { id, dossier }),
+      deleteDossier: async (id) => { await post('/why/dossier/delete', { id }); },
+      dossierPending: (id, item) => post('/why/dossier/pending', { id, item }),
+      dossierNewTurns: (id, opts = {}) => get('/why/dossier/new', { id, limit: String(opts.limit ?? 120) }),
     };
     return cached;
   }

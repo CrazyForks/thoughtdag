@@ -184,7 +184,29 @@ interface DesktopWhyBridge {
   byTopic(ids: string[], opts?: { minP?: number; limit?: number }): Promise<{ hits: (WhyFindHit & { topics: Record<string, number> })[]; total: number }>;
   /** a spread of past questions, for proposing topics */
   sample(n?: number): Promise<string[]>;
+  /** every topic's document state */
+  dossiers(): Promise<WhyDossierSummary[]>;
+  dossier(topicId: string): Promise<WhyDossier | null>;
+  setDossier(topicId: string, d: Partial<WhyDossier>): Promise<WhyDossier>;
+  deleteDossier(topicId: string): Promise<void>;
+  /** file a fact for a later merge */
+  dossierPending(topicId: string, item: { text: string; from?: string }): Promise<WhyDossier>;
+  /** the topic's labelled turns the document has not read, with excerpts */
+  dossierNewTurns(topicId: string, opts?: { limit?: number }): Promise<{ hits: (WhyFindHit & { topics: Record<string, number> })[]; excerpts: { key: string; q: string; a: string }[]; total: number }>;
 }
+interface WhyDossierSentence { text: string; src: string[] }
+interface WhyDossierSource { session: string; turn: number; runner: string; title: string; at: string | null; open: string; kind: 'turn' | 'memory' }
+interface WhyDossier {
+  topicId: string;
+  sections: { what: WhyDossierSentence[]; decisions: WhyDossierSentence[]; now: WhyDossierSentence[]; open: WhyDossierSentence[] };
+  sources: Record<string, WhyDossierSource>;
+  covered: string[];
+  pending: { id: string; text: string; at: string; from?: string }[];
+  changelog: { at: string; note: string }[];
+  builtAt: string | null;
+  updatedAt: string;
+}
+interface WhyDossierSummary { topicId: string; name: string; built: boolean; builtAt: string | null; updatedAt: string; lead: string; sentences: number; covered: number; pending: number; newTurns: number; labeled: number }
 interface WhyTopic { id: string; name: string; description: string }
 interface WhyLabelStatus { running: boolean; done: number; total: number; labeled: number; errors: number; startedAt: string | null; finishedAt: string | null; lastError: string | null; stopRequested: boolean }
 interface WhyTopics { topics: (WhyTopic & { count: number })[]; labeled: number; turns: number; status: WhyLabelStatus }
