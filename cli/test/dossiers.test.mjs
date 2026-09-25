@@ -95,8 +95,36 @@ test('facts filed for a later merge wait in the document; deletion clears it', a
   const shell = await why.dossierAddPending(dfg.id, { text: 'Budget table has one postdoc for 36 months' });
   assert.equal(shell.builtAt, null);
   assert.equal(shell.pending.length, 1);
+  dfgId = dfg.id;
   await why.deleteDossier(solarisId);
   assert.equal(await why.dossierJson(solarisId), null);
   assert.equal((await why.dossiersJson()).find((x) => x.topicId === solarisId).built, false);
+});
+
+let dfgId;
+test('an update takes only the facts it read; one filed while the model wrote stays in the inbox (#48)', async () => {
+  const before = await why.dossierJson(dfgId);
+  const read = before.pending.map((p) => p.id);
+  assert.equal(read.length, 1);
+  // the judge files a fact while synthesis is under way
+  await why.dossierAddPending(dfgId, { text: 'Filed during the update' });
+  const d = await why.setDossier(dfgId, {
+    sections: { what: [{ text: 'A funding application.', src: ['filed:1'] }], decisions: [], now: [], open: [] },
+    covered: [], builtAt: new Date().toISOString(), consumePending: read,
+  });
+  assert.equal(d.pending.length, 1);
+  assert.equal(d.pending[0].text, 'Filed during the update');
+  assert.equal((await why.dossierJson(dfgId)).pending.length, 1);
+  // an edit that says nothing about the inbox leaves it alone
+  const e = await why.setDossier(dfgId, { sections: d.sections, changelog: [] });
+  assert.equal(e.pending.length, 1);
+});
+
+test('concurrent filings queue behind each other and all land (#48)', async () => {
+  await Promise.all([1, 2, 3, 4, 5].map((i) => why.dossierAddPending(dfgId, { text: `fact ${i}` })));
+  const d = await why.dossierJson(dfgId);
+  assert.equal(d.pending.length, 6);
+  assert.equal(new Set(d.pending.map((p) => p.id)).size, 6, 'every filing has its own id');
+  assert.ok(!existsSync(join(home, 'dossiers.lock')), 'the lock is released');
   server.close();
 });

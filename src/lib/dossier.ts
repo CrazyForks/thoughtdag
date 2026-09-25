@@ -89,10 +89,13 @@ export async function buildDossier(topicId: string): Promise<WhyDossier> {
   const fresh = await bridge.dossierNewTurns(topicId, { limit: BUILD_TURNS });
   const current = await bridge.dossier(topicId);
   if (!fresh.excerpts.length && !(current?.pending.length)) throw new Error(t('dossier.nothingToRead'));
-  const { sections, change } = await synthesize(tp.name, tp.description, null, fresh.excerpts, current?.pending ?? []);
+  const read = current?.pending ?? [];
+  const { sections, change } = await synthesize(tp.name, tp.description, null, fresh.excerpts, read);
   const now = new Date().toISOString();
+  // the inbox is not cleared: the facts the model read leave by id, and one
+  // filed while it was writing waits for the next update (#48)
   return bridge.setDossier(topicId, {
-    sections, sources: sourcesOf(fresh.hits), covered: fresh.excerpts.map((e) => e.key), pending: [],
+    sections, sources: sourcesOf(fresh.hits), covered: fresh.excerpts.map((e) => e.key), consumePending: read.map((p) => p.id),
     changelog: [{ at: now, note: fmt(t('dossier.logBuilt'), { n: fresh.excerpts.length }) + (change ? ` · ${change}` : '') }], builtAt: now,
   });
 }
@@ -106,10 +109,11 @@ export async function updateDossier(topicId: string): Promise<WhyDossier> {
   const tp = await topicOf(topicId);
   const fresh = await bridge.dossierNewTurns(topicId, { limit: UPDATE_TURNS });
   if (!fresh.excerpts.length && !current.pending.length) return current;
-  const { sections, change } = await synthesize(tp.name, tp.description, current, fresh.excerpts, current.pending);
+  const read = current.pending;
+  const { sections, change } = await synthesize(tp.name, tp.description, current, fresh.excerpts, read);
   const now = new Date().toISOString();
   return bridge.setDossier(topicId, {
-    sections, sources: { ...current.sources, ...sourcesOf(fresh.hits) }, covered: [...current.covered, ...fresh.excerpts.map((e) => e.key)], pending: [],
+    sections, sources: { ...current.sources, ...sourcesOf(fresh.hits) }, covered: [...current.covered, ...fresh.excerpts.map((e) => e.key)], consumePending: read.map((p) => p.id),
     changelog: [...current.changelog, { at: now, note: change || fmt(t('dossier.logUpdated'), { n: fresh.excerpts.length, m: current.pending.length }) }].slice(-40),
   });
 }
@@ -119,7 +123,8 @@ export async function rebuildDossier(topicId: string): Promise<WhyDossier> {
   const bridge = whyBridge();
   if (!bridge) throw new Error(t('recall.unavailable'));
   const current = await bridge.dossier(topicId);
-  await bridge.setDossier(topicId, { sections: emptySections(), sources: {}, covered: [], pending: current?.pending ?? [], changelog: current?.changelog ?? [], builtAt: null });
+  // the inbox is left as it is: whatever was filed stays for the build to read
+  await bridge.setDossier(topicId, { sections: emptySections(), sources: {}, covered: [], changelog: current?.changelog ?? [], builtAt: null });
   return buildDossier(topicId);
 }
 

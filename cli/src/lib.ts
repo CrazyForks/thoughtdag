@@ -552,22 +552,22 @@ const LOCK_STALE_MS = 10 * 60_000;
 /** One refresher at a time. Returns a release function, or null when
  *  another live process holds the lock. A lock left by a dead process
  *  (or older than ten minutes) is broken. */
-async function acquireLock(): Promise<(() => Promise<void>) | null> {
+async function acquireLock(file = LOCK_FILE, staleMs = LOCK_STALE_MS): Promise<(() => Promise<void>) | null> {
   await fsp.mkdir(HOME, { recursive: true, mode: 0o700 });
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const fh = await fsp.open(LOCK_FILE, 'wx', 0o600);
+      const fh = await fsp.open(file, 'wx', 0o600);
       await fh.writeFile(JSON.stringify({ pid: process.pid, at: Date.now() }));
       await fh.close();
-      return async () => { await fsp.rm(LOCK_FILE, { force: true }).catch(() => undefined); };
+      return async () => { await fsp.rm(file, { force: true }).catch(() => undefined); };
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
       let holder: { pid?: number; at?: number } = {};
-      try { holder = JSON.parse(await fsp.readFile(LOCK_FILE, 'utf8')) as typeof holder; } catch { /* unreadable: treat as stale */ }
+      try { holder = JSON.parse(await fsp.readFile(file, 'utf8')) as typeof holder; } catch { /* unreadable: treat as stale */ }
       const alive = (() => { if (!holder.pid) return false; try { process.kill(holder.pid, 0); return true; } catch { return false; } })();
-      const stale = !alive || !holder.at || Date.now() - holder.at > LOCK_STALE_MS;
+      const stale = !alive || !holder.at || Date.now() - holder.at > staleMs;
       if (!stale) return null;
-      await fsp.rm(LOCK_FILE, { force: true }).catch(() => undefined);
+      await fsp.rm(file, { force: true }).catch(() => undefined);
     }
   }
   return null;
@@ -1368,25 +1368,59 @@ async function dossiersJson(): Promise<DossierSummary[]> {
   return out;
 }
 async function dossierJson(topicId: string): Promise<Dossier | null> { return (await loadDossiers()).byTopic[topicId] ?? null; }
-/** Replace a topic's document (the canvas wrote or edited it). */
-async function setDossier(topicId: string, d: Partial<Dossier>): Promise<Dossier> {
-  const df = await loadDossiers();
-  const cur = df.byTopic[topicId] ?? emptyDossier(topicId);
-  const next: Dossier = { ...cur, ...d, topicId, updatedAt: new Date().toISOString() };
-  df.byTopic[topicId] = next;
-  await writePrivate(DOSSIERS_FILE, df);
-  return next;
+
+// Every write to the dossiers file is a read-modify-write of the whole file,
+// and the writers are concurrent by nature: the canvas finishing an update,
+// the memory judge filing a fact in the background, a second host (desktop
+// and plugin share one home). In one process the writes queue behind each
+// other; across processes a lock file of their own serializes them — the
+// index lock is not reused because a refresh is long and a dossier write
+// must wait, not skip (#48).
+const DOSSIERS_LOCK = path.join(HOME, 'dossiers.lock');
+const DOSSIERS_LOCK_WAIT_MS = 5_000;
+let dossierWrites: Promise<unknown> = Promise.resolve();
+async function withDossiers<T>(fn: (df: DossiersFile) => T): Promise<T> {
+  const run = async (): Promise<T> => {
+    let release: (() => Promise<void>) | null = null;
+    const deadline = Date.now() + DOSSIERS_LOCK_WAIT_MS;
+    while (!(release = await acquireLock(DOSSIERS_LOCK, 30_000)) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 60));
+    // past the deadline the write goes ahead unlocked: losing it would be worse than the race it guards against
+    try {
+      const df = await loadDossiers();
+      const out = fn(df);
+      await writePrivate(DOSSIERS_FILE, df);
+      return out;
+    } finally { await release?.(); }
+  };
+  const p = dossierWrites.then(run, run);
+  dossierWrites = p.catch(() => undefined);
+  return p;
 }
-async function deleteDossier(topicId: string): Promise<void> { const df = await loadDossiers(); delete df.byTopic[topicId]; await writePrivate(DOSSIERS_FILE, df); }
+
+/** Replace a topic's document (the canvas wrote or edited it). An update
+ *  that read the inbox names what it read in `consumePending`: those
+ *  facts leave, and anything filed while the model was writing stays. */
+async function setDossier(topicId: string, d: Partial<Dossier> & { consumePending?: string[] }): Promise<Dossier> {
+  return withDossiers((df) => {
+    const cur = df.byTopic[topicId] ?? emptyDossier(topicId);
+    const { consumePending, ...rest } = d;
+    const patch = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)) as Partial<Dossier>;
+    const next: Dossier = { ...cur, ...patch, topicId, updatedAt: new Date().toISOString() };
+    if (consumePending) { const read = new Set(consumePending); next.pending = cur.pending.filter((p) => !read.has(p.id)); }
+    df.byTopic[topicId] = next;
+    return next;
+  });
+}
+async function deleteDossier(topicId: string): Promise<void> { await withDossiers((df) => { delete df.byTopic[topicId]; }); }
 /** File a fact for a later merge (the memory judge's project facts). */
 async function dossierAddPending(topicId: string, item: { text: string; from?: string }): Promise<Dossier> {
-  const df = await loadDossiers();
-  const cur = df.byTopic[topicId] ?? emptyDossier(topicId);
-  cur.pending.push({ id: shortHash(`${Date.now()}:${item.text}`), text: item.text.slice(0, 400), at: new Date().toISOString(), ...(item.from ? { from: item.from } : {}) });
-  cur.updatedAt = new Date().toISOString();
-  df.byTopic[topicId] = cur;
-  await writePrivate(DOSSIERS_FILE, df);
-  return cur;
+  return withDossiers((df) => {
+    const cur = df.byTopic[topicId] ?? emptyDossier(topicId);
+    cur.pending.push({ id: shortHash(`${Date.now()}:${cur.pending.length}:${item.text}`), text: item.text.slice(0, 400), at: new Date().toISOString(), ...(item.from ? { from: item.from } : {}) });
+    cur.updatedAt = new Date().toISOString();
+    df.byTopic[topicId] = cur;
+    return cur;
+  });
 }
 /** The topic's labelled turns the document has not read, newest first, with their text — what an update needs. */
 async function dossierNewTurns(topicId: string, opts: { limit?: number } = {}): Promise<{ hits: (FindHitJson & { topics: Record<string, number> })[]; excerpts: { key: string; q: string; a: string }[]; total: number }> {

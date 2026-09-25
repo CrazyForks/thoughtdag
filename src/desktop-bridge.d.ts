@@ -187,7 +187,8 @@ interface DesktopWhyBridge {
   /** every topic's document state */
   dossiers(): Promise<WhyDossierSummary[]>;
   dossier(topicId: string): Promise<WhyDossier | null>;
-  setDossier(topicId: string, d: Partial<WhyDossier>): Promise<WhyDossier>;
+  /** `consumePending` names the inbox facts an update read; they leave, later filings stay */
+  setDossier(topicId: string, d: Partial<WhyDossier> & { consumePending?: string[] }): Promise<WhyDossier>;
   deleteDossier(topicId: string): Promise<void>;
   /** file a fact for a later merge */
   dossierPending(topicId: string, item: { text: string; from?: string }): Promise<WhyDossier>;
