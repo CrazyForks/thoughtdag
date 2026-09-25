@@ -32,6 +32,54 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.5.0',
+    date: '2026-09-26',
+    announce: true,
+    lead: {
+      zh: '🎉 ThoughtDAG 0.5：记忆上线。你在 Pi、Codex、Claude Code、DeepSeek Harness 里聊过的一切，现在接成一个可以回忆的整体。散在几百个会话里的碎片，按主题整理成档案；提问时相关的档案和对话自动带进上下文，跨 Agent、跨时间。背后是快思考与慢思考的分工：慢思考模型回答，快思考模型判断。所有信息都在你自己的机器上。',
+      en: '🎉 ThoughtDAG 0.5: memory. Everything you discussed in Pi, Codex, Claude Code and DeepSeek Harness now forms one whole you can recall. Fragments scattered across hundreds of sessions are organised into dossiers by topic; when you ask, the relevant dossiers and conversations ride into the context, across agents and across time. Behind it, a division of labour: a slow-thinking model answers, a fast-thinking model decides. Everything stays on your machine.',
+    },
+    items: [
+      {
+        title: { zh: '碎片串成一条线', en: 'Fragments become a thread' },
+        body: {
+          zh: '昨天在 Codex 里定的阈值，上周在 Claude Code 里排除的方案，今天在画布上问起时都在。每个主题一份档案：是什么、定过什么、到哪一步、还没解决什么，每句都能点回原来的那轮对话。「你」是两份文档：偏好与身份，记到新东西时改写而不是堆砌。原来的记忆条目已并入。',
+          en: 'The threshold you settled in Codex yesterday and the approach you ruled out in Claude Code last week are there when you ask on the canvas today. Every topic keeps a dossier: what it is, what was decided, where it stands, what is still open, each line pointing back to its turn. Your profile is two documents, preferences and identity, rewritten rather than piled up. Earlier memory entries were folded in.',
+        },
+        link: { label: { zh: '记忆指南', en: 'The memory guide' }, href: `${DOCS}/zh/guides/memory` },
+      },
+      {
+        title: { zh: '提问时自动回忆', en: 'Recall as you ask' },
+        body: {
+          zh: '开着「回忆」提问，先判断问题涉及哪些主题，把档案整份带进去；问的是细节时再补几条原话。带了什么、花了多少，面板上一条一条看得见，不想要的划掉就不带。带入量三档：省、标准、多带。',
+          en: 'With recall on, a question is first matched to its topics and their dossiers ride in whole; a question about a detail brings a few verbatim excerpts too. What came in and what it cost is listed item by item; strike one and it stays out. Three amounts: lean, standard, generous.',
+        },
+      },
+      {
+        title: { zh: '快思考，慢思考', en: 'Fast thinking, slow thinking' },
+        body: {
+          zh: '回答你的是慢思考模型。判断「这条相关吗」「这句是决定吗」「这处改动影响吗」的是快思考模型：半秒一次，返回校准过的概率，让回忆、地图徽章和「上游已变」都有依据。模型选择器里一行开关，默认开；关掉全部退回规则，功能不变。',
+          en: 'The slow-thinking model answers you. The fast-thinking model decides — is this relevant, is this line a decision, does this change matter — in half a second, with calibrated probabilities, so recall, map badges and “upstream changed” rest on evidence. One switch in the model picker, on by default; off, every decision falls back to a rule and nothing stops working.',
+        },
+      },
+      {
+        title: { zh: '接入一个快思考模型', en: 'Connect a fast-thinking model' },
+        body: {
+          zh: 'Jev 类判断模型可以经你已保存的聚合商接入直接使用，也支持官方接口和自建服务；没有接入时会提示，一切照常。',
+          en: 'A Jev-class decision model runs through the aggregator access you already saved, through the official endpoint, or from a self-hosted server; without one you are told, and everything still works.',
+        },
+        link: { label: { zh: '怎么接入', en: 'How to connect one' }, href: `${DOCS}/zh/setup#decision-model` },
+      },
+      {
+        title: { zh: '一切都在本地', en: 'All of it stays local' },
+        body: {
+          zh: '索引、主题标签、档案存在本机 .thoughtdag 目录，画像文档存在应用本地。判断时发出去的只有问题和候选片段，发给你自己选的接入。',
+          en: 'The index, topic labels and dossiers live in your machine\'s .thoughtdag folder; your profile lives in the app\'s own storage. A decision sends only the question and the candidate excerpts, to the access you chose.',
+        },
+      },
+    ],
+  },
+  {
     version: '0.4.20',
     date: '2026-09-23',
     announce: false,
