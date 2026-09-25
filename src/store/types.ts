@@ -1,5 +1,6 @@
 import type { ThoughtNode, ThoughtEdge, Highlight, Attachment, CanvasEvent, CanvasOp } from '../types';
 
+export interface StaleVerdict { fp: string; p: number; changed: string[] }
 export interface Snapshot {
   nodes: ThoughtNode[];
   edges: ThoughtEdge[];
@@ -57,6 +58,11 @@ export interface NodeSlice {
   setArchived: (nodeIds: string[], archived: boolean) => void;
   /** Nodes whose answers predate upstream changes (derived, not persisted). */
   staleIds: string[];
+  /** the fingerprint each stale node was flagged at, so a judge's verdict can be matched to it */
+  staleFps: Record<string, string>;
+  /** the judge's verdict per stale node: does the upstream change bear on the answer (see lib/stale-judge) */
+  staleVerdicts: Record<string, StaleVerdict>;
+  setStaleVerdicts: (verdicts: Record<string, StaleVerdict>) => void;
   /** Recompute staleness across the graph (debounce-subscribed to nodes/edges). */
   recomputeStaleness: () => void;
 }
@@ -104,7 +110,7 @@ export interface HighlightSlice {
   addHighlight: (nodeId: string, highlight: Highlight) => void;
   removeHighlight: (nodeId: string, highlightId: string) => void;
   setHighlightMode: (nodeId: string, mode: 'off' | 'tag' | 'filter') => void;
-  setSummary: (nodeId: string, summary: string, forResponse: string, type?: string, topic?: string, confidence?: number) => void;
+  setSummary: (nodeId: string, summary: string, forResponse: string, type?: string, topic?: string, confidence?: number, conclusive?: number) => void;
   setMaterialSummary: (nodeId: string, summary: string, topic?: string) => void;
 }
 

@@ -35,6 +35,7 @@ import MaterialReader from './components/MaterialReader';
 import ProjectSwitcher from './components/ProjectSwitcher';
 import SessionAtlas from './components/SessionAtlas';
 import { useStore } from './store';
+import { shownStaleIds } from './lib/stale-judge';
 import { frameMembers } from './lib/frames';
 import { useProjects, adoptImportedProject, markInstantiatedFrom } from './store/projects';
 import { projectStorageKey } from './store/projects';
@@ -681,7 +682,7 @@ function Canvas() {
   // it follows the selection. Single clicks only select (no side effects).
   const panelMode = useUiStore((s) => s.panelOpen);
   const viewerLoadError = useUiStore((s) => s.viewerLoadError);
-  const staleCount = useStore((s) => s.staleIds.length);
+  const staleCount = useStore((s) => shownStaleIds(s).length);
   const livePanelWidth = useUiStore((s) => s.panelWidth);
   const selectedKind = nodes.find((nd) => nd.id === selectedNodeId)?.data.stepKind;
   const selectedIsContent = isContentKind(selectedKind) || selectedKind === 'frame';
@@ -1613,7 +1614,8 @@ function Canvas() {
         {staleCount > 0 && !isParadigm && (
           <button
             onClick={() => {
-              const { nodes: ns, edges: es, staleIds } = useStore.getState();
+              const { nodes: ns, edges: es } = useStore.getState();
+              const staleIds = shownStaleIds(useStore.getState());
               const estTok = staleIds.reduce((sum, sid) => {
                 const blanked = ns.map((x) => x.id === sid ? { ...x, data: { ...x.data, question: '', response: '' } } : x);
                 const { layerTokens } = buildContext(sid, blanked, es);

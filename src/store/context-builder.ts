@@ -129,6 +129,31 @@ export function upstreamFingerprint(nodeId: string, nodes: ThoughtNode[], edges:
   return hashContext(messages);
 }
 
+export interface UpstreamPart { h: string; head: string; text: string }
+const djb2 = (s: string): string => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
+/** What each upstream node contributes to this node's context, as a hash,
+ *  an opening excerpt and the full text: recorded (without the text) at
+ *  generation time, compared later so a judge can weigh the change. */
+export function upstreamParts(nodeId: string, nodes: ThoughtNode[], edges: ThoughtEdge[]): Record<string, UpstreamPart> {
+  const normalized = nodes.map((n) => ({
+    ...n,
+    data: { ...n.data, isCollapsed: false, summary: undefined, summaries: undefined, summaryTypes: undefined, generatedBy: undefined, ...(n.id === nodeId ? { question: '', response: '', attachments: [] } : {}) },
+  }));
+  const { messages, sources } = buildContext(nodeId, normalized, edges);
+  const byNode = new Map<string, string[]>();
+  messages.forEach((m, i) => {
+    const uid = sources?.[i]?.nodeId;
+    if (!uid || uid === nodeId) return;
+    const txt = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+    const list = byNode.get(uid) ?? [];
+    list.push(txt); byNode.set(uid, list);
+  });
+  const out: Record<string, UpstreamPart> = {};
+  for (const [uid, parts] of byNode) { const text = parts.join('\n'); out[uid] = { h: djb2(text), head: text.replace(/\s+/g, ' ').slice(0, 240), text }; }
+  return out;
+}
+export const recordParts = (parts: Record<string, UpstreamPart>): Record<string, { h: string; head: string }> => Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, { h: v.h, head: v.head }]));
+
 const STALE_MARK = '[Stale: this answer was written against an earlier version of its upstream]';
 
 /**

@@ -242,6 +242,9 @@ export const createNodeSlice: StateCreator<StoreState, [], [], NodeSlice> = (set
   },
 
   staleIds: [],
+  staleFps: {},
+  staleVerdicts: {},
+  setStaleVerdicts: (verdicts) => set((s) => ({ staleVerdicts: { ...s.staleVerdicts, ...verdicts } })),
 
   // A node is stale when the live fingerprint of everything it depended on
   // (materials, references, ancestor turns) no longer matches the one
@@ -251,14 +254,19 @@ export const createNodeSlice: StateCreator<StoreState, [], [], NodeSlice> = (set
   recomputeStaleness: () => {
     const { nodes, edges } = get();
     const stale: string[] = [];
+    const fps: Record<string, string> = {};
     for (const n of nodes) {
       if (!n.data.lastContextHash || !n.data.response) continue;
       if (['note', 'file', 'link', 'frame'].includes(n.data.stepKind ?? '')) continue;
-      if (upstreamFingerprint(n.id, nodes, edges) !== n.data.lastContextHash) stale.push(n.id);
+      const fp = upstreamFingerprint(n.id, nodes, edges);
+      if (fp !== n.data.lastContextHash) { stale.push(n.id); fps[n.id] = fp; }
     }
+    const prevFps = get().staleFps;
     const prev = get().staleIds;
-    if (prev.length === stale.length && prev.every((id, i) => id === stale[i])) return;
-    set({ staleIds: stale });
+    if (prev.length === stale.length && prev.every((id, i) => id === stale[i] && prevFps[id] === fps[id])) return;
+    set({ staleIds: stale, staleFps: fps });
+    // with a judge, each newly stale node is asked about: does the change matter?
+    if (stale.length) void import('../../lib/stale-judge').then((m) => m.judgeStaleness()).catch(() => undefined);
   },
 
   setEdgeStructural: (edgeId: string, structural: boolean) => {

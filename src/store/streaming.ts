@@ -1,6 +1,6 @@
 import type { StoreApi } from 'zustand';
 import { walkUpAncestors } from '../lib/graph';
-import { upstreamFingerprint, type MessageSource } from './context-builder';
+import { upstreamFingerprint, upstreamParts, recordParts, type MessageSource } from './context-builder';
 import { sha256Hex, canonicalStringify } from '../lib/context-bundle';
 import { pruneHighlights } from '../lib/highlight-match';
 import { llmCall, llmCallStream, type ContextMessage, type ImageAttachment } from '../lib/api';
@@ -27,14 +27,14 @@ import type { StoreState } from './types';
 // across plaques and classifications aware of what the thinking already
 // ruled out or decided — the lines read as one progression, not islands.
 export const SUMMARY_MIN_CHARS = 400;
-export function generateSummary(nodeId: string, question: string, response: string, setSummary: (id: string, summary: string, forResponse: string, type?: string, topic?: string, confidence?: number) => void, mapLines?: string[]) {
+export function generateSummary(nodeId: string, question: string, response: string, setSummary: (id: string, summary: string, forResponse: string, type?: string, topic?: string, confidence?: number, conclusive?: number) => void, mapLines?: string[]) {
   if (response.length < SUMMARY_MIN_CHARS) return;
   // With a judge, the MOVE (rule-out, decision, pivot, open, plain step) is a
   // typed decision with a probability; the model's own tag stands in when
   // no judge answers. The takeaway line is still the model's — a judge
   // does not write.
-  const judged: Promise<{ kind: string; p: number } | null> = judgeAvailable()
-    ? decideTakeaway(question, response).then((d) => ({ kind: d.kind, p: d.p })).catch(() => null)
+  const judged: Promise<{ kind: string; p: number; conclusive: number } | null> = judgeAvailable()
+    ? decideTakeaway(question, response).then((d) => ({ kind: d.kind, p: d.p, conclusive: d.conclusive })).catch(() => null)
     : Promise.resolve(null);
   const mapBlock = mapLines && mapLines.length > 0
     ? `Takeaway lines already on the map, along this node's ancestor path (oldest first):\n${mapLines.join('\n')}\n\nUse those lines ONLY to align terminology and avoid repeating them. Classify this exchange's epistemic move on its own merits, independent of the lines above.\n\n`
@@ -55,7 +55,7 @@ export function generateSummary(nodeId: string, question: string, response: stri
     return judged.then((j) => {
       // target the version this summary was computed FOR, not whichever
       // version the user has navigated to since
-      if (j) setSummary(nodeId, text, response, j.kind, topic, j.p);
+      if (j) setSummary(nodeId, text, response, j.kind, topic, j.p, j.conclusive);
       else setSummary(nodeId, text, response, modelType, topic);
     });
   }).catch(() => {});
@@ -195,6 +195,7 @@ export async function runNodeGeneration(
     // Provenance: fingerprint what this answer depended on, AT completion —
     // the staleness pass compares this against the live upstream fingerprint.
     const contextHash = upstreamFingerprint(nodeId, get().nodes, get().edges);
+    const contextParts = recordParts(upstreamParts(nodeId, get().nodes, get().edges));
     set((state) => ({
       nodes: state.nodes.map((n) => {
         if (n.id !== nodeId) return n;
@@ -219,7 +220,7 @@ export async function runNodeGeneration(
         const reasonings = [...kept.map(({ rs }) => rs), n.data.reasoning || undefined];
         const generatedAts = [...kept.map(({ at }) => at), now];
         const editedAts = [...kept.map(({ ed }) => ed), undefined];
-        return { ...n, data: { ...n.data, response, responses, questions, generatedBy, gatewaySearches, generatedEfforts, reasonings, generatedAts, editedAts, reasoning: undefined, restreaming: undefined, pendingApprovals: undefined, agentTrace: undefined, responseIndex: responses.length - 1, isLoading: false, tokenCount, generationFailed: failed || undefined, references, highlights: pruneHighlights(n.data.highlights, response), lastContextHash: contextHash, lastGeneratedAt: now } };
+        return { ...n, data: { ...n.data, response, responses, questions, generatedBy, gatewaySearches, generatedEfforts, reasonings, generatedAts, editedAts, reasoning: undefined, restreaming: undefined, pendingApprovals: undefined, agentTrace: undefined, responseIndex: responses.length - 1, isLoading: false, tokenCount, generationFailed: failed || undefined, references, highlights: pruneHighlights(n.data.highlights, response), lastContextHash: contextHash, lastContextParts: contextParts, lastGeneratedAt: now } };
       }),
     }));
   };

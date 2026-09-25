@@ -10,6 +10,8 @@ import 'katex/dist/katex.min.css';
 const TOOL_PLACEHOLDER = /^(?:🔍|📚|🎓|🔧) [\s\S]*…$/;
 import type { ThoughtNode as ThoughtNodeType } from '../types';
 import { useStore } from '../store';
+import { staleHiddenByJudge, currentStaleVerdict } from '../lib/stale-judge';
+import { CONCLUSIVE_SETTLED } from '../lib/judge';
 import { useZoomTier } from '../lib/use-map-mode';
 import { generateId, isImeComposing , activeSummary, activeTopic, awaitingInput, formatStamp } from '../utils';
 import { processFile } from '../lib/attachments';
@@ -108,7 +110,9 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
   const updateNodeInternals = useUpdateNodeInternals();
   useEffect(() => { updateNodeInternals(id); }, [glyphTier, id, updateNodeInternals]);
   // Upstream changed since this answer was written (see recomputeStaleness)
-  const isStale = useStore((s) => s.staleIds.includes(id));
+  const isStale = useStore((s) => s.staleIds.includes(id) && !staleHiddenByJudge(s, id));
+  const staleVerdict = useStore((s) => currentStaleVerdict(s, id));
+  const staleTitle = staleVerdict ? fmt(t('node.staleJudged'), { p: staleVerdict.p.toFixed(2) }) : t('node.staleTitle');
   // Lit while its condense-dialog segment row is hovered — the list points,
   // the canvas answers.
   const condenseLit = useUiStore((s) => s.condenseHighlightIds.includes(id));
@@ -334,6 +338,9 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
   const versionSummary = activeSummary(data);
   const takeawayType = data.summaryTypes?.[data.responseIndex] ?? undefined;
   const takeawayConfidence = data.summaryTypeConfidences?.[data.responseIndex] ?? undefined;
+  const conclusive = data.summaryConclusiveness?.[data.responseIndex] ?? undefined;
+  const settled = conclusive !== undefined && conclusive >= CONCLUSIVE_SETTLED;
+  const conclusiveNote = conclusive !== undefined ? fmt(t('takeaway.conclusive'), { l: t(`takeaway.level${conclusive}` as Parameters<typeof t>[0]) }) : undefined;
   // Reasoning of the ACTIVE version (models that emit it); display only
   const versionReasoning = data.reasonings?.[data.responseIndex] ?? undefined;
   // Only the rare, high-signal moves wear a badge — a map where every node
@@ -350,7 +357,7 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
     insight: { glyph: '✦', cls: 'text-sky-600 bg-sky-500/10', solid: 'bg-sky-500 text-white', key: 'takeaway.insight' },
   };
   const badge = takeawayType && takeawayType !== 'insight' && TYPE_BADGE[takeawayType] ? TYPE_BADGE[takeawayType] : null;
-  const badgeTitle = badge ? (takeawayConfidence !== undefined ? `${t(badge.key as Parameters<typeof t>[0])} · ${fmt(t('takeaway.judged'), { p: takeawayConfidence.toFixed(2) })}` : t(badge.key as Parameters<typeof t>[0])) : undefined;
+  const badgeTitle = badge ? [takeawayConfidence !== undefined ? `${t(badge.key as Parameters<typeof t>[0])} · ${fmt(t('takeaway.judged'), { p: takeawayConfidence.toFixed(2) })}` : t(badge.key as Parameters<typeof t>[0]), conclusiveNote].filter(Boolean).join(' · ') : undefined;
   // The glyph seal: typed moves keep their seal; insight sparks; evaluators
   // wear their red eye; everything else is a neutral waypoint dot
   const glyphSeal = takeawayType && TYPE_BADGE[takeawayType]
@@ -411,7 +418,7 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
           gone (one centered seal), so the seal wears an amber ring instead
           of a dot floating where the card used to be */}
       {isStale && zoomedOut && !glyphTier && (
-        <span className="absolute top-2.5 right-2.5 w-3.5 h-3.5 rounded-full bg-amber-500 z-10" title={t('node.staleBadge')} />
+        <span className="absolute top-2.5 right-2.5 w-3.5 h-3.5 rounded-full bg-amber-500 z-10" title={staleTitle} data-stale-dot />
       )}
       {zoomedOut && !glyphTier && badge && (
         // The cognitive move owns the plaque's top-left corner: a solid seal
@@ -496,8 +503,8 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
                 <div className="text-lg text-ink-muted leading-snug line-clamp-2">
                   {data.question}
                 </div>
-                <div className={`text-2xl font-semibold leading-snug line-clamp-3 mt-1.5 ${badge ? 'text-ink' : 'text-ink-muted'}`}>
-                  {(badge ? versionSummary : (activeTopic(data) ?? versionSummary)) || data.response.replace(/[#*`>-]/g, '').slice(0, 140)}
+                <div className={`text-2xl font-semibold leading-snug line-clamp-3 mt-1.5 ${badge || settled ? 'text-ink' : 'text-ink-muted'}`} title={!badge && conclusiveNote ? conclusiveNote : undefined} data-plaque-line={badge ? 'badge' : settled ? 'settled' : 'topic'}>
+                  {(badge || settled ? versionSummary : (activeTopic(data) ?? versionSummary)) || data.response.replace(/[#*`>-]/g, '').slice(0, 140)}
                 </div>
               </>
             )
@@ -546,7 +553,8 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
           {isStale && !data.isLoading && (
             <button
               onClick={(e) => { e.stopPropagation(); if (!isViewerMode) void rerunNode(id, {}); }}
-              title={t('node.staleTitle')}
+              title={staleTitle}
+              data-stale-badge
               className="text-2xs bg-amber-500/10 text-amber-600 hover:bg-amber-500/25 px-1.5 py-0.5 rounded-md flex items-center gap-1 font-medium transition-colors"
             >
               <RefreshCw size={11} strokeWidth={1.75} /> {t('node.staleBadge')}

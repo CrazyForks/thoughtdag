@@ -84,9 +84,13 @@ export async function decideMemory(question: string, response: string, existing:
 export const MEMORY_DURABLE_BAR = 0.6;
 export const MEMORY_STATED_BAR = 0.7;
 
-/** The move an exchange makes on the map. */
+/** The move an exchange makes on the map, and how settled what it arrives at is. */
 export type TakeawayKind = 'insight' | 'ruleout' | 'decision' | 'pivot' | 'open';
-export async function decideTakeaway(question: string, response: string): Promise<{ kind: TakeawayKind; p: number; provider: JudgeProviderId; model: string; calibrated: boolean }> {
+/** Levels of the conclusiveness score, index = level. */
+export const CONCLUSIVE_LEVELS = ['speculative', 'leaning', 'definite', 'verified'] as const;
+/** At or above this level a plain step's takeaway is a conclusion worth a plaque line of its own. */
+export const CONCLUSIVE_SETTLED = 2;
+export async function decideTakeaway(question: string, response: string): Promise<{ kind: TakeawayKind; p: number; conclusive: number; conclusiveP: number; provider: JudgeProviderId; model: string; calibrated: boolean }> {
   const r = await judge({ exchange: { user: question.slice(0, 3000), assistant: response.slice(0, 4000) } }, {
     kind: { type: 'choice', instructions: 'What kind of move does `exchange` make in the line of thinking?', criteria: {
       ruleout: 'something is ruled out, rejected or shown not to work',
@@ -95,10 +99,37 @@ export async function decideTakeaway(question: string, response: string): Promis
       open: 'a question is raised or left unresolved, next steps are asked for',
       insight: 'an ordinary step: an explanation, a result, information, no decisive move',
     } },
+    conclusive: { type: 'score', instructions: 'How settled is what `exchange` arrives at?', criteria: [
+      'speculative: guesses, possibilities or questions; nothing is settled',
+      'leaning: a tentative view, hedged with caveats or conditions',
+      'definite: a clear conclusion, answer or decision is stated',
+      'verified: the conclusion is backed by a result, test, measurement or evidence shown in the exchange',
+    ] },
   });
   const a = r.answers.kind;
   const kind = (a?.choice ?? 'insight') as TakeawayKind;
-  return { kind, p: a?.probabilities?.[kind] ?? 0, provider: r.provider, model: r.model, calibrated: r.calibrated };
+  const c = r.answers.conclusive;
+  const top = c?.probabilities ? Object.entries(c.probabilities).reduce((b, e) => (e[1] > b[1] ? e : b)) : null;
+  const conclusive = top ? Math.max(0, Math.min(3, Number(top[0]) || 0)) : Math.max(0, Math.min(3, Math.round(c?.score ?? 1)));
+  return { kind, p: a?.probabilities?.[kind] ?? 0, conclusive, conclusiveP: top ? top[1] : 0, provider: r.provider, model: r.model, calibrated: r.calibrated };
+}
+
+/** "Upstream changed": does the change bear on this answer, so it should be regenerated? */
+export interface StaleCase { id: string; question: string; answer: string; changes: { node: string; before: string; after: string }[] }
+export const STALE_BAR = 0.5;
+export async function decideStaleness(cases: StaleCase[]): Promise<Record<string, number>> {
+  const state: Record<string, unknown> = {};
+  const questions: Record<string, JudgeQuestion> = {};
+  cases.forEach((c, i) => {
+    state[`n${i}`] = {
+      question: c.question.slice(0, 800),
+      answer: c.answer.slice(0, 1500),
+      upstream_changes: c.changes.slice(0, 4).map((ch) => ({ before: ch.before.slice(0, 400) || '(nothing recorded)', after: ch.after.slice(0, 1200) || '(removed from the context)' })),
+    };
+    questions[`n${i}`] = { type: 'noul', instructions: `\`n${i}.answer\` was written when the content it depended on read as \`n${i}.upstream_changes[*].before\` (opening lines); that content now reads as \`after\`. Does the change bear on the answer — would the answer need to be different now — so that it should be regenerated?` };
+  });
+  const r = await judge(state, questions);
+  return Object.fromEntries(cases.map((c, i) => [c.id, r.answers[`n${i}`]?.noul ?? 1]));
 }
 
 

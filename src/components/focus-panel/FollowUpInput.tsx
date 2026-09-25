@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { ChevronUp, GitBranch, Paperclip, Send, X } from 'lucide-react';
 import { useStore } from '../../store';
+import { shownStaleIds } from '../../lib/stale-judge';
 import { isImeComposing } from '../../utils';
 import { useUiStore } from '../../lib/ui-store';
 import { buildContext } from '../../store/context-builder';
@@ -65,7 +66,10 @@ export default function FollowUpInput({
   // "you control the context" promise visible before asking. Messages come
   // out in layer order (materials → references → conversation), so the
   // flat list below reads grouped; the summary line shows the composition.
-  const staleIds = useStore((s) => s.staleIds);
+  const staleAll = useStore((s) => s.staleIds);
+  const staleFps = useStore((s) => s.staleFps);
+  const staleVerdicts = useStore((s) => s.staleVerdicts);
+  const staleIds = useMemo(() => shownStaleIds({ staleIds: staleAll, staleFps, staleVerdicts }), [staleAll, staleFps, staleVerdicts]);
   const preview = useMemo(() => {
     const { messages, images, layerTokens } = buildContext(nodeId, nodes, edges, undefined, undefined, undefined, staleIds);
     const items = messages.map((m) => ({

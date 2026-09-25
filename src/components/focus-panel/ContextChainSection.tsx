@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronDown, ChevronRight, CornerDownRight, Link2, Paperclip, Quote, Sprout, StickyNote } from 'lucide-react';
 import { useStore } from '../../store';
+import { shownStaleIds } from '../../lib/stale-judge';
 import { useUiStore } from '../../lib/ui-store';
 import { countTokens } from '../../utils';
 import { referenceBlockContent } from '../../store/context-builder';
@@ -60,7 +61,10 @@ export default function ContextChainSection({
 }) {
   const setSelectedNodeId = useStore((s) => s.setSelectedNodeId);
   const setEdgeStructural = useStore((s) => s.setEdgeStructural);
-  const staleIds = useStore((s) => s.staleIds);
+  const staleAll = useStore((s) => s.staleIds);
+  const staleFps = useStore((s) => s.staleFps);
+  const staleVerdicts = useStore((s) => s.staleVerdicts);
+  const staleIds = useMemo(() => shownStaleIds({ staleIds: staleAll, staleFps, staleVerdicts }), [staleAll, staleFps, staleVerdicts]);
   const t = useT();
 
   const [contextOpen, setContextOpen] = useState(false);

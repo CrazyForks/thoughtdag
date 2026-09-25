@@ -206,6 +206,8 @@ export interface ThoughtData extends Record<string, unknown> {
       A future staleness pass compares this against the CURRENT upstream
       fingerprint to flag "upstream changed since this was written". */
   lastContextHash?: string;
+  /** per upstream node, at generation time: a hash of what it contributed and its opening text — so a later change can be judged, not only detected */
+  lastContextParts?: Record<string, { h: string; head: string }>;
   lastGeneratedAt?: string;
   // ── thinking-timeline raw data (write-only for now: a future timeline /
   //    process-replay view needs these recorded from day one — they cannot
@@ -273,6 +275,8 @@ export interface ThoughtData extends Record<string, unknown> {
   summaryTypes?: (string | undefined | null)[];
   /** the judge's probability for the type, parallel to summaryTypes; absent when a model's tag was taken as-is */
   summaryTypeConfidences?: (number | undefined | null)[];
+  /** how settled the version's conclusion is (0 speculative … 3 verified), by the judge; parallel to summaries */
+  summaryConclusiveness?: (number | undefined | null)[];
   /** Micro topic per version (≤6 CJK chars / ≤14 latin): the noun phrase the
       narrow surfaces show — timeline tooltips, unbadged plaques. Written by
       the same judge call as the summary; display layer only. Older canvases
