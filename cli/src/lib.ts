@@ -88,7 +88,7 @@ interface TextTurn { q: string; a: string; m?: string }
 interface TextIndex { version: number; sessions: Record<string, number> }
 interface TextLine extends TextTurn { k: string; i: number }
 
-const INDEX_VERSION = 12;
+const INDEX_VERSION = 13; // 13: failed tool calls are no footprints (#50)
 const EXCERPT = 200;
 
 const HOME = process.env.THOUGHTDAG_HOME ?? path.join(os.homedir(), '.thoughtdag');
@@ -1072,6 +1072,8 @@ async function renderRecall(facts: FactIndex, sidPrefix: string, n: number): Pro
     for (const t of r.tools) {
       out.push(`- ${t.name}${t.paths?.length ? `  ${t.paths.join(', ')}` : ''}`);
       if (t.op === 'edit' || t.op === 'write') out.push(t.call.slice(0, 1200).split('\n').map((l) => `    ${l}`).join('\n'));
+      // a call the runner answered with an error names no file (#50); the error itself is what the model saw
+      else if (t.op === 'other' && /^error\b/i.test(t.result.trimStart())) out.push(`    ✗ ${t.result.trim().split('\n')[0].slice(0, 200)}`);
     }
   }
   return out.join('\n');

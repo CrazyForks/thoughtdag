@@ -88,6 +88,8 @@ interface DshToolResult {
     turn: number;
     step: number;
     message: { source?: { callId?: string }; content?: unknown };
+    /** the harness's error record when the tool threw (FsError etc.) */
+    error?: unknown;
   };
 }
 
@@ -116,6 +118,15 @@ interface DshSessionLine {
     turn?: number;
     step?: number;
   };
+}
+
+/** Whether a top-level tool/result reports failure: the harness marks the
+ *  tool-result part `isError` and, for thrown errors, adds `data.error`. */
+function resultFailed(data: DshToolResult['data'] | undefined): boolean {
+  if (!data) return false;
+  if (data.error) return true;
+  const parts = data.message?.content;
+  return Array.isArray(parts) && parts.some((p) => !!p && typeof p === 'object' && (p as { isError?: unknown }).isError === true);
 }
 
 /** Text under a DSH message: content is an array of parts, text parts may
@@ -248,10 +259,14 @@ export class DshSessionCollector {
       if (!reg) return;
       const res = clipText(partsText(tr.data?.message?.content), TOOL_RESULT_LIMIT);
       const t = this.ensure();
+      // a call the harness answered with an error changed nothing: it stays
+      // in the trace (the error text is what the model saw) but names no
+      // file, so it never becomes a footprint (#50)
+      const failed = resultFailed(tr.data);
       t.tools.push({
         name: reg.name, call: reg.call, result: res.text, truncated: reg.truncated || res.truncated,
-        op: reg.op, nativeCallId: callId,
-        ...(reg.paths.length ? { paths: reg.paths } : {}), ...(reg.url ? { url: reg.url } : {}), ...(reg.locator ? { locator: reg.locator } : {}),
+        op: failed ? 'other' : reg.op, nativeCallId: callId,
+        ...(failed ? {} : { ...(reg.paths.length ? { paths: reg.paths } : {}), ...(reg.url ? { url: reg.url } : {}), ...(reg.locator ? { locator: reg.locator } : {}) }),
       });
       this.pendingTools.delete(callId);
       return;
@@ -267,6 +282,15 @@ export class DshSessionCollector {
       const paths = toolPaths(d.arguments);
       const scope = toolScope(d.arguments);
       if (!paths.length && !scope.url) return;
+      if (d.isError === true) {
+        // the nested call failed (old_string not found, permission refused,
+        // a stale read): the file is as it was, so the attempt is a trace
+        // line with its error and no footprint (#50)
+        const attempt = clipText(renderArgCall(d.name, d.arguments), TOOL_CALL_LIMIT);
+        const err = clipText(partsText(d.content), TOOL_RESULT_LIMIT);
+        this.ensure().tools.push({ name: d.name, call: attempt.text, result: err.text, truncated: attempt.truncated || err.truncated, op: 'other', nativeCallId: d.subCallId });
+        return;
+      }
       const op = toolOpOf(d.name);
       const call = clipText(renderArgCall(d.name, d.arguments), op === 'write' || op === 'edit' ? ARTIFACT_CALL_LIMIT : TOOL_CALL_LIMIT);
       const res = clipText(partsText(d.content), TOOL_RESULT_LIMIT);

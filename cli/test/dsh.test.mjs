@@ -25,6 +25,7 @@ const L = (o) => JSON.stringify(o);
 const T = 1788522596653;
 const header = (id) => L({ type: 'session', version: 0, id, createdAt: T, cwd: proj, delegationDepth: 0, agentPreset: 'standard' });
 const api = join(proj, 'src', 'lib', 'api.ts'); const backoff = join(proj, 'src', 'lib', 'backoff.ts'); const vision = join(proj, 'src', 'lib', 'vision.py');
+const failedTs = join(proj, 'src', 'lib', 'failed.ts'); const staleTs = join(proj, 'src', 'lib', 'stale.ts');
 // frame 1: header, turn open, the harness's own injected context (not a question), the human's question, the title
 const frame1 = [
   header('session-dsh-1'),
@@ -42,9 +43,14 @@ const frame2 = [
   // DSH 0.1.5's PTC preset logs a nested call under a new name, same shape (#46)
   L({ type: 'tool/ptc-dispatch-start', seq: 9, time: T + 5, data: { rootCallId: 'c1', parentCallId: 'c1', subCallId: 'c1:ptc:1', name: 'edit', arguments: { file_path: vision, old_string: 'model = "v1"', new_string: 'model = "v4"' } } }),
   L({ type: 'tool/ptc-dispatch', seq: 10, time: T + 5, data: { rootCallId: 'c1', parentCallId: 'c1', subCallId: 'c1:ptc:1', name: 'edit', arguments: { file_path: vision, old_string: 'model = "v1"', new_string: 'model = "v4"' }, isError: false, content: [{ type: 'text', text: 'The file has been updated successfully.' }] } }),
-  L({ type: 'tool/result', seq: 11, time: T + 5, data: { turn: 1, step: 1, message: { source: { callId: 'c1' }, content: [{ type: 'text', text: 'done' }] } }, surfaceOp: 'append' }),
-  L({ type: 'assistant/message', seq: 12, time: T + 6, data: { turn: 1, step: 2, message: { id: 'm-a1', content: [{ type: 'reasoning', text: 'The user wants backoff.' }, { type: 'text', text: '改好了。\n\n重试改成指数退避，接口不变。' }] } }, surfaceOp: 'append' }),
-  L({ type: 'turn/end', seq: 13, time: T + 7, data: { turn: 1, reason: 'completed' } }),
+  // a nested edit the harness answered with an error: the file is as it was (#50)
+  L({ type: 'tool/ptc-dispatch', seq: 11, time: T + 5, data: { rootCallId: 'c1', parentCallId: 'c1', subCallId: 'c1:ptc:2', name: 'edit', arguments: { file_path: failedTs, old_string: 'nowhere', new_string: 'somewhere' }, isError: true, content: [{ type: 'text', text: 'Error: old_string not found in file' }] } }),
+  L({ type: 'tool/result', seq: 12, time: T + 5, data: { turn: 1, step: 1, message: { source: { callId: 'c1' }, content: [{ type: 'text', text: 'done' }] } }, surfaceOp: 'append' }),
+  // a direct edit the harness refused (stale read): the tool-result part carries isError, the event an error record (#50)
+  L({ type: 'tool/call', seq: 13, time: T + 5, data: { turn: 1, step: 2, callId: 'c2', name: 'edit', arguments: L({ file_path: staleTs, old_string: 'a', new_string: 'b' }) } }),
+  L({ type: 'tool/result', seq: 14, time: T + 5, data: { turn: 1, step: 2, message: { source: { kind: 'tool', callId: 'c2' }, content: [{ type: 'tool-result', toolCallId: 'c2', content: [{ type: 'text', text: 'Error: cannot edit: file changed since it was read' }], isError: true }], role: 'user', id: 'm-t2' }, error: { name: 'FsError', code: 'FS_STALE_VERSION' } }, surfaceOp: 'append' }),
+  L({ type: 'assistant/message', seq: 15, time: T + 6, data: { turn: 1, step: 2, message: { id: 'm-a1', content: [{ type: 'reasoning', text: 'The user wants backoff.' }, { type: 'text', text: '改好了。\n\n重试改成指数退避，接口不变。' }] } }, surfaceOp: 'append' }),
+  L({ type: 'turn/end', seq: 16, time: T + 7, data: { turn: 1, reason: 'completed' } }),
 ];
 if (hasZstd) {
   writeFileSync(file, Buffer.concat([zlib.zstdCompressSync(Buffer.from(frame1.join('\n') + '\n')), zlib.zstdCompressSync(Buffer.from(frame2.join('\n') + '\n'))]));
@@ -103,6 +109,16 @@ t('events projects the log onto the contract with runner dsh and an observed edi
   assert.match(ev, /"kind":"tool.called".*"op":"edit"/);
   assert.match(ev, /"kind":"tool.called".*"op":"read"/);
   assert.ok(!/"op":"run"/.test(ev) || !/npm test.*"artifacts":\[\{/.test(ev), 'a shell dispatch carries no artifact');
+});
+
+t('a call the harness answered with an error is no footprint, nested or direct (#50)', () => {
+  // no turn changed these files; the attempts stay in the turn's trace with their errors
+  assert.match(run('why', 'src/lib/failed.ts').split('\n')[0], /no session touched this file/);
+  assert.match(run('why', 'src/lib/stale.ts').split('\n')[0], /no session touched this file/);
+  const rec = run('recall', 'session-dsh-1', '0');
+  assert.ok(rec.includes('old_string not found') && rec.includes('file changed since it was read'), 'the errors are in the trace');
+  const ev = run('events', file);
+  assert.ok(!new RegExp('"op":"edit"[^\\n]*failed\\.ts').test(ev) && !new RegExp('"op":"edit"[^\\n]*stale\\.ts').test(ev), 'no edit event names a file the harness did not change');
 });
 
 t('purge, then the fixture goes', () => {
