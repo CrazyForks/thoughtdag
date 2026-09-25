@@ -797,7 +797,7 @@ async function runAgentTurn(ctx, body, emit, isClosed, { answerApprovals = true 
         const text = blocks.filter(b => b.type === 'text').map(b => b.text).join('')
         if (text) { fullText += text; emit({ text }) }
       }
-    } else if (event.type === 'tool/call' || event.type === 'tool/code-dispatch-start') {
+    } else if (event.type === 'tool/call' || event.type === 'tool/code-dispatch-start' || event.type === 'tool/ptc-dispatch-start') {
       if (event.data?.callId) turnEntry.calls.set(event.data.callId, { name: event.data?.name ?? 'tool', arguments: event.data?.arguments })
       emit({ tool: { name: event.data?.name ?? 'tool', query: toolQuery(event.data?.name, event.data?.arguments) } })
     } else if (event.type === 'turn/end') {

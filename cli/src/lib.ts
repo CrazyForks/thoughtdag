@@ -88,7 +88,7 @@ interface TextTurn { q: string; a: string; m?: string }
 interface TextIndex { version: number; sessions: Record<string, number> }
 interface TextLine extends TextTurn { k: string; i: number }
 
-const INDEX_VERSION = 11;
+const INDEX_VERSION = 12;
 const EXCERPT = 200;
 
 const HOME = process.env.THOUGHTDAG_HOME ?? path.join(os.homedir(), '.thoughtdag');
@@ -1429,7 +1429,7 @@ async function memoriesJson(): Promise<MemoryFileJson[]> {
 // Read-only by construction: nothing here writes a canvas or a session.
 // stdout carries protocol frames only; every notice goes to stderr.
 
-const CLI_VERSION = '0.1.0';
+const CLI_VERSION = '0.2.0';
 const MCP_TOOLS = [
   { name: 'why_check', description: 'Cheap first question before editing a file: does this artifact have any history in local agent sessions? One line; history true/false.', inputSchema: { type: 'object', properties: { path: { type: 'string', description: 'file path (absolute or relative to cwd), URL, or arxiv:<id>' } }, required: ['path'] } },
   { name: 'why_file', description: 'The turns across local Claude Code, Codex, DeepSeek Harness, Pi and ThoughtDAG sessions that touched a file, URL or paper: when, what changed (Δ, observed), what was asked, what the answer said about it (≈, a candidate explanation, not a verified reason). Each hit carries a deep link.', inputSchema: { type: 'object', properties: { path: { type: 'string' }, include_read: { type: 'boolean', description: 'also list turns that only read it (default false)' }, limit: { type: 'number', description: 'max hits (default 10)' } }, required: ['path'] } },

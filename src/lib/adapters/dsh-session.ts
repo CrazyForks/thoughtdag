@@ -92,7 +92,7 @@ interface DshToolResult {
 }
 
 interface DshCodeDispatch {
-  type: 'tool/code-dispatch';
+  type: 'tool/code-dispatch' | 'tool/ptc-dispatch';
   data: {
     rootCallId?: string; parentCallId?: string; subCallId?: string;
     name?: string; arguments?: unknown; isError?: boolean; content?: unknown;
@@ -259,7 +259,9 @@ export class DshSessionCollector {
     // A file operation dispatched from inside run_code (see the header): its
     // own tool, its own footprint. Dispatches that name no file fold into
     // the root call.
-    if (line.type === 'tool/code-dispatch') {
+    // DSH 0.1.5's PTC preset (programmatic tool calls inside run_code) logs the
+    // same shape under tool/ptc-dispatch (#46); both are one nested call each
+    if (line.type === 'tool/code-dispatch' || line.type === 'tool/ptc-dispatch') {
       const d = (line as unknown as DshCodeDispatch).data;
       if (!d?.name || !d.subCallId) return;
       const paths = toolPaths(d.arguments);

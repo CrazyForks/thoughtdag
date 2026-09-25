@@ -24,7 +24,7 @@ const file = join(dir, 'session.jsonl.zstd');
 const L = (o) => JSON.stringify(o);
 const T = 1788522596653;
 const header = (id) => L({ type: 'session', version: 0, id, createdAt: T, cwd: proj, delegationDepth: 0, agentPreset: 'standard' });
-const api = join(proj, 'src', 'lib', 'api.ts'); const backoff = join(proj, 'src', 'lib', 'backoff.ts');
+const api = join(proj, 'src', 'lib', 'api.ts'); const backoff = join(proj, 'src', 'lib', 'backoff.ts'); const vision = join(proj, 'src', 'lib', 'vision.py');
 // frame 1: header, turn open, the harness's own injected context (not a question), the human's question, the title
 const frame1 = [
   header('session-dsh-1'),
@@ -39,9 +39,12 @@ const frame2 = [
   L({ type: 'tool/code-dispatch', seq: 6, time: T + 2, data: { rootCallId: 'c1', parentCallId: 'c1', subCallId: 'c1:code:1', name: 'read', arguments: { file_path: api, offset: 10, limit: 20 }, isError: false, content: [{ type: 'text', text: 'export const x = retry(1);' }] } }),
   L({ type: 'tool/code-dispatch', seq: 7, time: T + 3, data: { rootCallId: 'c1', parentCallId: 'c1', subCallId: 'c1:code:2', name: 'bash', arguments: { command: 'npm test', workdir: proj }, isError: false, content: [{ type: 'text', text: 'ok' }] } }),
   L({ type: 'tool/code-dispatch', seq: 8, time: T + 4, data: { rootCallId: 'c1', parentCallId: 'c1', subCallId: 'c1:code:3', name: 'edit', arguments: { file_path: backoff, old_string: 'x = retry(1)', new_string: 'x = backoff(1)' }, isError: false, content: [{ type: 'text', text: 'edited' }] } }),
-  L({ type: 'tool/result', seq: 9, time: T + 5, data: { turn: 1, step: 1, message: { source: { callId: 'c1' }, content: [{ type: 'text', text: 'done' }] } }, surfaceOp: 'append' }),
-  L({ type: 'assistant/message', seq: 10, time: T + 6, data: { turn: 1, step: 2, message: { id: 'm-a1', content: [{ type: 'reasoning', text: 'The user wants backoff.' }, { type: 'text', text: '改好了。\n\n重试改成指数退避，接口不变。' }] } }, surfaceOp: 'append' }),
-  L({ type: 'turn/end', seq: 11, time: T + 7, data: { turn: 1, reason: 'completed' } }),
+  // DSH 0.1.5's PTC preset logs a nested call under a new name, same shape (#46)
+  L({ type: 'tool/ptc-dispatch-start', seq: 9, time: T + 5, data: { rootCallId: 'c1', parentCallId: 'c1', subCallId: 'c1:ptc:1', name: 'edit', arguments: { file_path: vision, old_string: 'model = "v1"', new_string: 'model = "v4"' } } }),
+  L({ type: 'tool/ptc-dispatch', seq: 10, time: T + 5, data: { rootCallId: 'c1', parentCallId: 'c1', subCallId: 'c1:ptc:1', name: 'edit', arguments: { file_path: vision, old_string: 'model = "v1"', new_string: 'model = "v4"' }, isError: false, content: [{ type: 'text', text: 'The file has been updated successfully.' }] } }),
+  L({ type: 'tool/result', seq: 11, time: T + 5, data: { turn: 1, step: 1, message: { source: { callId: 'c1' }, content: [{ type: 'text', text: 'done' }] } }, surfaceOp: 'append' }),
+  L({ type: 'assistant/message', seq: 12, time: T + 6, data: { turn: 1, step: 2, message: { id: 'm-a1', content: [{ type: 'reasoning', text: 'The user wants backoff.' }, { type: 'text', text: '改好了。\n\n重试改成指数退避，接口不变。' }] } }, surfaceOp: 'append' }),
+  L({ type: 'turn/end', seq: 13, time: T + 7, data: { turn: 1, reason: 'completed' } }),
 ];
 if (hasZstd) {
   writeFileSync(file, Buffer.concat([zlib.zstdCompressSync(Buffer.from(frame1.join('\n') + '\n')), zlib.zstdCompressSync(Buffer.from(frame2.join('\n') + '\n'))]));
@@ -65,6 +68,13 @@ t('the footprint is the edit run_code dispatched, shown as the runner\'s own cha
   assert.ok(!why.includes('runtime-context'), 'the injected context is not a question');
   assert.ok(!why.includes('The user wants backoff'), 'reasoning is not the answer');
   assert.match(why, /thoughtdag:\/\/open\?session=session-dsh-1&turn=m-u1/);
+});
+
+t('an edit the PTC preset dispatched (tool/ptc-dispatch) is a footprint too (#46)', () => {
+  const why = run('why', 'src/lib/vision.py');
+  assert.match(why.split('\n')[0], /1 turn in 1 session/);
+  assert.match(why, /✏️ edit/);
+  assert.match(why, /Δ model = "v1" → model = "v4"/);
 });
 
 t('a read dispatched from run_code is a read, with its line window; a file nobody changed still answers', () => {
