@@ -28,6 +28,8 @@ export interface JudgeAnswer {
 export type JudgeProviderId = 'none' | 'openrouter' | 'typesafe' | 'cloudflare' | 'custom' | 'llm';
 
 export interface JudgeSettings {
+  /** the switch: wanted at all (on by default); a provider still has to be reachable */
+  enabled: boolean;
   provider: JudgeProviderId;
   /** the provider in use before the judge was switched off, so switching on restores it */
   prevProvider?: JudgeProviderId;
@@ -49,7 +51,7 @@ export interface JudgeResult {
   calibrated: boolean;
 }
 
-export const DEFAULT_JUDGE: JudgeSettings = { provider: 'none', openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' };
+export const DEFAULT_JUDGE: JudgeSettings = { enabled: true, provider: 'none', openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' };
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '';
 
 export const JUDGE_LABELS: Record<JudgeProviderId, string> = {
@@ -178,9 +180,16 @@ export function judgeAvailable(s: JudgeSettings = judgeSettings()): boolean {
   if (Date.now() < tripUntil) return false;
   return judgeConfigured(s);
 }
+/** The provider in effect: the chosen one, else the saved OpenRouter access when there is one. */
+export function effectiveProvider(s: JudgeSettings = judgeSettings()): JudgeProviderId {
+  if (s.provider !== 'none') return s.provider;
+  return storedOpenRouterKey() ? 'openrouter' : 'none';
+}
+
 /** Whether a judge is configured, regardless of whether it is answering right now. */
 export function judgeConfigured(s: JudgeSettings = judgeSettings()): boolean {
-  switch (s.provider) {
+  if (s.enabled === false) return false;
+  switch (effectiveProvider(s)) {
     case 'openrouter': return !!(s.openrouterKey || storedOpenRouterKey());
     case 'typesafe': return !!s.typesafeKey;
     case 'cloudflare': return !!(s.cloudflareAccount && s.cloudflareToken);
@@ -205,7 +214,7 @@ export function judgeCall(s: JudgeSettings = judgeSettings()): WhyJudgeCall | nu
 interface Wire { url: string; headers: Record<string, string>; body: unknown; direct: boolean; unwrap?: (j: unknown) => unknown }
 
 function wireFor(s: JudgeSettings, state: unknown, questions: Record<string, JudgeQuestion>): Wire {
-  switch (s.provider) {
+  switch (effectiveProvider(s)) {
     case 'openrouter':
       return { url: 'https://openrouter.ai/api/v1/systemone', headers: { Authorization: `Bearer ${s.openrouterKey || storedOpenRouterKey()}`, 'HTTP-Referer': 'https://chenxiachan.github.io/thoughtdag/', 'X-Title': 'ThoughtDAG' }, body: { model: 'typesafe/jev-1.13', state, questions }, direct: true };
     case 'typesafe':
@@ -255,7 +264,7 @@ export async function judge(rawState: unknown, questions: Record<string, JudgeQu
   if (opts.force ? !judgeConfigured(s) : !judgeAvailable(s)) throw new Error('no judge configured');
   const state = cleanForJudge(rawState);
   const t0 = Date.now();
-  if (s.provider === 'llm') {
+  if (effectiveProvider(s) === 'llm') {
     const r = await llmJudge(state, questions);
     return { provider: 'llm', model: useUiStore.getState().selectedModel ?? '', answers: r, ms: Date.now() - t0, calibrated: false };
   }
@@ -279,7 +288,7 @@ export async function judge(rawState: unknown, questions: Record<string, JudgeQu
       throw new Error(msg);
     }
     const n = normalize(w.unwrap ? w.unwrap(parsed) : parsed);
-    return { provider: s.provider, model: n.model, answers: n.answers, usage: n.usage, ms: Date.now() - t0, calibrated: true };
+    return { provider: effectiveProvider(s), model: n.model, answers: n.answers, usage: n.usage, ms: Date.now() - t0, calibrated: true };
   } catch (e) {
     // a judge that does not answer in time, or cannot be reached, is skipped for a while: every decision has a rule to fall back on
     const msg = signal.aborted ? t('judge.timeout') : (e instanceof Error ? e.message : String(e));

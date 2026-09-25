@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Info, Loader2, Scale } from 'lucide-react';
 import { useUiStore } from '../../lib/ui-store';
-import { judgeSelfTest, storedOpenRouterKey, judgeConfigured, judgeTripped, type JudgeProviderId, type JudgeResult } from '../../lib/judge';
+import { judgeSelfTest, storedOpenRouterKey, judgeConfigured, judgeTripped, effectiveProvider, type JudgeProviderId, type JudgeResult } from '../../lib/judge';
 import { useT, fmt } from '../../i18n';
 
 // The decision model (the judge), configured where the other keys are.
@@ -25,8 +25,9 @@ export default function JudgeSettings() {
   const [test, setTest] = useState<{ ok: true; r: JudgeResult } | { ok: false; error: string } | null>(null);
   const [choosing, setChoosing] = useState(false);
   const storedKey = storedOpenRouterKey();
-  const on = judgeCfg.provider !== 'none';
+  const on = judgeCfg.enabled !== false;
   const configured = judgeConfigured(judgeCfg);
+  const effective = effectiveProvider(judgeCfg);
   const tripped = judgeTripped();
 
   const runTest = async (cfg = judgeCfg) => {
@@ -35,20 +36,14 @@ export default function JudgeSettings() {
     catch (e) { setTest({ ok: false, error: e instanceof Error ? e.message : String(e) }); }
     finally { setTesting(false); }
   };
-  // switched on: restore the provider used before, else the saved OpenRouter access, else ask
-  const toggle = () => {
-    setTest(null);
-    if (on) { setJudge({ provider: 'none', prevProvider: judgeCfg.provider }); setChoosing(false); return; }
-    const next: JudgeProviderId = judgeCfg.prevProvider && judgeCfg.prevProvider !== 'none' ? judgeCfg.prevProvider : storedKey ? 'openrouter' : 'openrouter';
-    setJudge({ provider: next });
-    setChoosing(!(next === 'openrouter' && (storedKey || judgeCfg.openrouterKey)));
-  };
+  // the switch alone: the provider (chosen, or the saved OpenRouter access) stays as it is
+  const toggle = () => { setTest(null); setChoosing(false); setJudge({ enabled: !on }); };
   // a provider that is reachable in principle is checked once, so the row says whether it answers
   useEffect(() => {
     if (!on || !configured || test || testing) return;
     void runTest(judgeCfg);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [on, configured, judgeCfg.provider]);
+  }, [on, configured, effective]);
 
   const field = (label: string, value: string, onChange: (v: string) => void, extra: { placeholder?: string; secret?: boolean; hint?: string } = {}) => (
     <label className="block">
@@ -66,7 +61,7 @@ export default function JudgeSettings() {
     </label>
   );
   const providerLabel = (p: JudgeProviderId) => t(`judge.provider.${p}` as 'judge.provider.none');
-  const usingStored = judgeCfg.provider === 'openrouter' && !judgeCfg.openrouterKey && !!storedKey;
+  const usingStored = effective === 'openrouter' && !judgeCfg.openrouterKey && !!storedKey;
 
   return (
     <div className="border border-line rounded-xl px-3 py-2.5 bg-surface" data-judge-settings data-judge-on={on ? 'on' : 'off'}>
@@ -84,20 +79,20 @@ export default function JudgeSettings() {
         <div className="mt-2 space-y-2" data-judge-body>
           {/* what is in use, and whether it answers */}
           <div className="flex items-center gap-2 flex-wrap text-2xs">
-            <span className="text-ink-muted">{usingStored ? t('judge.detected') : providerLabel(judgeCfg.provider)}</span>
+            <span className="text-ink-muted" data-judge-effective={effective}>{usingStored ? t('judge.detected') : configured ? providerLabel(effective) : t('judge.stateNoApi')}</span>
             {!choosing && <button onClick={() => setChoosing(true)} className="text-accent hover:underline" data-judge-other>{t('judge.otherProvider')}</button>}
           </div>
           {(choosing || !configured) && (
             <label className="block">
               <span className="block text-2xs text-ink-faint mb-0.5">{t('judge.providerLabel')}</span>
-              <select value={judgeCfg.provider} onChange={(e) => { setJudge({ provider: e.target.value as JudgeProviderId }); setTest(null); }} className="w-full bg-wash border border-line rounded-md px-2 py-1 text-xs" data-judge-provider>
+              <select value={judgeCfg.provider === 'none' ? 'openrouter' : judgeCfg.provider} onChange={(e) => { setJudge({ provider: e.target.value as JudgeProviderId }); setTest(null); }} className="w-full bg-wash border border-line rounded-md px-2 py-1 text-xs" data-judge-provider>
                 {PROVIDERS.map((p) => <option key={p} value={p}>{providerLabel(p)}</option>)}
               </select>
             </label>
           )}
           {(choosing || !configured) && (
             <div className="space-y-2">
-              {judgeCfg.provider === 'openrouter' && field(t('judge.key'), judgeCfg.openrouterKey, (v) => setJudge({ openrouterKey: v }), { secret: true, placeholder: storedKey ? t('judge.openrouterStored') : 'sk-or-…', hint: t('judge.openrouterHint') })}
+              {(judgeCfg.provider === 'openrouter' || judgeCfg.provider === 'none') && field(t('judge.key'), judgeCfg.openrouterKey, (v) => setJudge({ openrouterKey: v }), { secret: true, placeholder: storedKey ? t('judge.openrouterStored') : 'sk-or-…', hint: t('judge.openrouterHint') })}
               {judgeCfg.provider === 'typesafe' && field(t('judge.key'), judgeCfg.typesafeKey, (v) => setJudge({ typesafeKey: v }), { secret: true, hint: t('judge.typesafeHint') })}
               {judgeCfg.provider === 'cloudflare' && (<>
                 {field(t('judge.account'), judgeCfg.cloudflareAccount, (v) => setJudge({ cloudflareAccount: v }))}

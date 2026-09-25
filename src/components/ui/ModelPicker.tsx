@@ -5,6 +5,7 @@ import { toast, useUiStore } from '../../lib/ui-store';
 import { profileLines } from '../../lib/profile';
 import { useModels, setModelsCache, ensureAgentsFresh, type ModelInfo } from '../../lib/use-models';
 import { AGENT_PROVIDER, AGENT_RUNTIMES, isAgentModel, runtimeOf } from '../../lib/agents/agent-runtime';
+import { JUDGE_LABELS, effectiveProvider, judgeConfigured, judgeTripped } from '../../lib/judge';
 
 // Agent-run models fold by runtime: each runtime lists many models, so only
 // the runtime holding the current pick opens by itself; the others show their
@@ -147,6 +148,7 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
               {!value && <Check size={13} strokeWidth={2} className="shrink-0" />}
             </button>
           )}
+          {!nodeMode && <p className="text-2xs text-ink-faint uppercase tracking-wider font-medium px-3 pt-2 pb-0.5" data-picker-answer-header>{t('model.answerGroup')}</p>}
           {providers.map((provider) => (
             <div key={provider}>
               <p className="text-2xs text-ink-faint uppercase tracking-wider font-medium px-3 pt-2 pb-1 flex items-center gap-1.5" title={provider === AGENT_PROVIDER ? t('model.agentGroupHint') : undefined}>
@@ -210,16 +212,10 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
               ))}
             </div>
           ))}
+          {!nodeMode && <JudgeRow onOpen={() => { setOpen(false); useUiStore.getState().setApiKeyModalOpen(true); }} />}
           {!nodeMode && (
-            <div className="flex items-center pr-1">
-            <button
-              onClick={() => { setOpen(false); useUiStore.getState().setApiKeyModalOpen(true); }}
-              className="text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors hover:bg-wash text-ink-muted shrink-0"
-              title={t('judge.where')}
-              data-picker-judge
-            >
-              <Scale size={13} strokeWidth={1.75} className="shrink-0" /> {t('judge.pickerEntry')}
-            </button>
+            <div className="flex items-center pr-1 border-t border-line mt-1 pt-1">
+            <span className="text-2xs text-ink-faint uppercase tracking-wider font-medium px-3 py-1.5 shrink-0">{t('model.interfaces')}</span>
             {!IN_HARNESS && <button
               onClick={() => { setOpen(false); useUiStore.getState().setApiKeyModalOpen(true); }}
               className={`flex-1 text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors hover:bg-wash ${
@@ -248,6 +244,33 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
           {!nodeMode && <GlobalCapabilities />}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── The decision model's row: one switch, one line of state, the dialog a click away ──
+function JudgeRow({ onOpen }: { onOpen: () => void }) {
+  const t = useT();
+  const judgeCfg = useUiStore((s) => s.judge);
+  const setJudge = useUiStore((s) => s.setJudge);
+  const on = judgeCfg.enabled !== false;
+  const configured = judgeConfigured(judgeCfg);
+  const tripped = judgeTripped();
+  const state = !on ? t('judge.stateOff') : !configured ? t('judge.stateNoApi') : tripped ? t('judge.stateTripped') : fmt(t('judge.stateOn'), { j: JUDGE_LABELS[effectiveProvider(judgeCfg)] });
+  return (
+    <div className="border-t border-line mt-1 pt-1" data-picker-judge-row data-judge-state={!on ? 'off' : !configured ? 'no-api' : tripped ? 'tripped' : 'on'}>
+      <div className="px-3 py-1.5 flex items-center gap-2">
+        <button onClick={onOpen} className="flex-1 min-w-0 text-left flex items-center gap-2 group" title={t('judge.where')} data-picker-judge>
+          <Scale size={13} strokeWidth={1.75} className="shrink-0 text-accent" />
+          <span className="min-w-0">
+            <span className="block text-xs text-ink font-medium group-hover:text-accent">{t('judge.rowTitle')}</span>
+            <span className="block text-2xs text-ink-faint truncate">{state}{on && !configured ? <span className="text-accent ml-1">{t('judge.goConfigure')}</span> : null}</span>
+          </span>
+        </button>
+        <button role="switch" aria-checked={on} onClick={(e) => { e.stopPropagation(); setJudge({ enabled: !on }); }} className={`relative w-8 h-[18px] rounded-full transition-colors shrink-0 ${on ? 'bg-accent' : 'bg-line-strong'}`} data-picker-judge-toggle>
+          <span className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-3.5' : ''}`} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -285,8 +308,10 @@ function EffortStep({ model, onDone }: { model: ModelInfo; onDone: () => void })
 // What this installation can do, what is missing (the ONLY place that
 // hints at hidden features), and the one extra model choice: which
 // vision model reads images and recognizes scanned pages.
+const CAPS_OPEN_KEY = 'thoughtdag.pickerCapsOpen';
 function GlobalCapabilities() {
   const t = useT();
+  const [capsOpen, setCapsOpen] = useState<boolean>(() => { try { return localStorage.getItem(CAPS_OPEN_KEY) === 'open'; } catch { return false; } });
   const data = useModels();
   const visionModelPref = useUiStore((s) => s.visionModelPref);
   const setVisionModelPref = useUiStore((s) => s.setVisionModelPref);
@@ -336,8 +361,13 @@ function GlobalCapabilities() {
     </div>
   );
   return (
-    <div className="border-t border-line mt-1.5 pt-1 pb-1">
-      <p className="text-2xs text-ink-faint uppercase tracking-wider font-medium px-3 pt-1 pb-1">{t('caps.title')}</p>
+    <div className="border-t border-line mt-1.5 pt-1 pb-1" data-picker-caps data-picker-caps-open={capsOpen ? 'open' : 'closed'}>
+      <button onClick={() => setCapsOpen((v) => { try { localStorage.setItem(CAPS_OPEN_KEY, v ? 'closed' : 'open'); } catch { /* per-session */ } return !v; })} className="w-full text-left px-3 pt-1 pb-1 flex items-center gap-1.5 hover:bg-wash transition-colors" data-picker-caps-toggle>
+        {capsOpen ? <ChevronDown size={12} strokeWidth={1.75} className="text-ink-faint" /> : <ChevronRight size={12} strokeWidth={1.75} className="text-ink-faint" />}
+        <span className="text-2xs text-ink-faint uppercase tracking-wider font-medium">{t('caps.title')}</span>
+        {!capsOpen && <span className="ml-auto flex items-center gap-1.5">{dot(!!caps?.webSearch)}<span className="text-2xs text-ink-faint">{t('caps.webSearch')}</span>{dot(memoryEnabled)}<span className="text-2xs text-ink-faint">{t('caps.memory')}</span></span>}
+      </button>
+      {capsOpen && <>
       <div className="px-3 py-1 flex items-start gap-2">
         {dot(!!caps?.webSearch)}
         <div className="flex-1 min-w-0">
@@ -412,6 +442,7 @@ function GlobalCapabilities() {
           )}
         </div>
       </div>
+      </>}
     </div>
   );
 }
