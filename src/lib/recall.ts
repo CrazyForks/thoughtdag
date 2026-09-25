@@ -14,7 +14,7 @@ import { contextLengthFor } from './runtime-providers';
 import { cachedCard, fillCards } from './recall-cards';
 import { topicsOf, TOPIC_BAR } from './topics';
 import { dossiersFor } from './dossier';
-import { decideDetail, DETAIL_BAR } from './judge';
+import { decideDetail, DETAIL_BAR, judgeTripped } from './judge';
 import { t, fmt } from '../i18n';
 import { countTokens, generateId } from '../utils';
 import type { RecallItem, RecallMeta, ThoughtData } from '../types';
@@ -194,7 +194,7 @@ export async function fetchRecallItems(question: string, opts: RecallOptions = {
       const tokens = [...name.matchAll(/[a-z][a-z0-9_.-]{3,}|[\u3400-\u9fff]{2,}/g)].map((m) => m[0]).filter((w) => !STOP.has(w) && !CJK_STOP.has(w) && !GENERIC_TOPIC_WORDS.has(w));
       return tokens.some((w) => low.includes(w));
     };
-    const of = judged ? await topicsOf(question, table.topics).catch(() => ({} as Record<string, number>)) : {};
+    const of = judged ? await topicsOf(question, table.topics).catch((e: unknown) => { meta.judgeError = e instanceof Error ? e.message : String(e); return {} as Record<string, number>; }) : {};
     about = table.topics
       .map((tp) => ({ id: tp.id, name: tp.name, p: of[tp.id] ?? 0, byName: named(tp) }))
       .filter((x) => x.p >= TOPIC_BAR || x.byName)
@@ -212,12 +212,16 @@ export async function fetchRecallItems(question: string, opts: RecallOptions = {
     used += d.tokens;
     meta.dossiers = [...(meta.dossiers ?? []), d.name];
   }
-  // with a dossier in hand, excerpts are fetched only when the question wants a specific detail
-  if (dossiers.length && judged) {
-    const p = await decideDetail(question).catch(() => 1);
-    meta.detail = p;
-    if (p < DETAIL_BAR) { meta.pool = 0; meta.total = 0; return { items, meta }; }
+  // with a dossier in hand, excerpts are fetched only when the question wants a specific detail;
+  // a judge that stopped answering (the breaker) leaves the decision to the rule: fetch them
+  if (dossiers.length && judgeAvailable()) {
+    try {
+      const p = await decideDetail(question);
+      meta.detail = p;
+      if (p < DETAIL_BAR) { meta.pool = 0; meta.total = 0; return { items, meta }; }
+    } catch (e) { meta.judgeError = e instanceof Error ? e.message : String(e); }
   }
+  if (!meta.judgeError && judged && !judgeAvailable()) meta.judgeError = judgeTripped()?.note ?? t('judge.timeout');
   if (!terms.length) return { items, meta };
   const found = new Map<string, { hit: WhyFindHit; matched: string[]; topics: string[] }>();
   let total = 0;

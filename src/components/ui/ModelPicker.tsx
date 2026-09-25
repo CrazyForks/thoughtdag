@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { IN_HARNESS } from '../../lib/embedded';
-import { Check, ChevronDown, Cpu, KeyRound, RefreshCw, Info, Loader2 } from 'lucide-react';
+import { Check, ChevronDown, Cpu, KeyRound, RefreshCw, Info, Loader2, ChevronRight, Scale } from 'lucide-react';
 import { toast, useUiStore } from '../../lib/ui-store';
 import { profileLines } from '../../lib/profile';
 import { useModels, setModelsCache, ensureAgentsFresh, type ModelInfo } from '../../lib/use-models';
-import { AGENT_PROVIDER, isAgentModel } from '../../lib/agents/agent-runtime';
+import { AGENT_PROVIDER, AGENT_RUNTIMES, isAgentModel, runtimeOf } from '../../lib/agents/agent-runtime';
+
+// Agent-run models fold by runtime: each runtime lists many models, so only
+// the runtime holding the current pick opens by itself; the others show their
+// name, count and a chevron. Which are open is remembered.
+const OPEN_RUNTIMES_KEY = 'thoughtdag.pickerOpenRuntimes';
+const runtimeLabelOf = (id: string): string => { const rt = runtimeOf(id); if (rt) return AGENT_RUNTIMES[rt].label; if (id.startsWith('harness/')) return 'Harness'; return id.split('/')[0] || 'agent'; };
+const loadOpenRuntimes = (): Set<string> => { try { const v = JSON.parse(localStorage.getItem(OPEN_RUNTIMES_KEY) ?? '[]'); return new Set(Array.isArray(v) ? v : []); } catch { return new Set(); } };
 import { refreshStoredProviders, pushProviders, storedProviders } from '../../lib/runtime-providers';
 import { fmt } from '../../i18n';
 import { useT } from '../../i18n';
@@ -32,6 +39,8 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
   // the effort step unfolded under a just-picked agent model (see pick); closes with the menu
   const [effortStepFor, setEffortStepFor] = useState<string | null>(null);
   const agentEffort = useUiStore((s) => s.agentEffort);
+  const [openRuntimes, setOpenRuntimes] = useState<Set<string>>(loadOpenRuntimes);
+  const toggleRuntime = (label: string) => setOpenRuntimes((prev) => { const next = new Set(prev); if (next.has(label)) next.delete(label); else next.add(label); try { localStorage.setItem(OPEN_RUNTIMES_KEY, JSON.stringify([...next])); } catch { /* per-session then */ } return next; });
   const rootRef = useRef<HTMLDivElement>(null);
 
   // the runtimes are asked for their catalogs the first time a picker
@@ -148,7 +157,40 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
               {provider === AGENT_PROVIDER && data?.agentsPending && models.filter((m) => m.provider === AGENT_PROVIDER).length === 0 && (
                 <p className="text-2xs text-ink-faint px-3 pb-1.5">{t('model.agentGroupLoading')}</p>
               )}
-              {models.filter((m) => m.provider === provider).map((m) => (
+              {provider === AGENT_PROVIDER ? (() => {
+                const agentModels = models.filter((m) => m.provider === AGENT_PROVIDER);
+                const groups = new Map<string, ModelInfo[]>();
+                for (const m of agentModels) { const label = runtimeLabelOf(m.id); const list = groups.get(label) ?? []; list.push(m); groups.set(label, list); }
+                const activeLabel = activeId ? runtimeLabelOf(activeId) : null;
+                return [...groups.entries()].map(([label, list]) => {
+                  const isOpen = openRuntimes.has(label) || label === activeLabel || groups.size === 1;
+                  const current = list.find((m) => m.id === activeId);
+                  return (
+                    <div key={label} data-runtime-group={label} data-runtime-open={isOpen ? 'open' : 'closed'}>
+                      <button onClick={() => toggleRuntime(label)} className="w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 hover:bg-wash transition-colors text-ink-muted" data-runtime-toggle={label}>
+                        {isOpen ? <ChevronDown size={12} strokeWidth={1.75} className="text-ink-faint shrink-0" /> : <ChevronRight size={12} strokeWidth={1.75} className="text-ink-faint shrink-0" />}
+                        <span className="font-medium text-ink">{label}</span>
+                        <span className="text-2xs text-ink-faint">{list.length}</span>
+                        {!isOpen && current && <span className="text-2xs text-accent truncate ml-auto max-w-[55%]">{current.name.replace(`${label} · `, '')}</span>}
+                      </button>
+                      {isOpen && list.map((m) => (
+                        <div key={m.id}>
+                          <button
+                            onClick={() => pick(m.id)}
+                            title={m.name}
+                            className={`w-full text-left pl-8 pr-3 py-1.5 text-xs flex items-center gap-2 transition-colors hover:bg-wash ${m.id === activeId ? 'text-accent font-medium' : 'text-ink'}`}
+                          >
+                            <span className="flex-1 break-words leading-snug">{m.name.replace(` (${m.provider})`, '').replace(`${label} · `, '')}</span>
+                            {m.vision && <span className="text-2xs text-ink-faint shrink-0">{t('model.vision')}</span>}
+                            {m.id === activeId && <Check size={13} strokeWidth={2} className="shrink-0" />}
+                          </button>
+                          {effortStepFor === m.id && <EffortStep model={m} onDone={() => { setEffortStepFor(null); setOpen(false); }} />}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                });
+              })() : models.filter((m) => m.provider === provider).map((m) => (
                 <div key={m.id}>
                 <button
                   onClick={() => pick(m.id)}
@@ -170,6 +212,14 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
           ))}
           {!nodeMode && (
             <div className="flex items-center pr-1">
+            <button
+              onClick={() => { setOpen(false); useUiStore.getState().setApiKeyModalOpen(true); }}
+              className="text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors hover:bg-wash text-ink-muted shrink-0"
+              title={t('judge.where')}
+              data-picker-judge
+            >
+              <Scale size={13} strokeWidth={1.75} className="shrink-0" /> {t('judge.pickerEntry')}
+            </button>
             {!IN_HARNESS && <button
               onClick={() => { setOpen(false); useUiStore.getState().setApiKeyModalOpen(true); }}
               className={`flex-1 text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors hover:bg-wash ${

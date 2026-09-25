@@ -7,7 +7,8 @@
 // Off by default. Everything that asks the judge falls back to rules when
 // no judge answers, so the app works the same without one.
 import { llmCall } from './api';
-import { useUiStore } from './ui-store';
+import { toast, useUiStore } from './ui-store';
+import { t, fmt } from '../i18n';
 
 export type JudgeQuestion =
   | { type: 'noul'; instructions: string; criteria?: { true: string; false: string } }
@@ -28,6 +29,8 @@ export type JudgeProviderId = 'none' | 'openrouter' | 'typesafe' | 'cloudflare' 
 
 export interface JudgeSettings {
   provider: JudgeProviderId;
+  /** the provider in use before the judge was switched off, so switching on restores it */
+  prevProvider?: JudgeProviderId;
   openrouterKey: string;
   typesafeKey: string;
   cloudflareAccount: string;
@@ -155,8 +158,28 @@ export function storedOpenRouterKey(): string {
 
 export function judgeSettings(): JudgeSettings { return useUiStore.getState().judge; }
 
-/** Whether a judge is configured well enough to be asked. */
+// ── degrade, never wait: one call gets this long; after a failure the judge
+// is skipped for a while and every decision falls back to its rule ──
+export const JUDGE_TIMEOUT_MS = 6000;
+export const JUDGE_TRIP_MS = 60_000;
+let tripUntil = 0;
+let tripNote: string | null = null;
+/** The breaker's state, for the UI: skipping the judge until when, and why. */
+export function judgeTripped(): { until: number; note: string } | null { return Date.now() < tripUntil ? { until: tripUntil, note: tripNote ?? '' } : null; }
+export function judgeReset(): void { tripUntil = 0; tripNote = null; }
+function trip(note: string): void {
+  const first = Date.now() >= tripUntil;
+  tripUntil = Date.now() + JUDGE_TRIP_MS; tripNote = note;
+  if (first) toast('info', fmt(t('judge.tripped'), { e: note.slice(0, 80) }), 8000);
+}
+
+/** Whether a judge is configured well enough to be asked — and answering. */
 export function judgeAvailable(s: JudgeSettings = judgeSettings()): boolean {
+  if (Date.now() < tripUntil) return false;
+  return judgeConfigured(s);
+}
+/** Whether a judge is configured, regardless of whether it is answering right now. */
+export function judgeConfigured(s: JudgeSettings = judgeSettings()): boolean {
   switch (s.provider) {
     case 'openrouter': return !!(s.openrouterKey || storedOpenRouterKey());
     case 'typesafe': return !!s.typesafeKey;
@@ -201,12 +224,12 @@ function wireFor(s: JudgeSettings, state: unknown, questions: Record<string, Jud
   }
 }
 
-async function post(url: string, headers: Record<string, string>, body: unknown): Promise<Response> {
-  return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
+async function post(url: string, headers: Record<string, string>, body: unknown, signal?: AbortSignal): Promise<Response> {
+  return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body), signal });
 }
 
-async function viaProxy(w: Wire): Promise<Response> {
-  return fetch(`${API_BASE}/api/judge`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ url: w.url, headers: w.headers, body: w.body }) });
+async function viaProxy(w: Wire, signal?: AbortSignal): Promise<Response> {
+  return fetch(`${API_BASE}/api/judge`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ url: w.url, headers: w.headers, body: w.body }), signal });
 }
 
 function normalize(raw: unknown): { model: string; answers: Record<string, JudgeAnswer>; usage?: JudgeResult['usage'] } {
@@ -227,9 +250,9 @@ export function cleanForJudge<T>(v: T): T {
 }
 
 /** Ask the configured judge. Throws when none is configured or the call fails. */
-export async function judge(rawState: unknown, questions: Record<string, JudgeQuestion>, opts: { settings?: JudgeSettings; signal?: AbortSignal } = {}): Promise<JudgeResult> {
+export async function judge(rawState: unknown, questions: Record<string, JudgeQuestion>, opts: { settings?: JudgeSettings; signal?: AbortSignal; timeoutMs?: number; force?: boolean } = {}): Promise<JudgeResult> {
   const s = opts.settings ?? judgeSettings();
-  if (!judgeAvailable(s)) throw new Error('no judge configured');
+  if (opts.force ? !judgeConfigured(s) : !judgeAvailable(s)) throw new Error('no judge configured');
   const state = cleanForJudge(rawState);
   const t0 = Date.now();
   if (s.provider === 'llm') {
@@ -237,24 +260,32 @@ export async function judge(rawState: unknown, questions: Record<string, JudgeQu
     return { provider: 'llm', model: useUiStore.getState().selectedModel ?? '', answers: r, ms: Date.now() - t0, calibrated: false };
   }
   const w = wireFor(s, state, questions);
-  let res: Response;
-  if (w.direct) {
-    // a browser can reach OpenRouter and (usually) a self-hosted endpoint directly; the proxy is the fallback for CORS
-    try { res = await post(w.url, w.headers, w.body); }
-    catch { res = await viaProxy(w); }
-  } else {
-    res = await viaProxy(w);
-  }
-  const text = await res.text();
-  let parsed: unknown = {};
-  try { parsed = text ? JSON.parse(text) : {}; } catch { throw new Error(`the judge answered ${res.status} with non-JSON`); }
-  if (!res.ok) {
-    const err = (parsed as { error?: unknown; errors?: { message?: string }[] });
-    const msg = typeof err.error === 'string' ? err.error : (err.error as { message?: string })?.message ?? err.errors?.[0]?.message ?? `HTTP ${res.status}`;
+  const signal = opts.signal ?? AbortSignal.timeout(opts.timeoutMs ?? JUDGE_TIMEOUT_MS);
+  try {
+    let res: Response;
+    if (w.direct) {
+      // a browser can reach OpenRouter and (usually) a self-hosted endpoint directly; the proxy is the fallback for CORS
+      try { res = await post(w.url, w.headers, w.body, signal); }
+      catch (e) { if (signal.aborted) throw e; res = await viaProxy(w, signal); }
+    } else {
+      res = await viaProxy(w, signal);
+    }
+    const text = await res.text();
+    let parsed: unknown = {};
+    try { parsed = text ? JSON.parse(text) : {}; } catch { throw new Error(`the judge answered ${res.status} with non-JSON`); }
+    if (!res.ok) {
+      const err = (parsed as { error?: unknown; errors?: { message?: string }[] });
+      const msg = typeof err.error === 'string' ? err.error : (err.error as { message?: string })?.message ?? err.errors?.[0]?.message ?? `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    const n = normalize(w.unwrap ? w.unwrap(parsed) : parsed);
+    return { provider: s.provider, model: n.model, answers: n.answers, usage: n.usage, ms: Date.now() - t0, calibrated: true };
+  } catch (e) {
+    // a judge that does not answer in time, or cannot be reached, is skipped for a while: every decision has a rule to fall back on
+    const msg = signal.aborted ? t('judge.timeout') : (e instanceof Error ? e.message : String(e));
+    if (!opts.force) trip(msg);
     throw new Error(msg);
   }
-  const n = normalize(w.unwrap ? w.unwrap(parsed) : parsed);
-  return { provider: s.provider, model: n.model, answers: n.answers, usage: n.usage, ms: Date.now() - t0, calibrated: true };
 }
 
 // ── the chat model as a stand-in ──
@@ -290,14 +321,16 @@ async function llmJudge(state: unknown, questions: Record<string, JudgeQuestion>
   return out;
 }
 
-/** A tiny decision, for the settings page's Test button. */
+/** A tiny decision, for the settings page's Test button (bypasses the breaker and resets it on success). */
 export async function judgeSelfTest(settings: JudgeSettings): Promise<JudgeResult> {
-  return judge(
+  const r = await judge(
     { message: 'Help! My payouts have been failing for 3 days and nobody answers.' },
     {
       urgent: { type: 'noul', instructions: 'Does `message` communicate time pressure?' },
       department: { type: 'choice', instructions: 'Which team should handle `message`?', criteria: { billing: 'payments, invoices, refunds', technical: 'bugs, outages, integrations', other: 'everything else' } },
     },
-    { settings },
+    { settings, force: true },
   );
+  judgeReset();
+  return r;
 }
