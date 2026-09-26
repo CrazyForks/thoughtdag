@@ -4,170 +4,156 @@
 
 # ThoughtDAG
 
-**Find the conversations. Remember what mattered. Decide what the model sees next.**
+**AI conversations that branch on an infinite canvas.**
+
+Each exchange becomes a node. **Wires are the context.**<br/>
+Explore a side question, connect useful paths, and choose what the model sees next.
+
+[Download](https://chenxiachan.github.io/thoughtdag/#download) · [Website](https://chenxiachan.github.io/thoughtdag/) · [Docs](https://chenxiachan.github.io/thoughtdag/docs/) · [中文](./README_ZH.md)
 
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Status](https://img.shields.io/badge/status-active_development-6B5CE7)
-
-### [Download ↓](https://chenxiachan.github.io/thoughtdag/#download) · [Website](https://chenxiachan.github.io/thoughtdag/) · [Docs](https://chenxiachan.github.io/thoughtdag/docs/)
-
-[中文](./README_ZH.md) · [Memory across agents](#new-in-05--memory-across-your-agents) · [Find past context](#find-past-context-from-the-command-line) · [Inside DeepSeek Harness](#inside-deepseek-harness) · [The desktop app](#the-desktop-app) · [How it differs](#how-thoughtdag-differs) · [Research](#-research-why-editable-context-matters) · [Full docs](https://chenxiachan.github.io/thoughtdag/docs/)
 
 </div>
 
-## New in 0.5 · Memory across your agents
+[0.5 update](#new-in-05--thoughtdag--jev) · [CLI](#find-past-context-from-the-command-line) · [Harness](#inside-deepseek-harness) · [Desktop](#the-desktop-app) · [How it works](#the-one-rule) · [How it differs](#how-thoughtdag-differs) · [Research](#-research-why-editable-context-matters)
 
-> Everything you discussed in Pi, Codex, Claude Code and DeepSeek Harness now forms one whole you can recall. When you ask, what matters rides in with the question, across agents and across time.
+## New in 0.5 · ThoughtDAG × Jev
 
-- **Fragments become a thread.** The threshold you settled in Codex yesterday and the approach you ruled out in Claude Code last week are there when you ask on the canvas today. Every topic keeps a dossier: what it is, what was decided, where it stands, what is still open, each line pointing back to the turn it came from. Your own profile is two documents, preferences and identity, rewritten as you go rather than piled up.
-- **Recall as you ask.** With recall on, ThoughtDAG works out which topics a question touches and brings their dossiers in whole; a question about a detail brings a few verbatim excerpts too. The panel shows what came in and what it cost, item by item; strike one and it stays out.
-- **Fast thinking, slow thinking.** The slow-thinking model writes your answers. A fast-thinking model decides: is this relevant, is this line a decision, does this change bear on that answer. Half a second, calibrated probabilities, one switch in the model picker, on by default. Without one, every decision falls back to a rule and nothing stops working.
-- **Connect a fast-thinking model.** A Jev-class decision model runs through the aggregator access you already saved, through the official endpoint, or from a self-hosted server. [How to connect one →](https://chenxiachan.github.io/thoughtdag/docs/setup#decision-model)
-- **All of it stays local.** The index, topic labels and dossiers live in `~/.thoughtdag`; your profile lives in the app's own storage. A decision sends only the question and the candidate excerpts, to the access you chose.
+**Bring relevant past conversations into the question you are asking now.**
 
-[The memory guide →](https://chenxiachan.github.io/thoughtdag/docs/guides/memory)
+- **Find earlier work.** The local index searches supported agent sessions and ThoughtDAG canvases. Topic dossiers collect decisions and open questions with links back to their sources.
+- **Select what belongs.** The optional **Jev decision layer** helps identify topics and rank relevant excerpts. Your chosen language model develops the answer.
+- **Check what comes back.** With recall enabled, the context panel lists the dossiers and excerpts added to a request. Inspect their sources or exclude individual items before continuing.
+
+<img src="docs/jev-relevance-en.gif" width="100%" alt="Animated replay of a small relevance-selection pilot: Jev median 391 milliseconds versus 24,813 milliseconds for the GLM judgment adapter with default reasoning. Ends with historical nodes converging into Jev. This is not end-to-end retrieval timing."/>
+
+In a small relevance-selection pilot, Jev's median was **391 ms** versus **24,813 ms** for our GLM adapter. These are selection-stage timings, not end-to-end search or answer times.
+
+<details>
+<summary>What the timing measures</summary>
+
+Six runs per engine over the same 14 synthetic excerpts. Median selection latency: **391 ms** for Jev-1.13 and **24,813 ms** for the GLM-5.3-Flash adapter with default reasoning. These are different inference paths, not a controlled ranking of model speed. Retrieval and answer generation are excluded; this does not measure whole-product speed or accuracy gains.
+
+Without a decision model, recall falls back to rules. The **System 1 / System 2-style split** describes software roles here: quick relevance decisions, then answer and dossier generation. It is not a claim about human cognition.
+
+</details>
+
+[Set up history and recall](https://chenxiachan.github.io/thoughtdag/docs/guides/memory) · [Configure Jev](https://chenxiachan.github.io/thoughtdag/docs/setup#decision-model)
 
 ## Find past context from the command line
 
-> Start with a code file, an exact phrase, a URL, or a paper. ThoughtDAG searches your local agent conversations and takes you back to the matching turn.
+Remember a file, a phrase or a URL, but not the session? Search local conversations and jump to the matching turn, without opening the desktop app.
 
 ```bash
-npx thoughtdag why src/lib/api.ts           # which conversations touched this file
-npx thoughtdag find "a phrase you remember"  # which turns said it
-npx thoughtdag topics                        # your topics, and how much of the index carries labels
+npx thoughtdag why src/lib/api.ts           # conversations about this file
+npx thoughtdag find "a phrase you remember" # matching conversation turns
+npx thoughtdag topics                       # topics in your local index
 ```
 
-For regular use, install the CLI and connect its read-only MCP tools: `npm install -g thoughtdag && thoughtdag setup mcp`. Your agent can then call `why_check`, `why_file`, `find` and `recall_turn`. Conversations from Claude Code, Codex, DeepSeek Harness, Pi and ThoughtDAG canvases are indexed together on your machine; the desktop app is not required.
-
-```text
-$ npx thoughtdag why src/lib/api.ts
-why src/lib/api.ts · 12 turns in 6 sessions
-claude-code  ✏️ edit  Q: Can the API detect vision support?
-             Δ storedProviders → storedProviders, storedVision…
-…
-```
-
-> **Give agents less irrelevant history. Reduce context-driven hallucinations and wasted tokens.** The query layer brings back only the matching history; the canvas lets you cut contaminated branches before they shape the next answer.
+For regular use: `npm install -g thoughtdag`. Run `thoughtdag setup mcp` to expose read-only history tools to your agent. Retrieve the relevant turns rather than replaying a whole session. [CLI guide →](cli/README.md)
 
 ## Inside DeepSeek Harness
 
-ThoughtDAG runs as a view inside the DeepSeek Harness web UI: a 对话 | 思维图 switch above the chat. The canvas is where you decide what the harness sees next; the harness runs the turn.
+Switch between chat and ThoughtDAG's graph inside the harness. Choose the context on the canvas; the harness runs the next turn.
 
 ```bash
 dsh plugin --profile web add dsh-thoughtdag
 dsh web
 ```
 
-The plugin bundles the canvas and the memory layer; no other install is needed. Requires Node 22.19+ and DeepSeek Harness 0.1.2-rc or later. Details, including how to pin a version on release day → [the plugin guide](https://chenxiachan.github.io/thoughtdag/docs/guides/deepseek-harness).
+The plugin bundles the canvas and memory layer. Requires Node 22.19+ (22.x) or 24+, and DeepSeek Harness 0.1.2-rc.1 or later. [Plugin guide →](https://chenxiachan.github.io/thoughtdag/docs/guides/deepseek-harness)
 
-<img src="docs/harness-plugin-en.gif" alt="ThoughtDAG inside DeepSeek Harness: the 对话 | 思维图 switch above the chat, a question asked on the canvas and answered by a harness model, then a follow-up node growing the graph" width="100%"/>
+<img src="docs/harness-plugin-en.gif" alt="Switching from chat to the ThoughtDAG canvas inside DeepSeek Harness, asking a question and continuing in a new node." width="100%"/>
 
 ## The desktop app
 
-Session Atlas, an editable context canvas, PDF and file readers, model and search connections, clipping, export, handoff, and memory with sources.
+Read a document beside your conversation, branch from a passage, and connect the paths you want to explore together. Use your own model connection.
 
 ```bash
 brew install --cask thoughtdag
 ```
 
-Or use the [download page](https://chenxiachan.github.io/thoughtdag/#download) for macOS, Windows, and Linux.
+Or [download for macOS, Windows or Linux](https://chenxiachan.github.io/thoughtdag/#download), connect a model and open the example canvas.
 
-<div align="center">
+<img src="docs/hero-demo-en.gif" width="100%" alt="ThoughtDAG in use: ask from a document, branch a conversation, and edit the connections that carry context."/>
 
-<img src="docs/hero-demo-en.gif" alt="ThoughtDAG hero demo: asking from a PDF passage, editing model context by removing an edge, zooming out into a thought map, exporting a backup, and turning scattered agent sessions into persistent project context with Session Atlas" width="100%"/>
+<p align="center"><a href="https://www.youtube.com/watch?v=-8BqAyaoNXQ"><img src="https://img.youtube.com/vi/-8BqAyaoNXQ/maxresdefault.jpg" alt="Official YouTube thumbnail: ThoughtDAG narrated tour" width="640"/></a></p>
 
-<p align="center"><a href="https://www.youtube.com/watch?v=-8BqAyaoNXQ"><img src="https://img.youtube.com/vi/-8BqAyaoNXQ/maxresdefault.jpg" alt="YouTube thumbnail for the ThoughtDAG narrated tour" width="640" /></a></p>
-
-**[▶ The 33-second narrated tour](https://www.youtube.com/watch?v=-8BqAyaoNXQ)**
-
-</div>
+<p align="center"><a href="https://www.youtube.com/watch?v=-8BqAyaoNXQ">▶ Watch the 33-second tour</a></p>
 
 ## The one rule
 
-> **Wires are the context.** What the model sees is exactly what wires into the node. Editing the graph edits the model's memory.
+> **Wires are the context.** Connect conversation paths to use them in the next question. Disconnect a path without deleting the work.
 
-Many tools put conversations on a canvas. In ThoughtDAG, a wire is not decoration or an execution route. It determines what the model sees next.
+Branch from a detail, explore it separately, then connect the useful parts to a later question. The graph changes the model's input, not just the layout.
+
+**Preview what the model will receive before sending.** Wires select the conversation paths; explicit references and enabled recall can add material alongside them. [Context guide →](https://chenxiachan.github.io/thoughtdag/docs/guides/context-control)
 
 ## In action
 
-One principle behind every gesture: **the human in the loop, the model on the wires**. No autonomous agent redraws your graph.
-
-<table>
-<tr>
-<td width="45%"><img src="docs/illus/prune-en.svg" alt="Illustration: the research chain wired to a summary node, with the edge to a dinner node cut into a red dashed line"/></td>
+<table><tr>
+<td width="45%"><img src="docs/illus/prune-en.svg" alt="A research path remains connected to a summary while an unrelated dinner branch is disconnected but stays on the canvas."/></td>
 <td width="55%">
 
-### ✂️ Delete one edge, get a different answer
+### ✂️ Change the context, keep the exploration
 
-The model sees only what wires in. Delete the noise edge, ask again, and the same prompt returns a clean answer. **Reproduce it in chapter ③ of the example canvas.**
+Select text in an answer to start a side branch. Disconnect that branch from a later question, then regenerate to compare. Its nodes stay on the canvas: keep exploring from them or reconnect them later.
+
+</td></tr></table>
+
+<table><tr><td width="55%">
+
+### 📖 Read, clip, and ask
+
+Open a PDF, image or HTML alongside the graph. Ask about a passage or clip a figure into its own node. PDF clips keep their page reference, so you can check the source as the discussion develops.
 
 </td>
-</tr>
-</table>
+<td width="45%"><img src="docs/illus/reading-en.svg" alt="Selecting a passage in a PDF, asking about it and retaining a reference to page 3."/></td>
+</tr></table>
 
-<table>
-<tr>
+<table><tr>
+<td width="45%"><img src="docs/illus/map-en.svg" alt="Conversation nodes shown as compact takeaways, with decisions and changes of direction visible."/></td>
 <td width="55%">
 
-### 📖 Read a paper into a map
+### 💎 Condense the path; weave the highlights
 
-Select a passage, ask right there. The answer lands on the canvas with its page number, and the p.N chip jumps back to the page. **Finish the paper, and the map is drawn.**
+**Condense** creates a shorter copy of a conversation path while preserving the original. **Weave** turns selected highlights into cited prose. Continue from the result, or export it as Markdown. Zooming out changes the view, not the context.
 
-</td>
-<td width="45%"><img src="docs/illus/reading-en.svg" alt="Illustration: a passage selected on the original page, a purple ask bubble beside it, the paragraph tagged p.3"/></td>
-</tr>
-</table>
+</td></tr></table>
 
-<table>
-<tr>
-<td width="45%"><img src="docs/illus/map-en.svg" alt="Illustration: three takeaway plaques with ruled-out, decided and pivoted badges, linked by dashed lines"/></td>
-<td width="55%">
+<table><tr><td width="55%">
 
-### 💎 Condense, zoom out, and export the shape
+### 🧭 Session Atlas: continue an earlier conversation
 
-Merge nodes into a higher conclusion; weave highlights into cited prose. Zoom through full cards, takeaway plaques and an icon skeleton. Then export the current structure as a light or dark Thought Map.
+Open a supported local agent session as a graph. Pick where to branch or continue; use the history index to find related discussions from other sessions. Atlas provides the view, and recall helps find what to bring in.
+
+*Supports local Claude Code, Codex, DeepSeek Harness and Pi sessions. Source sessions remain read-only.*
 
 </td>
-</tr>
-</table>
-
-<table>
-<tr>
-<td width="55%">
-
-### 🧭 Session Atlas: bring agent conversations onto the canvas
-
-Bring work scattered across different agents into one editable context graph. Continue from any node, then bring the new work back to where the thought began.
-
-*Currently supports local Claude Code, Codex, DeepSeek Harness, and Pi sessions, with more agent integrations in development. Source sessions remain read-only.*
-
-</td>
-<td width="45%"><img src="docs/illus/atlas-en.svg" alt="Illustration: local Codex and Claude Code sessions grouped by project, opened as a context graph, then continued in a fresh CLI session"/></td>
-</tr>
-</table>
+<td width="45%"><img src="docs/illus/atlas-en.svg" alt="Local agent sessions grouped by project, opened as a context graph and continued in a fresh session."/></td>
+</tr></table>
 
 ## How ThoughtDAG differs
 
-Many products use nodes and edges, but the graph does a different job in each category.
+Nodes and edges serve different purposes. Here is where ThoughtDAG fits:
 
-| Product category | How it differs from ThoughtDAG |
+| Product category | ThoughtDAG's focus |
 |---|---|
-| Linear chat | Context follows one chronological thread; ThoughtDAG selects and merges visible paths. |
-| Mind maps and whiteboards | Edges organize ideas for people; ThoughtDAG edges also change model input. |
-| Branching chat canvases | They usually follow one inherited branch; ThoughtDAG can merge or prune several paths. |
-| Workflow and agent canvases | Edges run tasks and data; ThoughtDAG edges control conversational context. |
-| RAG and automatic memory | Retrieval is a black box; ThoughtDAG's memory is a document with sources you can read, correct and strike, and what rides in is listed per item. |
-| Code structure graphs | They answer what connects to what; ThoughtDAG finds the conversations and decisions that shaped it. |
-| Agent memory and conversation search | They retrieve text inside one agent; ThoughtDAG reads every agent's conversations on the machine, labels them by topic, and keeps one dossier per topic. |
-| Harness context viewers | They show what a session carries now; ThoughtDAG lets you compose what the next turn receives, and sends it as a real turn. |
+| Linear chat | Keep several lines of inquiry visible and choose which ones continue into the next question. |
+| Mind maps and whiteboards | Use connections to change model input, not just organize ideas visually. |
+| Branching chat canvases | Connect several branches into one question, or disconnect a path while keeping its nodes. |
+| Agent workflow canvases | Edit conversational context as you explore, rather than design a pipeline of automated tasks. |
+| Retrieval and automatic memory | Inspect source-linked dossiers and recalled excerpts; edit or exclude what the next request uses. |
+| Code graphs and conversation search | Find the discussions behind a file or topic across supported agents, then continue from them. |
+| Harness context viewers | Move from inspecting a session to composing and sending its next turn. |
 
-ThoughtDAG is a user-authored context graph with a memory that shows its sources: incoming paths, explicit references and recalled dossiers form the next request, while excluded work stays visible on the canvas.
+These categories overlap; individual tools may share capabilities. ThoughtDAG is not an autonomous research agent or a replacement for your coding harness. Retrieval can miss relevant history, and generated dossiers still need checking.
 
 ## 🗺️ Export the shape of your thinking
 
-The export keeps the nodes, wires and high-level structural counts. Different questions and different ways of exploring them leave visibly different maps.
+Export the canvas as a Thought Map: nodes, wires and structural counts, without the full conversation text. Use it to share how an investigation branched, narrowed and came together.
 
-<img src="docs/thought-map-four-en.png" alt="Four Thought Map exports showing a deep single thread, five explored branches, a three-week investigation and a literature review season" width="100%"/>
+<img src="docs/thought-map-four-en.png" alt="Four Thought Map exports showing different patterns of exploration, from a single thread to a branching literature review." width="100%"/>
 
 ## More ways to run
 
@@ -176,53 +162,42 @@ The export keeps the nodes, wires and high-level structural counts. Different qu
 ```bash
 npm install
 npm run server    # LLM proxy :3001
-npm run dev       # → localhost:5173
-# No .env? Connect any OpenAI-compatible endpoint inside the app
+npm run dev       # frontend :5173
 ```
 
-Environment variables, local models and connection details → [docs/setup.md](docs/setup.md)
+Configure a model in the app or through environment variables. [Local setup →](docs/setup.md)
 
 ### Browser demo
 
-Want a ten-second look before installing anything? The [hosted demo](https://app.thoughtdag.workers.dev) runs in the browser, and the example canvas needs no key. It is a feature subset: Session Atlas, local session discovery, memory with sources, keyless web search, some direct-connection tools and the subscription bridge are desktop- or local-only.
+The [browser demo](https://app.thoughtdag.workers.dev) includes an example canvas that needs no API key. It is a subset: local session discovery, Session Atlas and the local history/memory layer require desktop or local hosting.
 
 ## 🧪 Research: Why editable context matters
 
 ### Context Intervention Benchmark · Pilot v2
 
-`9 models` · `1,485 test runs` · `$0 in free tiers` · `answers scored by exact match`
+`9 model endpoints` · `1,485 scored responses` · `exact-match scoring`
 
-Context does not only fade as conversations grow longer. A wrong statement flows into the replies that come after it and undermines the truthfulness of every later conclusion. Our benchmark verified this across nine language models and found the effect to be widespread: deleting the message that introduced the error is often not enough, because later replies still carry it. Restoring the correct answer needs the whole affected stretch cleaned or rewritten. On a model with switchable step-by-step reasoning, the minimal cleanup worked only with reasoning on. Context needs management, not just accumulation.
+Deleting a wrong claim may leave its consequences in later replies. In our synthetic pilot, removing the source alone repaired **152 of 162** affected model-cases; removing the contaminated subgraph repaired **162**, and recomputing descendants repaired **161**. The report includes the protocol, results and limitations. This is a context-intervention experiment, not a general model leaderboard.
 
-The full report explains the method, the numbers and their statistics, and what this does and does not establish. It does not rank models and does not explain their inner workings; it tests one observable claim: changing what a model sees changes what it answers next.
-
-📖 **[Read the first case study](https://chenxiachan.github.io/thoughtdag/stories/context-repair/)** · 📊 **[Methodology and results](https://chenxiachan.github.io/thoughtdag/research/context-repair-pilot-v2/)** · 🗳️ **[Suggest the next models to test](https://github.com/chenxiachan/thoughtdag/issues/new)**
+[Read the case study](https://chenxiachan.github.io/thoughtdag/stories/context-repair/) · [Methods and results](https://chenxiachan.github.io/thoughtdag/research/context-repair-pilot-v2/) · [Suggest a model](https://github.com/chenxiachan/thoughtdag/issues/new?template=suggest-next-model.yml)
 
 ## More capabilities
 
-| Capability | What it does |
-|------------|--------------|
-| 🧠 Memory with sources | One dossier per topic, built from your agents' conversations; every line links to its turn; updated as you work |
-| ⚖️ Decision model | A fast-thinking model ranks recall, judges map badges and staleness; rules take over when it is off |
-| 📤 Read-only share | One link carries the whole graph: no account, no server storage |
-| 🧭 Staleness & replay | Upstream edits mark the answers they invalidate, only when the change bears on them; replay in dependency order, token estimate first |
-| ✂️ Clipping | Select a passage or drag a rectangle in the reader; it becomes canvas material with page provenance |
-| 🔌 Any model | Per-node pins that follow the line; text-only models read images through their companion text |
-| 🧭 Agent session continuity | Bring sessions from different agents into one map; continue from any node and return the result to the graph. |
-| 🔒 Local-first | Automatic folder backup writes real files; point it at a synced folder for cross-device |
+| Capability | What it adds to the same workflow |
+|---|---|
+| Request preview | Check the conversation, references and recalled material assembled for the next call. |
+| Staleness and replay | Review dependent answers after an upstream edit; rerun in dependency order. |
+| Per-node model selection | Try a different model on a branch without changing the entire canvas. |
+| Read-only sharing | Share a graph for others to inspect; preview its contents before publishing. |
+| Folder backup | Save canvases as local files and keep a recoverable copy outside browser storage. |
 
-Full feature list (60+, grouped by area) → [docs/features.md](docs/features.md)
+[Full capabilities and roadmap →](docs/features.md)
 
 ## Models, cost & privacy
 
-Connect a local Ollama or any OpenAI-compatible endpoint. Built-in presets, subscription connections and environment variables are documented in [setup](docs/setup.md).
+Canvases, documents, the index and dossiers are stored locally. **Remote model calls send relevant content to your configured providers**, including decision and dossier-generation calls. Provider charges may apply; disabling Jev does not disable ordinary model calls.
 
-- **The free model tier covers every feature**; a local Ollama runs fully offline
-- **In the desktop app everything lives on your machine**: canvases, keys, documents, the index, topic labels and dossiers (`~/.thoughtdag`), and your profile documents
-- **A decision sends only the question and the candidate excerpts** to the access you chose; with the decision model off, nothing is sent
-- **PDFs never leave your machine**; only extracted text travels when you ask
-- **Inside DeepSeek Harness, model calls use the harness's own providers and keys**; ThoughtDAG adds no key of its own, and images and link fetches go through the harness's attachment store and bounded fetcher
-- **The backup format stays backward compatible**; Markdown export is the permanent escape hatch
+Connect local Ollama or an OpenAI-compatible endpoint. Inside DeepSeek Harness, inference uses the harness's providers and keys. Export backups and Markdown, and review text and metadata before sharing. [Setup and privacy details →](docs/setup.md)
 
 ## Contributors
 
@@ -245,8 +220,6 @@ With gratitude to **@andreilaiter**, ThoughtDAG's first supporter, and to everyo
 ---
 
 <div align="center">
-
-*The graph is acyclic. You are the loop.*
 
 [MIT](./LICENSE) © 2026 Xia Chen · [Roadmap](docs/features.md#roadmap) · [Feedback](https://github.com/chenxiachan/thoughtdag/issues) · [Cite](https://github.com/chenxiachan/thoughtdag#cite-this-repository)
 

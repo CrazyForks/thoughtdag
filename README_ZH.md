@@ -4,168 +4,156 @@
 
 # ThoughtDAG
 
-**找到相关对话。记住重要的事。决定模型下一步看到什么。**
+**让 AI 对话在画布上展开。**
+
+问答是节点，**连线即上下文。**<br/>
+沿着支线追问，把有用的思路接在一起，决定模型下一次看到什么。
+
+[下载](https://chenxiachan.github.io/thoughtdag/?lang=zh#download) · [官网](https://chenxiachan.github.io/thoughtdag/?lang=zh) · [文档](https://chenxiachan.github.io/thoughtdag/docs/zh/) · [English](./README.md)
 
 ![License](https://img.shields.io/badge/许可-MIT-green)
-![Status](https://img.shields.io/badge/状态-活跃开发中-6B5CE7)
-
-### [下载桌面版 ↓](https://chenxiachan.github.io/thoughtdag/?lang=zh#download) · [官网](https://chenxiachan.github.io/thoughtdag/?lang=zh) · [使用文档](https://chenxiachan.github.io/thoughtdag/docs/zh/)
-
-[English](./README.md) · [跨 Agent 记忆](#05-新功能--跨-agent-的记忆) · [找回历史上下文](#从命令行找回历史上下文) · [DeepSeek Harness 插件](#在-deepseek-harness-里使用) · [桌面版](#桌面版) · [有何不同](#thoughtdag-和其他图形化-ai-工具有何不同) · [研究](#-研究为什么上下文需要可编辑) · [完整文档](https://chenxiachan.github.io/thoughtdag/docs/zh/)
 
 </div>
 
-## 0.5 新功能 · 跨 Agent 的记忆
+[0.5 更新](#05-更新--thoughtdag--jev) · [CLI](#从命令行找回历史上下文) · [Harness](#在-deepseek-harness-里使用) · [桌面版](#桌面版) · [连线规则](#唯一法则) · [产品对比](#与其他工具有什么不同) · [研究](#-研究为什么上下文需要可编辑)
 
-> 你在 Pi、Codex、Claude Code、DeepSeek Harness 里聊过的一切，现在接成一个可以回忆的整体。提问时，重要的内容随问题一起带进去，跨 Agent、跨时间。
+## 0.5 更新 · ThoughtDAG × Jev
 
-- **碎片串成一条线。** 昨天在 Codex 里定的阈值，上周在 Claude Code 里排除的方案，今天在画布上问起时都在。每个主题一份档案：是什么、定过什么、到哪一步、还没解决什么，每句都能点回原来的那轮对话。你自己的画像是两份文档：偏好与身份，记到新东西时改写，而不是堆砌。
-- **提问时自动回忆。** 开着「回忆」，ThoughtDAG 先判断问题涉及哪些主题，把档案整份带进去；问的是细节时再补几条原话。面板上一条一条列出带了什么、花了多少；划掉一条，它就不带。
-- **快思考，慢思考。** 回答你的是慢思考模型。快思考模型只做判断：这条相关吗，这句是决定吗，这处改动影响那个回答吗。半秒一次，返回校准过的概率，模型选择器里一行开关，默认开。没有接入时每个判断退回规则，功能不变。
-- **接入一个快思考模型。** Jev 类判断模型可以经你已保存的聚合商接入直接使用，也支持官方接口和自建服务。[怎么接入 →](https://chenxiachan.github.io/thoughtdag/docs/zh/setup#decision-model)
-- **一切都在本地。** 索引、主题标签、档案存在 `~/.thoughtdag`，画像文档存在应用本地。判断时发出去的只有问题和候选片段，发给你自己选的接入。
+**从旧对话中，找出当前问题用得上的内容。**
 
-[记忆指南 →](https://chenxiachan.github.io/thoughtdag/docs/zh/guides/memory)
+- **找回旧讨论。** 本地索引检索已支持的 Agent 会话和 ThoughtDAG 画布；主题档案整理已有决定和待解决的问题，保留出处。
+- **筛选相关内容。** 可选的 **Jev 判断层**识别主题、筛选相关片段，你选择的语言模型负责展开回答。
+- **核对后继续。** 开启回忆后，上下文面板会列出本轮引入的档案和片段。可以打开原文，也可以排除不想带入的内容。
+
+<img src="docs/jev-relevance-en.gif" width="100%" alt="相关性筛选小样本测试的动画回放：Jev 中位耗时 391 毫秒，开启默认推理的 GLM 判断适配器为 24,813 毫秒；结尾为历史节点汇入 Jev。不代表端到端检索耗时。"/>
+
+在一组小样本相关性筛选测试中，Jev 的中位耗时为 **391 毫秒**，GLM 适配器为 **24,813 毫秒**。这里测的是筛选这一步，不是从搜索到生成回答的总耗时。
+
+<details>
+<summary>这组速度数字测了什么？</summary>
+
+同一组 14 条合成片段，每个引擎运行 6 次。筛选中位耗时：Jev-1.13 为 **391 毫秒**；开启默认推理的 GLM-5.3-Flash 判断适配器为 **24,813 毫秒**。两者推理路径不同，不是严格控制变量的模型速度排名。计时不含检索和回答生成，也不代表整个产品的加速或准确率提升。
+
+不开启判断模型时，回忆按规则筛选。这里的 **System 1 / System 2 式分工**，指快速判断层筛选材料，语言模型展开回答、整理主题档案；是软件职责的划分，不代表复现了人的认知。
+
+</details>
+
+[设置历史索引与回忆](https://chenxiachan.github.io/thoughtdag/docs/zh/guides/memory) · [配置 Jev](https://chenxiachan.github.io/thoughtdag/docs/zh/setup#decision-model)
 
 ## 从命令行找回历史上下文
 
-> 从一个代码文件、一句记得的原话、一个网址或一篇论文出发。ThoughtDAG 检索本机上的 Agent 对话，并带你回到命中的那一轮。
+记得一个文件、一句话或网址，却忘了在哪次对话里？不必打开桌面版，也能从本地历史中找到对应的原始轮次。
 
 ```bash
-npx thoughtdag why src/lib/api.ts        # 哪些对话动过这个文件
-npx thoughtdag find "你记得的一句话"      # 哪些轮次说过它
-npx thoughtdag topics                    # 你的主题，以及索引里多少轮打了标签
+npx thoughtdag why src/lib/api.ts           # 哪些对话讨论过这个文件
+npx thoughtdag find "记得的一句话"            # 找到对应的对话轮次
+npx thoughtdag topics                       # 查看本地索引中的主题
 ```
 
-日常使用时，安装 CLI 并接入只读 MCP 工具：`npm install -g thoughtdag && thoughtdag setup mcp`。之后 Agent 可以直接调用 `why_check`、`why_file`、`find` 和 `recall_turn`。Claude Code、Codex、DeepSeek Harness、Pi 与 ThoughtDAG 画布里的对话会在本机进入同一份索引；不安装桌面版也能使用。
-
-```text
-$ npx thoughtdag why src/lib/api.ts
-why src/lib/api.ts · 12 个相关轮次，来自 6 个会话
-claude-code  ✏️ 修改  Q: 能否判断模型是否支持多模态？
-             Δ storedProviders → storedProviders, storedVision…
-……
-```
-
-> **让 Agent 少读无关历史，降低上下文污染导致的幻觉与错误，减少 token 浪费。** 查询层只带回命中的历史；画布层剪掉污染分支，不让它继续影响下一个回答。
+经常使用可以 `npm install -g thoughtdag`，再运行 `thoughtdag setup mcp`，让 Agent 调用只读历史工具。找回需要的几轮，而不是重新塞入整段会话。[CLI 说明 →](cli/README.md)
 
 ## 在 DeepSeek Harness 里使用
 
-ThoughtDAG 可以作为 DeepSeek Harness 网页界面里的一个视图运行：对话框上方多一个 对话 | 思维图 开关。画布决定 Harness 下一步看到什么，Harness 负责把这一轮跑完。
+在 Harness 内切换对话与思维图：用画布选择上下文，再由 Harness 执行下一轮。
 
 ```bash
 dsh plugin --profile web add dsh-thoughtdag
 dsh web
 ```
 
-插件自带画布和记忆层，不需要另装。需要 Node 22.19 以上和 DeepSeek Harness 0.1.2-rc 及之后版本。细节，包括发版当天怎么点名版本 → [插件说明](https://chenxiachan.github.io/thoughtdag/docs/zh/guides/deepseek-harness)。
+插件自带画布和记忆层。需要 Node 22.19+（22.x）或 24+，以及 DeepSeek Harness 0.1.2-rc.1 或更新版本。[插件说明 →](https://chenxiachan.github.io/thoughtdag/docs/zh/guides/deepseek-harness)
 
-<img src="docs/harness-plugin-zh.gif" alt="ThoughtDAG 在 DeepSeek Harness 里：对话框上方的 对话 | 思维图 开关，在画布上提问、由 Harness 的模型回答，再追问长出新节点" width="100%"/>
+<img src="docs/harness-plugin-zh.gif" alt="在 DeepSeek Harness 中切换到 ThoughtDAG 画布，提问并从回答继续展开新节点。" width="100%"/>
 
 ## 桌面版
 
-Agent 对话地图、可编辑上下文画布、PDF/文件阅读器、模型与搜索接入、摘取、导出、交接，以及带来源的记忆。
+一边看资料，一边展开对话。从一段原文追问，把需要一起考虑的支线接起来；模型由你选择。
 
 ```bash
 brew install --cask thoughtdag
 ```
 
-也可以前往[下载页](https://chenxiachan.github.io/thoughtdag/?lang=zh#download)获取 macOS、Windows 与 Linux 版本。
+或[下载 macOS、Windows、Linux 版本](https://chenxiachan.github.io/thoughtdag/?lang=zh#download)，连接模型后打开示例画布。
 
-<div align="center">
+<img src="docs/hero-demo-zh.gif" width="100%" alt="ThoughtDAG 实际操作：从资料提问、展开对话支线，并修改传递上下文的连线。"/>
 
-<img src="docs/hero-demo-zh.gif" alt="ThoughtDAG Hero 演示：从 PDF 原文提问，删边修改模型上下文，缩小画布形成思维地图，导出备份，并通过 Session Atlas 把分散的 Agent 会话变成持续存在的项目上下文" width="100%"/>
+<p align="center"><a href="https://github.com/user-attachments/assets/f0362497-0e80-4caa-8214-cdbac92ab77c"><img src="https://img.youtube.com/vi/-8BqAyaoNXQ/maxresdefault.jpg" alt="ThoughtDAG 官方视频缩略图，点击观看中文讲解" width="640"/></a></p>
 
-</div>
-
-**[▶ 33 秒旁白讲解](https://github.com/user-attachments/assets/f0362497-0e80-4caa-8214-cdbac92ab77c)**
+<p align="center"><a href="https://github.com/user-attachments/assets/f0362497-0e80-4caa-8214-cdbac92ab77c">▶ 观看 33 秒中文讲解</a></p>
 
 ## 唯一法则
 
-> **连线即上下文。** 模型看到的，精确等于连进节点的内容。编辑图，就是在编辑模型的记忆。
+> **连线即上下文。** 把需要的对话路径接入下一问；断开连线，不必删除之前的探索。
 
-很多工具都把对话放上画布。在 ThoughtDAG 里，连线不是装饰，也不是执行路径。它决定模型下一次看到什么。
+从回答里的一个细节另开支线，想清楚以后，再把有用的部分接回后面的提问。你修改的不只是画布布局，还有模型收到的内容。
+
+**发送前，检查模型实际会收到什么。** 连线选择对话路径，显式引用和开启的回忆还会补充材料。[上下文操作说明 →](https://chenxiachan.github.io/thoughtdag/docs/zh/guides/context-control)
 
 ## 它长什么样
 
-每个手势背后是同一条原则：**人在回路上，模型在连线上**。没有自主代理替你改图。
-
-<table>
-<tr>
-<td width="45%"><img src="docs/illus/prune-zh.svg" alt="示意图：研究主链与总结节点由实线相连，通往晚饭节点的边被剪断成红色虚线"/></td>
+<table><tr>
+<td width="45%"><img src="docs/illus/prune-zh.svg" alt="研究路径仍连接到总结节点，无关的晚餐支线已断开，但节点仍留在画布上。"/></td>
 <td width="55%">
 
-### ✂️ 删一条边，换一个答案
+### ✂️ 调整上下文，保留探索
 
-模型只看到连进来的内容。删掉噪音边，同一个问题返回干净的回答。**在示例画布第 ③ 区亲手复现。**
+选中回答中的文字，另开支线追问。不想让这条支线参与后面的回答，就断开对应连线，再生成一次作比较。节点仍在画布上，可以继续探索，也可以重新接回。
+
+</td></tr></table>
+
+<table><tr><td width="55%">
+
+### 📖 边读、边摘、边问
+
+在对话旁打开 PDF、图片或 HTML。选一段原文提问，或把一张图摘成独立节点。PDF 摘录保留页码，讨论到哪里，都能回到原文核对。
 
 </td>
-</tr>
-</table>
+<td width="45%"><img src="docs/illus/reading-zh.svg" alt="选中 PDF 中的一段原文提问，并保留第 3 页的出处。"/></td>
+</tr></table>
 
-<table>
-<tr>
+<table><tr>
+<td width="45%"><img src="docs/illus/map-zh.svg" alt="对话节点缩成简洁的要点卡片，显示决定、排除和方向变化。"/></td>
 <td width="55%">
 
-### 📖 把文献读成思维地图
+### 💎 凝练对话，编织成文
 
-圈选一段直接提问，答案带着页码落进画布，p.N 芯片一键跳回原文。**读完论文，地图已经画好。**
+**凝练**把对话路径缩成更短的副本，原始探索仍然保留；**编织**把选中的高光整理成带引用的文字。结果可以接着聊，也可以导出 Markdown。缩放只改变展示，不改变上下文。
 
-</td>
-<td width="45%"><img src="docs/illus/reading-zh.svg" alt="示意图：在原文页面圈选一段文字，旁边浮出紫色提问气泡，段落带 p.3 出处"/></td>
-</tr>
-</table>
+</td></tr></table>
 
-<table>
-<tr>
-<td width="45%"><img src="docs/illus/map-zh.svg" alt="示意图：三个收获句门牌，分别带排除、决策、转向徽章，虚线相连"/></td>
-<td width="55%">
+<table><tr><td width="55%">
 
-### 💎 先凝练，再把整张地图带走
+### 🧭 Session Atlas：接着以前的对话往下想
 
-节点可以合并成更高一层的结论，高光可以串成带引用的文字。继续缩小，完整卡片会收拢成收获句和图标骨架；最后，把当前结构导出成明暗两色的思路地图。
+把已支持的本地 Agent 会话打开成图，选择从哪里分叉、继续。需要其他会话里的内容时，再用历史索引找回。Atlas 负责看清会话，回忆帮你找到要带进来的内容。
+
+*目前支持本地 Claude Code、Codex、DeepSeek Harness 和 Pi 会话，原始会话保持只读。*
 
 </td>
-</tr>
-</table>
+<td width="45%"><img src="docs/illus/atlas-zh.svg" alt="按项目整理本地 Agent 会话，打开成上下文图，再从选定的位置继续。"/></td>
+</tr></table>
 
-<table>
-<tr>
-<td width="55%">
+## 与其他工具有什么不同
 
-### 🧭 把 Agent 会话带进画布
+看起来都在用节点和连线，解决的问题却不一样：
 
-把散落在不同 Agent 里的工作，汇成一张可编辑的上下文图。从任意节点继续探索，再把新的结果接回思路开始的地方。
-
-*目前支持本机 Claude Code、Codex、DeepSeek Harness 与 Pi 会话，更多 Agent 正在接入；源会话始终只读。*
-
-</td>
-<td width="45%"><img src="docs/illus/atlas-zh.svg" alt="示意图：按项目归类本机 Codex 与 Claude Code 会话，展开为上下文图，再带着选定上下文进入新的 CLI 会话"/></td>
-</tr>
-</table>
-
-## ThoughtDAG 和其他图形化 AI 工具有何不同
-
-很多产品都有节点和连线，但这张图在不同产品中做的事并不一样。
-
-| 产品类别 | 与 ThoughtDAG 的区别 |
+| 产品类别 | ThoughtDAG 侧重什么 |
 |---|---|
-| 线性对话 | 上下文沿一条时间线累积；ThoughtDAG 可选择和合并可见路径。 |
-| 思维导图与数字白板 | 连线主要帮人整理概念；ThoughtDAG 的连线还会改变模型输入。 |
-| 分支对话画布 | 通常沿一条父链继承；ThoughtDAG 还能合并或剪枝多条路径。 |
-| 工作流与 Agent 画布 | 连线用于运行任务和传递数据；ThoughtDAG 的连线用于控制对话上下文。 |
-| RAG 与自动记忆 | 检索是黑箱；ThoughtDAG 的记忆是一份带来源的文档，能读、能改、能划掉，带进去的每一条都列出来。 |
-| 代码结构图工具 | 它们回答“和什么相连”；ThoughtDAG 找到塑造它的对话与决策。 |
-| Agent 记忆与对话检索 | 它们在一个 Agent 内部找回文本；ThoughtDAG 读本机所有 Agent 的对话，按主题打标，每个主题一份档案。 |
-| Harness 上下文查看器 | 它们显示会话当前携带了什么；ThoughtDAG 让你编排下一轮收到什么，并作为真实的一轮发出去。 |
+| 线性聊天 | 同时保留几条探索路径，选择哪些进入下一问。 |
+| 思维导图、白板 | 连线不仅整理思路，也改变模型收到的内容。 |
+| 分支聊天画布 | 把多条支线接入同一问，或断开某条路径而保留节点。 |
+| Agent 工作流画布 | 随着讨论修改上下文，而不是编排自动执行的任务流程。 |
+| 检索与自动记忆 | 核对带出处的档案和片段，编辑或排除下一轮不需要的内容。 |
+| 代码关系图、对话搜索 | 跨已支持的 Agent 找到文件或主题背后的讨论，再从那里继续。 |
+| Harness 上下文查看器 | 不止查看本轮内容，还能组合并发送下一轮。 |
 
-ThoughtDAG 是一张由人编辑的上下文图，配一份能看到来源的记忆：连入节点的路径、显式引用和回忆带进的档案构成下一次请求，被排除的内容则继续留在画布上。
+这些类别并不互斥，具体产品也可能有相似能力。ThoughtDAG 不是自主研究 Agent，也不替代你的编程 Harness。检索可能遗漏信息，模型整理的档案仍需要核对。
 
-## 🗺️ 你可以导出你的思维的形状
+## 🗺️ 导出你的思路地图
 
-导出图保留节点、连线与结构统计，不画具体问答。问题不同，探索方式不同，最后留下的思路形状也不同。
+把画布导出为 Thought Map：保留节点、连线和结构统计，不包含完整问答正文。可以用它分享一次探索如何分叉、收敛，又在哪里汇合。
 
-<img src="docs/thought-map-four-zh.png" alt="四张思路地图，分别呈现一条深入主线、五条探索支线、持续三周的问题与一整个文献综述季" width="100%"/>
+<img src="docs/thought-map-four-zh.png" alt="四张思路地图，展示从单线追问到多分支文献探索的不同结构。" width="100%"/>
 
 ## 更多运行方式
 
@@ -173,54 +161,43 @@ ThoughtDAG 是一张由人编辑的上下文图，配一份能看到来源的记
 
 ```bash
 npm install
-npm run server    # LLM 代理 :3001
-npm run dev       # → localhost:5173
-# 无 .env 时，在应用内连接任意兼容 OpenAI 协议的接口即可
+npm run server    # 模型代理 :3001
+npm run dev       # 前端 :5173
 ```
 
-环境变量、本地模型与连接方式 → [docs/setup_ZH.md](docs/setup_ZH.md)
+在应用内或通过环境变量配置模型。[本地配置 →](docs/setup_ZH.md)
 
 ### 在线体验
 
-想先花十秒看看再决定装不装？[在线 Demo](https://app.thoughtdag.workers.dev) 在浏览器里直接跑，示例画布免 key。注意它是功能子集：Agent 对话地图、本机会话发现、带来源的记忆、免 key 联网搜索、部分直连工具和订阅桥只在桌面版/本地可用。
+[浏览器 Demo](https://app.thoughtdag.workers.dev) 的示例画布免 API key。它是功能子集：本机会话发现、Session Atlas 和本地历史／记忆层需要桌面版或本地环境。
 
 ## 🧪 研究：为什么上下文需要可编辑
 
 ### 上下文干预基准 · Pilot v2
 
-`9 个模型` · `1,485 次测试` · `全程免费档 $0` · `答案精确匹配打分`
+`9 个模型端点` · `1,485 次测试` · `精确匹配评分`
 
-上下文的问题不只是随对话变长而衰减。错误的信息会流入后续的回答，影响之后每个结论的可信度和真实性。我们的 benchmark 实验验证了九个语言模型，发现这个特性广泛存在：只删掉最初说错的那条消息往往不够，因为后续回答仍然带着这个错误。要恢复正确答案，需要把受影响的整段对话一起清理，或者让模型重写这一段。在一个可以开关逐步思考的模型上，最小化的清理只在思考开启时有效。上下文需要管理，而不只是累积。
+删掉错误源头，不代表后续回答里的错误也消失了。在这组合成任务中，162 组原本答对、被污染后答错的测试里，只删源头修复了 **152 组**，删除受污染子图修复了 **162 组**，重算后续节点修复了 **161 组**。报告公开了方法、结果与局限；这是上下文干预实验，不是通用模型排行榜。
 
-完整报告解释了方法、数字与统计，以及这个实验能说明什么、不能说明什么。它不做模型排名，也不解释模型内部机制，只检验一个可观察的问题：改变模型看到的内容，会不会改变它接下来的回答。
-
-📖 **[阅读首轮案例](https://chenxiachan.github.io/thoughtdag/stories/context-repair/?lang=zh)** · 📊 **[实验方法与结果（英文技术报告）](https://chenxiachan.github.io/thoughtdag/research/context-repair-pilot-v2/)** · 💬 **[建议下一轮测试模型](https://github.com/chenxiachan/thoughtdag/issues/new)**
+[阅读案例](https://chenxiachan.github.io/thoughtdag/stories/context-repair/?lang=zh) · [方法与结果（英文）](https://chenxiachan.github.io/thoughtdag/research/context-repair-pilot-v2/) · [建议下一批测试模型](https://github.com/chenxiachan/thoughtdag/issues/new?template=suggest-next-model.yml)
 
 ## 更多能力
 
-| 能力 | 说明 |
-|------|------|
-| 🧠 带来源的记忆 | 每个主题一份档案，从各家 Agent 的对话里写出，每句链接到原轮次，随工作更新 |
-| ⚖️ 判断模型 | 快思考模型给回忆排序、判地图徽章和陈旧；关掉后按规则 |
-| 📤 只读分享 | 一条链接携带整张图，无账号、不经服务器存储 |
-| 🧭 陈旧重放 | 上游一改，受影响的回答亮标记，且只在改动真影响时亮；按依赖序批量重放，先报 token 价 |
-| ✂️ 摘取 | 阅读器里圈选文字、框选图表，摘成带页码出处的画布素材 |
-| 🔌 模型自由 | 节点级钉选、沿线继承；纯文本模型经伴随文本读图 |
-| 🧭 Agent 会话接续 | 把不同 Agent 的会话汇入同一张图，从任意节点继续，再把结果接回原图 |
-| 🔒 本地优先 | 自动文件夹备份写成真实文件，指向同步盘即跨设备 |
+| 能力 | 如何帮助你继续工作 |
+|---|---|
+| 请求预览 | 发送前查看本轮组装的对话、引用和回忆材料。 |
+| 过期标记与重算 | 修改上游内容后，检查依赖它的回答，按依赖顺序重新生成。 |
+| 节点级模型选择 | 在一条支线上换模型，不必更改整张画布。 |
+| 只读分享 | 让别人查看图中的探索；发布前可以检查分享内容。 |
+| 文件夹备份 | 把画布保存为本地文件，在浏览器存储之外保留可恢复的副本。 |
 
-完整功能清单（60+ 条，按领域分组）→ [docs/features_ZH.md](docs/features_ZH.md)
+[完整功能与路线图 →](docs/features_ZH.md)
 
 ## 模型、成本与隐私
 
-连接本地 Ollama 或任意兼容 OpenAI 协议的端点。内置预设、订阅接入与环境变量说明统一放在[配置文档](docs/setup_ZH.md)。
+画布、文档、索引和档案保存在本机。**调用远程模型时，相关内容会发送到你配置的服务**，判断和档案生成也不例外。服务商可能收费，关闭 Jev 不等于关闭普通模型调用。
 
-- **免费档模型覆盖全部功能**；本地 Ollama 完全离线
-- **桌面版一切都在本机**：画布、key、文档、索引、主题标签与档案（`~/.thoughtdag`）、画像文档
-- **判断时发出去的只有问题和候选片段**，发给你自己选的接入；判断模型关掉后什么都不发
-- **PDF 不离机**，只有提取文本随提问发出
-- **在 DeepSeek Harness 里，模型调用走 Harness 自己的接入和 key**；ThoughtDAG 不另加 key，图片和链接抓取也走 Harness 的附件库与受限抓取器
-- **备份格式向后兼容**；Markdown 导出是永久逃生门
+可以接入本地 Ollama 或兼容 OpenAI 协议的端点；在 DeepSeek Harness 内，推理由 Harness 的服务配置和密钥处理。支持备份和 Markdown 导出，公开分享前请检查正文及元数据。[配置与隐私说明 →](docs/setup_ZH.md)
 
 ## 贡献者
 
@@ -243,8 +220,6 @@ npm run dev       # → localhost:5173
 ---
 
 <div align="center">
-
-*图无环，环是人。*
 
 [MIT](./LICENSE) © 2026 Xia Chen · [Roadmap](docs/features_ZH.md#roadmap) · [反馈](https://github.com/chenxiachan/thoughtdag/issues) · [引用](https://github.com/chenxiachan/thoughtdag#cite-this-repository)
 
