@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Archive, ArchiveRestore, BookOpen, Copy, Files, FlaskConical, GitFork, Maximize2, RefreshCw, StickyNote, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, BookOpen, Copy, Files, FlaskConical, GitFork, Layers, Maximize2, RefreshCw, StickyNote, Trash2 } from 'lucide-react';
 import { useStore } from '../store';
 import { useUiStore, confirmDialog, toast } from '../lib/ui-store';
 import { recapToNote } from '../lib/recap';
+import { reselectLadder } from '../lib/ladder-reselect';
 import { useT, fmt, t as ti } from '../i18n';
 
 // Right-click on a node: the app's own context menu (same visual language
@@ -39,7 +40,7 @@ export default function NodeContextMenu({ x, y, nodeId, onClose }: {
 
   // Keep the menu inside the viewport (it renders at the pointer)
   const MENU_W = 200;
-  const MENU_H = 340;
+  const MENU_H = 380;
   const left = Math.min(x, window.innerWidth - MENU_W - 8);
   const top = Math.min(y, window.innerHeight - MENU_H - 8);
 
@@ -70,6 +71,11 @@ export default function NodeContextMenu({ x, y, nodeId, onClose }: {
           <GitFork size={14} strokeWidth={1.75} className={icon} /> {t('ctx.regenBranch')}
         </button>
       )}
+      {hasResponse && (node.data.response?.length ?? 0) >= 400 && (
+        <button className={item} onClick={run(() => { void reselectLadder(nodeId); })} data-reselect-ladder>
+          <Layers size={14} strokeWidth={1.75} className={icon} /> {t('ctx.reselectLadder')}
+        </button>
+      )}
       {hasResponse && (
         <button className={item} onClick={run(() => { void recapToNote(nodeId); })}>
           <StickyNote size={14} strokeWidth={1.75} className={icon} /> {t('continue.summarize')}
@@ -82,20 +88,6 @@ export default function NodeContextMenu({ x, y, nodeId, onClose }: {
           <Copy size={14} strokeWidth={1.75} className={icon} /> {t('ctx.copyContent')}
         </button>
       )}
-      {!isContent && (
-        <button className={item} title={ti('exp.takeTitle')} onClick={run(() => {
-          void import('../lib/experiment-loop').then((m) => m.takeToExperiment(nodeId, 'branch'));
-        })} data-take-to-experiment>
-          <FlaskConical size={14} strokeWidth={1.75} className={icon} /> {t('exp.take')}
-        </button>
-      )}
-      {!isContent && (
-        <button className={item} title={ti('exp.continueTitle')} onClick={run(() => {
-          void import('../lib/experiment-loop').then((m) => m.takeToExperiment(nodeId, 'continue'));
-        })} data-take-to-continue>
-          <BookOpen size={14} strokeWidth={1.75} className={icon} /> {t('exp.continue')}
-        </button>
-      )}
       <button className={item} onClick={run(() => useStore.getState().duplicateNode(nodeId))}>
         <Files size={14} strokeWidth={1.75} className={icon} /> {t('ctx.duplicate')}
       </button>
@@ -105,6 +97,14 @@ export default function NodeContextMenu({ x, y, nodeId, onClose }: {
           : <Archive size={14} strokeWidth={1.75} className={icon} />}
         {node.data.archived ? t('ctx.unarchive') : t('archive.label')}
       </button>
+      {!isContent && (
+        // the pre-agent-lane door, kept for people who work in a terminal: the node's context to the clipboard, the session mounts back as a branch
+        <button className={item} title={ti('exp.copyForCliTitle')} onClick={run(() => {
+          void import('../lib/experiment-loop').then((m) => m.takeToExperiment(nodeId, 'branch'));
+        })} data-take-to-experiment>
+          <FlaskConical size={14} strokeWidth={1.75} className={icon} /> {t('exp.copyForCli')}
+        </button>
+      )}
       <div className="h-px bg-line my-1" />
       <button
         className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2.5"
