@@ -39,6 +39,25 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    // a patch: the 0.5.2 entry below stays the announcement, this one is history only
+    version: '0.5.3',
+    date: '2026-09-27',
+    announce: false,
+    lead: {
+      zh: '圈选多个节点后，工具栏多了「更新节点摘要」：用当前选中的模型为它们一次更新四层摘要，文件、便签和短回答自动跳过。进度在右下角，随时可停。旧画布想整体升级到新摘要，圈一下就行。右键单个节点也是同一个入口。',
+      en: 'With several nodes selected, the toolbar gains "Update node summaries": the picked model updates their four summary levels in one go, files, notes and short answers skipped. Progress shows bottom right and can be stopped any time. An older canvas upgrades to the new summaries with one lasso; the right-click item on a single node is the same door.',
+    },
+    items: [
+      {
+        title: { zh: '🧭 摘要写的是这一步新增了什么', en: '🧭 Summaries say what the step adds' },
+        body: {
+          zh: '结论与短述改为由模型撰写。写之前它先读这条思路里前面各步的牌匾，只写本步新增的结论、决定或转向，不重复前面已经说过的；概要仍是原答里的原文摘句，作为证据。旧节点用「更新节点摘要」换新即可。',
+          en: 'The takeaway and brief are now written by the model. It first reads the plaques of the earlier steps in the thread, then writes only what this step adds, a conclusion, a decision or a turn, without repeating what came before; the abstract stays verbatim sentences of the answer, as evidence. Older nodes switch over with "Update node summaries".',
+        },
+      },
+    ],
+  },
+  {
     version: '0.5.2',
     date: '2026-09-27',
     announce: true,
@@ -88,7 +107,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
         title: { zh: '🧹 右键菜单焕新', en: '🧹 A refreshed right-click menu' },
         body: {
           zh: '「重新生成」更简洁，CLI 相关操作合并为一项，新增「用模型重选摘要」。手动修改过的回答会自动重做摘要。',
-          en: '"Regenerate" is simpler, the CLI actions merge into one, and "Reselect the summary with a model" joins the menu. Hand-edited answers get their summaries redone automatically.',
+          en: '"Regenerate" is simpler, the CLI actions merge into one, and "Update node summary" joins the menu. Hand-edited answers get their summaries redone automatically.',
         },
       },
     ],
