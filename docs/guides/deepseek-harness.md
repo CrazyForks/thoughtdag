@@ -63,11 +63,7 @@ Open [Session Atlas](./session-atlas) from the canvas menu to browse other conve
 
 ## Query history
 
-The published `dsh-thoughtdag@0.4.4` provides the canvas and session integration above. For standalone history queries, see [Why layer: CLI and MCP](./why-layer).
-
-::: info Native query tools: awaiting a new npm release
-The repository's main branch includes the following native tools and `/why` command. They are not included in the published `dsh-thoughtdag@0.4.4` package and will not appear after installing that version.
-:::
+The published `dsh-thoughtdag@0.5.3` includes the canvas, session integration, and native history-query tools below. If you still use `0.4.4`, update the plugin to use these tools and the `/why` command. For standalone history queries, see [Why layer: CLI and MCP](./why-layer).
 
 | Tool / command | Parameters | Purpose |
 |---|---|---|
@@ -79,7 +75,7 @@ The repository's main branch includes the following native tools and `/why` comm
 
 Native tools share the CLI's `~/.thoughtdag` index. Relative paths resolve against the current Harness session's working directory. `why_find` is not semantic search, and candidate explanations are not verified causes.
 
-The main-branch implementation enables native tools and a check-history-before-editing prompt by default. Plugin configuration `whyPrompt: false` disables the prompt; `whyTools: false` disables the tools, `/why`, and their prompt. See the [Why manual](./why-layer) for output markers.
+The plugin enables native tools and a check-history-before-editing prompt by default. Plugin configuration `whyPrompt: false` disables the prompt; `whyTools: false` disables the tools, `/why`, and their prompt. See the [Why manual](./why-layer) for output markers.
 
 ## Troubleshooting
 

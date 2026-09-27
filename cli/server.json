@@ -1,0 +1,26 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.chenxiachan/thoughtdag",
+  "title": "ThoughtDAG",
+  "description": "Search local AI conversations by file or phrase and recall source turns. Four read-only tools.",
+  "version": "0.2.2",
+  "repository": {
+    "url": "https://github.com/chenxiachan/thoughtdag",
+    "source": "github",
+    "subfolder": "cli"
+  },
+  "websiteUrl": "https://chenxiachan.github.io/thoughtdag/docs/guides/why-layer",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "thoughtdag",
+      "version": "0.2.2",
+      "runtimeHint": "npx",
+      "transport": { "type": "stdio" },
+      "packageArguments": [
+        { "type": "positional", "value": "mcp" }
+      ]
+    }
+  ]
+}

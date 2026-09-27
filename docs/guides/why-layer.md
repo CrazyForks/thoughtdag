@@ -27,6 +27,18 @@ thoughtdag setup mcp
 
 This registers ThoughtDAG in the current project's `.mcp.json` for Claude Code and in `~/.codex/config.toml` for Codex. Queries remain scoped to the current workspace. The MCP server can search and recall; it cannot edit a canvas or a source session.
 
+For other clients that support local stdio servers, use `npx -y thoughtdag@0.2.2 mcp` as the startup command. Node.js 20 or newer and supported session logs must be available on the machine running the server. The MCP Registry name is `io.github.chenxiachan/thoughtdag`; [manual client configuration](https://github.com/chenxiachan/thoughtdag/tree/main/cli#mcp-clients-and-directories) is also available.
+
+The server writes derived indexes under `~/.thoughtdag` and returns retrieved history to the calling agent. That agent may send it to its configured model provider. Source logs remain unchanged.
+
+### Optional Codex skill
+
+```bash
+npx skills add chenxiachan/thoughtdag --skill thoughtdag --agent codex
+```
+
+This installs the repository's Codex skill in the current project. It can run CLI queries or open a supported session in the ThoughtDAG desktop app (with a local bridge fallback). Skill installation is separate from MCP registration; it does not add canvas-editing MCP tools.
+
 ### Optionally add project rules
 
 ```bash

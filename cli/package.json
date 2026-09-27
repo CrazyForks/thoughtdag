@@ -1,6 +1,7 @@
 {
   "name": "thoughtdag",
-  "version": "0.2.1",
+  "version": "0.2.2",
+  "mcpName": "io.github.chenxiachan/thoughtdag",
   "description": "Find the conversations that shaped a file. Indexes local Claude Code, Codex and DeepSeek Harness sessions by the files they touched; source files are never written.",
   "license": "MIT",
   "type": "module",
@@ -10,6 +11,7 @@
   "files": [
     "dist/thoughtdag.mjs",
     "README.md",
+    "server.json",
     "LICENSE"
   ],
   "scripts": {

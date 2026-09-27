@@ -8,7 +8,9 @@
 # workflow filename publish-cli.yml, environment left empty. Until that is
 # registered, the publish step fails with 404 and nothing else is affected.
 #
-# Skips quietly when the version in cli/package.json is already on npm.
+# Skips existing npm and MCP Registry versions independently, so a retry can
+# finish registry publishing after npm has succeeded. Keep cli/server.json,
+# cli/package.json and CLI_VERSION in cli/src/lib.ts at the same CLI version.
 name: publish cli
 
 on:
@@ -19,6 +21,10 @@ on:
 permissions:
   contents: read
   id-token: write
+
+concurrency:
+  group: publish-cli
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -46,10 +52,72 @@ jobs:
             echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build the bundle
-        run: npm run cli:build
+      - name: Build and test the CLI
+        run: npm --prefix cli test
+
+      - name: Check distribution metadata
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          const pkg = JSON.parse(fs.readFileSync('cli/package.json', 'utf8'));
+          const server = JSON.parse(fs.readFileSync('cli/server.json', 'utf8'));
+          assert.equal(server.name, pkg.mcpName);
+          assert.equal(server.version, pkg.version);
+          assert.equal(server.packages[0].identifier, pkg.name);
+          assert.equal(server.packages[0].version, pkg.version);
+          assert.equal(server.packages[0].transport.type, 'stdio');
+          assert.deepEqual(server.packages[0].packageArguments, [{ type: 'positional', value: 'mcp' }]);
+          JS
 
       - name: Publish thoughtdag
         if: steps.check.outputs.publish == 'true'
         working-directory: cli
         run: npm publish --provenance --access public --loglevel verbose
+
+      - name: Check MCP Registry version
+        id: registry
+        run: |
+          registry_url=$(node -p "const s = require('./cli/server.json'); 'https://registry.modelcontextprotocol.io/v0.1/servers/' + encodeURIComponent(s.name) + '/versions/' + encodeURIComponent(s.version)")
+          echo "url=$registry_url" >> "$GITHUB_OUTPUT"
+          status=$(curl --silent --show-error --retry 3 --max-time 30 --output "$RUNNER_TEMP/mcp-entry.json" --write-out '%{http_code}' "$registry_url")
+          case "$status" in
+            200) echo "publish=false" >> "$GITHUB_OUTPUT" ;;
+            404) echo "publish=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "MCP Registry lookup failed: HTTP $status" >&2; exit 1 ;;
+          esac
+
+      - name: Install MCP publisher
+        if: steps.registry.outputs.publish == 'true'
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl --fail --silent --show-error --location --retry 3 --max-time 120 \
+            'https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz' \
+            --output mcp-publisher_linux_amd64.tar.gz
+          echo 'a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc  mcp-publisher_linux_amd64.tar.gz' | sha256sum --check
+          tar xzf mcp-publisher_linux_amd64.tar.gz mcp-publisher
+
+      - name: Publish to MCP Registry
+        if: steps.registry.outputs.publish == 'true'
+        run: |
+          "$RUNNER_TEMP/mcp-publisher" login github-oidc
+          "$RUNNER_TEMP/mcp-publisher" publish cli/server.json
+
+      - name: Verify the public Registry entry
+        env:
+          REGISTRY_URL: ${{ steps.registry.outputs.url }}
+        run: |
+          curl --fail --silent --show-error --retry 3 --max-time 30 "$REGISTRY_URL" --output "$RUNNER_TEMP/mcp-entry.json"
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          const expected = JSON.parse(fs.readFileSync('cli/server.json', 'utf8'));
+          const actual = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/mcp-entry.json`, 'utf8')).server;
+          assert.equal(actual.name, expected.name);
+          assert.equal(actual.version, expected.version);
+          assert.equal(actual.packages[0].identifier, expected.packages[0].identifier);
+          assert.equal(actual.packages[0].version, expected.version);
+          assert.equal(actual.packages[0].transport.type, 'stdio');
+          assert.deepEqual(actual.packages[0].packageArguments, expected.packages[0].packageArguments);
+          console.log(`Verified ${actual.name}@${actual.version}`);
+          JS

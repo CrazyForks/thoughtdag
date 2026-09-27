@@ -27,6 +27,18 @@ thoughtdag setup mcp
 
 它会为 Claude Code 写入当前项目的 `.mcp.json`，并在 `~/.codex/config.toml` 中注册 Codex MCP。查询仍以当前工作区为范围。MCP 服务只能检索与回忆，不能编辑画布或来源会话。
 
+其他支持本地 stdio 服务的客户端，可使用 `npx -y thoughtdag@0.2.2 mcp` 启动。运行服务的机器需要 Node.js 20 或更新版本，以及受支持的本地会话日志。MCP Registry 名称为 `io.github.chenxiachan/thoughtdag`，也可参照[手动配置示例](https://github.com/chenxiachan/thoughtdag/tree/main/cli#mcp-clients-and-directories)。
+
+服务会在 `~/.thoughtdag` 中写入派生索引，并把检索到的历史返回给调用它的 Agent；该 Agent 可能将内容发送给其配置的模型服务。原始会话日志不会被修改。
+
+### 可选的 Codex Skill
+
+```bash
+npx skills add chenxiachan/thoughtdag --skill thoughtdag --agent codex
+```
+
+此命令将仓库中的 Codex Skill 安装到当前项目。它可以运行 CLI 查询，或在 ThoughtDAG 桌面应用中打开受支持的会话（本地桥接作为后备路径）。Skill 安装与 MCP 注册是两个入口，不会增加编辑画布的 MCP 工具。
+
 ### 可选：加入项目规则
 
 ```bash
