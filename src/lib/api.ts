@@ -147,7 +147,7 @@ async function guardDirectVision(modelId: string | undefined, images?: ImageAtta
 }
 
 // Non-streaming call (used for background summaries)
-export async function llmCall(contextMessages: ContextMessage[], images?: ImageAttachment[], modelOverride?: string): Promise<string> {
+export async function llmCall(contextMessages: ContextMessage[], images?: ImageAttachment[], modelOverride?: string, opts?: { /** a selection or classification call: ask the model not to think out loud (the proxy turns reasoning off where the provider allows) */ fast?: boolean }): Promise<string> {
   const modelId = modelOverride || useUiStore.getState().selectedModel || undefined;
   images = await imagesForModel(modelId, images);
   const direct = directProvider(modelId);
@@ -163,6 +163,7 @@ export async function llmCall(contextMessages: ContextMessage[], images?: ImageA
         messages: contextMessages,
         images: images?.length ? images : undefined,
         model: modelOverride || useUiStore.getState().selectedModel || undefined,
+        ...(opts?.fast ? { fast: true } : {}),
         // browser-configured providers ride along on EVERY request — the
         // proxy builds a per-request registry and forgets it (stateless)
         providers: statelessProviders(),

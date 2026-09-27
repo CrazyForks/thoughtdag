@@ -14,6 +14,8 @@ import { memoryContextBlock, judgeMemory } from '../lib/memory';
 import { fetchRecallItems, recallContextBlock } from '../lib/recall';
 import { fillCards } from '../lib/recall-cards';
 import { judgeAvailable, decideTakeaway } from '../lib/judge';
+import { buildLadder, ladderModelFor, inFlight } from '../lib/ladder';
+import type { Ladder } from '../types';
 import { t, fmt } from '../i18n';
 import { isViewerMode } from '../lib/viewer';
 import type { Reference } from '../types';
@@ -27,8 +29,18 @@ import type { StoreState } from './types';
 // across plaques and classifications aware of what the thinking already
 // ruled out or decided — the lines read as one progression, not islands.
 export const SUMMARY_MIN_CHARS = 400;
-export function generateSummary(nodeId: string, question: string, response: string, setSummary: (id: string, summary: string, forResponse: string, type?: string, topic?: string, confidence?: number, conclusive?: number) => void, mapLines?: string[]) {
+export function generateSummary(nodeId: string, question: string, response: string, setSummary: (id: string, summary: string, forResponse: string, type?: string, topic?: string, confidence?: number, conclusive?: number) => void, mapLines?: string[], ladder?: { model?: string; set: (id: string, forResponse: string, ladder: Ladder | null) => void }) {
   if (response.length < SUMMARY_MIN_CHARS) return;
+  // The zoom ladder (lib/ladder.ts) is selected by the answering model, in
+  // parallel with the takeaway line below; when it lands it also rewrites the
+  // plain summary and topic so the plaque and the ladder never disagree.
+  // One rule for who summarises: the model that answered when it is an API model,
+  // the default background model for agent answers (an agent id would otherwise
+  // be sent to the plain chat route). The ladder is selected first; the takeaway
+  // line below runs on the same model.
+  const who = ladderModelFor(ladder?.model);
+  // no API model at all (agent-only setups): skip the calls, the plaque uses its local ladder
+  if (ladder) { inFlight.add(nodeId); void who.then((m) => m ? buildLadder(question, response, m) : null).then((l) => ladder.set(nodeId, response, l)).catch(() => ladder.set(nodeId, response, null)).finally(() => inFlight.delete(nodeId)); }
   // With a judge, the MOVE (rule-out, decision, pivot, open, plain step) is a
   // typed decision with a probability; the model's own tag stands in when
   // no judge answers. The takeaway line is still the model's — a judge
@@ -39,11 +51,11 @@ export function generateSummary(nodeId: string, question: string, response: stri
   const mapBlock = mapLines && mapLines.length > 0
     ? `Takeaway lines already on the map, along this node's ancestor path (oldest first):\n${mapLines.join('\n')}\n\nUse those lines ONLY to align terminology and avoid repeating them. Classify this exchange's epistemic move on its own merits, independent of the lines above.\n\n`
     : '';
-  llmCall([
+  void who.then((m) => m === undefined && ladder ? Promise.reject(new Error('no model')) : llmCall([
     { role: 'user', content: question },
     { role: 'assistant', content: response },
     { role: 'user', content: `${mapBlock}Compress the above exchange for a map plaque. Output exactly ONE line in the format: TAG | topic | takeaway\n\nTAG classifies the epistemic move: INSIGHT (learned or confirmed something), RULEOUT (killed a hypothesis or option), DECISION (chose among options), PIVOT (reframed the question or direction), OPEN (raised a new unresolved question). Most exchanges are INSIGHT.\n\ntopic: the subject as a bare noun phrase. Hard limit: 6 characters for CJK languages, 14 characters otherwise.\n\ntakeaway: the conclusion, stated first and plainly, as one clause. Hard limit: 18 characters for CJK languages, 40 characters otherwise — it must fit whole on a small plaque, never truncated. A reader scanning many such lines should see how the thinking progressed.\n\nBoth in the same language as the question. Never use dash characters (—, –, -) inside topic or takeaway; use commas or colons instead. Output only that one line.` },
-  ]).then((raw) => {
+  ], undefined, m, { fast: true })).then((raw) => {
     // "TAG | topic | takeaway" — older models or drift may still answer
     // "TAG: text"; unknown/missing tags degrade to the unmarked default
     const line = raw.trim().split('\n')[0].trim();
@@ -491,7 +503,7 @@ export async function runNodeGeneration(
     }
     onSuccess?.(response);
     get().pushHistory();
-    generateSummary(nodeId, question, response, get().setSummary, collectMapLines(nodeId, get().nodes, get().edges));
+    generateSummary(nodeId, question, response, get().setSummary, collectMapLines(nodeId, get().nodes, get().edges), { model: harnessRoute || agentRoute ? undefined : requestedModel, set: get().setLadder });
     if (!selfData?.stepKind && !selfData?.digestOf) {
       // the memory judge counts its writes per canvas (#47); the project
       // store imports this module, so it is reached lazily here

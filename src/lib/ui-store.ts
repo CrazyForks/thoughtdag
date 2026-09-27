@@ -40,6 +40,9 @@ interface UiState {
   webSearchEnabled: boolean;
   /** recall past conversations and memories into a new ask (the why layer); off by default, per-node snapshot like the search switches */
   recallEnabled: boolean;
+  /** the model that selects zoom ladders: 'answering' = the model that wrote the answer (agents fall back to the default), or a model id */
+  ladderModel: string;
+  setLadderModel: (id: string) => void;
   /** how much recall may bring in: a share of the answering model's window (input tokens), lean / standard / generous */
   recallScale: 'lean' | 'standard' | 'generous';
   setRecallScale: (s: 'lean' | 'standard' | 'generous') => void;
@@ -193,6 +196,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   tutorialOpen: false,
   webSearchEnabled: localStorage.getItem(WEB_SEARCH_KEY) !== 'off',
   recallEnabled: localStorage.getItem(RECALL_KEY) === 'on',
+  ladderModel: localStorage.getItem('thoughtdag.ladderModel') || 'answering',
+  setLadderModel: (id) => { localStorage.setItem('thoughtdag.ladderModel', id); set({ ladderModel: id }); },
   recallScale: ((): 'lean' | 'standard' | 'generous' => { const v = localStorage.getItem('thoughtdag.recallScale'); return v === 'lean' || v === 'generous' ? v : 'standard'; })(),
   setRecallScale: (s) => { localStorage.setItem('thoughtdag.recallScale', s); set({ recallScale: s }); },
   judge: (() => { try { const raw = localStorage.getItem(JUDGE_KEY); return raw ? { enabled: true, provider: 'none', openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '', ...JSON.parse(raw) } : { enabled: true, provider: 'none' as const, openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' }; } catch { return { enabled: true, provider: 'none' as const, openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' }; } })(),

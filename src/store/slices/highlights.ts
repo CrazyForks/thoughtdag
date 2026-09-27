@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand';
 import type { Highlight } from '../../types';
+import { levelText } from '../../lib/ladder';
 import type { StoreState, HighlightSlice } from '../types';
 
 export const createHighlightSlice: StateCreator<StoreState, [], [], HighlightSlice> = (set, get) => ({
@@ -68,6 +69,23 @@ export const createHighlightSlice: StateCreator<StoreState, [], [], HighlightSli
         const summaryConclusiveness = [...(n.data.summaryConclusiveness ?? [])];
         summaryConclusiveness[idx] = conclusive;
         return { ...n, data: { ...n.data, summaries, summaryTypes, summaryTopics, summaryTypeConfidences, summaryConclusiveness } };
+      }),
+    }));
+  },
+
+  setLadder: (nodeId, forResponse, ladder) => {
+    set((state) => ({
+      nodes: state.nodes.map((n) => {
+        if (n.id !== nodeId) return n;
+        const idx = n.data.responses.indexOf(forResponse);
+        if (idx === -1) return n;
+        const summaryLadders = [...(n.data.summaryLadders ?? [])];
+        summaryLadders[idx] = ladder;
+        if (!ladder) return { ...n, data: { ...n.data, summaryLadders } };
+        // the plain texts every other surface reads come from the ladder too, so the two never disagree
+        const summaries = [...(n.data.summaries ?? [])]; summaries[idx] = levelText(ladder, 1);
+        const summaryTopics = [...(n.data.summaryTopics ?? [])]; summaryTopics[idx] = levelText(ladder, 0);
+        return { ...n, data: { ...n.data, summaryLadders, summaries, summaryTopics } };
       }),
     }));
   },

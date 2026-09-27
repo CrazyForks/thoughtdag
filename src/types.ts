@@ -29,6 +29,24 @@ export interface Attachment {
 /** What a tool call DID, classified from its name across runners. */
 export type ToolOp = 'read' | 'write' | 'edit' | 'run' | 'search' | 'fetch' | 'agent' | 'other';
 
+/** One word of a ladder's abstract; `space` when the source had whitespace after it. */
+export interface LadderToken { t: string; space?: boolean }
+/** A ladder level item: an index into the abstract's tokens, or a short glue string the model inserted. */
+export type LadderItem = number | string;
+/** Nested summaries for one answer version: topic ⊂ takeaway ⊂ brief ⊂ abstract (indices only; glue is free). */
+export interface Ladder {
+  tokens: LadderToken[];
+  /** the abstract: whole sentences of the answer, verbatim, in order */
+  abstract: string;
+  /** which sentences of the answer (by index in lib/ladder sentencesOf) */
+  sentences: number[];
+  brief: LadderItem[];
+  takeaway: LadderItem[];
+  topic: LadderItem[];
+  /** the model that selected */
+  model?: string;
+}
+
 export interface Highlight {
   id: string;
   text: string;
@@ -288,6 +306,10 @@ export interface ThoughtData extends Record<string, unknown> {
       the same judge call as the summary; display layer only. Older canvases
       lack it — every consumer must fall back to the summary itself. */
   summaryTopics?: (string | undefined | null)[];
+  /** The zoom ladder per version (see lib/ladder.ts): nested texts the map
+      plaque morphs between as the zoom changes. Absent on older canvases and
+      on short answers; the plaque then falls back to summary/topic. */
+  summaryLadders?: (Ladder | undefined | null)[];
   /** Where on the source material this question was asked from: page number,
       plus selection rectangles as fractions of the page box when asked in the
       original PDF view (rects power the in-reader marks; page alone powers

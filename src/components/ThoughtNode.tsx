@@ -23,6 +23,8 @@ import SearchToggles from './ui/SearchToggles';
 import { Markdown, HighlightedMarkdown } from './Markdown';
 import FanOutModal from './FanOutModal';
 import ReasoningDisclosure from './ui/ReasoningDisclosure';
+import ZoomText from './ZoomText';
+import { buildLocalLadder, LOCAL_LADDER_MIN_CHARS } from '../lib/ladder';
 import { ApprovalCard } from './ui/ApprovalCard';
 import { AgentTrace } from './ui/AgentTrace';
 import { SquareTerminal } from 'lucide-react';
@@ -336,6 +338,14 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
   // Map layer: the display summary for the ACTIVE version. Long answers wear
   // it instead of raw text; the full answer lives one double-click away.
   const versionSummary = activeSummary(data);
+  // the zoom ladder of the ACTIVE version: the one its answering model selected, else
+  // an instant local one from the takeaway and the answer's own sentences (older
+  // nodes, failed builds); computed only while the card is folded
+  const storedLadder = data.summaryLadders?.[data.responseIndex] ?? undefined;
+  const versionTopic = activeTopic(data);
+  const localLadder = useMemo(() => (zoomedOut && !storedLadder && (data.response?.length ?? 0) >= LOCAL_LADDER_MIN_CHARS) ? buildLocalLadder(data.question, data.response, versionSummary, versionTopic) : null,
+    [zoomedOut, storedLadder, data.question, data.response, versionSummary, versionTopic]);
+  const versionLadder = storedLadder ?? localLadder ?? undefined;
   const takeawayType = data.summaryTypes?.[data.responseIndex] ?? undefined;
   const takeawayConfidence = data.summaryTypeConfidences?.[data.responseIndex] ?? undefined;
   const conclusive = data.summaryConclusiveness?.[data.responseIndex] ?? undefined;
@@ -489,9 +499,13 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
                 <div className="text-2xl font-semibold text-ink leading-snug line-clamp-3">
                   {data.question}
                 </div>
+                {versionLadder ? (
+                  <div className="mt-1.5" data-plaque-line><ZoomText ladder={versionLadder} /></div>
+                ) : (
                 <div className="text-lg text-ink-muted leading-snug line-clamp-2 mt-1.5">
                   {versionSummary || data.response.replace(/[#*`>-]/g, '').slice(0, 140)}
                 </div>
+                )}
               </>
             ) : (
               // Thinning by signal: badged turns (ruled out / decided /
@@ -503,9 +517,15 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
                 <div className="text-lg text-ink-muted leading-snug line-clamp-2">
                   {data.question}
                 </div>
+                {versionLadder ? (
+                  <div className="mt-1.5" title={!badge && conclusiveNote ? conclusiveNote : undefined} data-plaque-line>
+                    <ZoomText ladder={versionLadder} />
+                  </div>
+                ) : (
                 <div className={`text-2xl font-semibold leading-snug line-clamp-3 mt-1.5 ${badge || settled ? 'text-ink' : 'text-ink-muted'}`} title={!badge && conclusiveNote ? conclusiveNote : undefined} data-plaque-line={badge ? 'badge' : settled ? 'settled' : 'topic'}>
                   {(badge || settled ? versionSummary : (activeTopic(data) ?? versionSummary)) || data.response.replace(/[#*`>-]/g, '').slice(0, 140)}
                 </div>
+                )}
               </>
             )
           ) : (

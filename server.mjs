@@ -883,8 +883,14 @@ app.post('/api/runtime-key', async (req, res) => {
 });
 
 // Non-streaming endpoint (background summaries)
+// Selection and classification calls (`fast: true`) should not think out loud.
+// OpenRouter models take a reasoning switch; Zhipu's flash models always think
+// ("该模型始终思考，不支持关闭思考") and the provider library exposes no effort
+// level, so they keep their defaults.
+const noThink = (base) => ({ ...(base ?? {}), openrouter: { ...(base?.openrouter ?? {}), reasoning: { enabled: false } } });
+
 app.post('/api/claude', async (req, res) => {
-  const { messages, model: modelId, images, providers } = req.body;
+  const { messages, model: modelId, images, providers, fast } = req.body;
   const resolved = resolveModel(modelId || DEFAULT_MODEL, images && images.length > 0, providers);
   if (!resolved) { res.status(503).json({ error: 'No model configured. Add an API key first.' }); return; }
   const { entry, id: actualModelId } = resolved;
@@ -896,7 +902,7 @@ app.post('/api/claude', async (req, res) => {
       model: entry.model(),
       system: prompt.system,
       messages: prompt.messages,
-      providerOptions: entry.providerOptions,
+      providerOptions: fast ? noThink(entry.providerOptions) : entry.providerOptions,
     });
     res.json({ text, usage, model: actualModelId });
   } catch (err) {

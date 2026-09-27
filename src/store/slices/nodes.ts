@@ -79,6 +79,9 @@ export const createNodeSlice: StateCreator<StoreState, [], [], NodeSlice> = (set
                 // a hand-edited answer invalidates its auto summary
                 summaries: n.data.summaries?.map((s, i) => (i === n.data.responseIndex ? undefined : s)),
                 summaryTypes: n.data.summaryTypes?.map((s, i) => (i === n.data.responseIndex ? undefined : s)),
+                summaryTopics: n.data.summaryTopics?.map((s, i) => (i === n.data.responseIndex ? undefined : s)),
+                // the zoom ladder was selected from the old text; the plaque falls back to a local one
+                summaryLadders: n.data.summaryLadders?.map((s, i) => (i === n.data.responseIndex ? undefined : s)),
                 // timeline: the human revised this version (generation stamp stays)
                 editedAts: n.data.responses.map((_, i) => (i === n.data.responseIndex ? new Date().toISOString() : n.data.editedAts?.[i])),
                 highlights: pruneHighlights(n.data.highlights, response),

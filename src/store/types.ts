@@ -1,4 +1,4 @@
-import type { ThoughtNode, ThoughtEdge, Highlight, Attachment, CanvasEvent, CanvasOp } from '../types';
+import type { ThoughtNode, ThoughtEdge, Highlight, Attachment, CanvasEvent, CanvasOp, Ladder } from '../types';
 
 export interface StaleVerdict { fp: string; p: number; changed: string[] }
 export interface Snapshot {
@@ -111,6 +111,8 @@ export interface HighlightSlice {
   removeHighlight: (nodeId: string, highlightId: string) => void;
   setHighlightMode: (nodeId: string, mode: 'off' | 'tag' | 'filter') => void;
   setSummary: (nodeId: string, summary: string, forResponse: string, type?: string, topic?: string, confidence?: number, conclusive?: number) => void;
+  /** store a version's zoom ladder (lib/ladder.ts); also refreshes the plain summary and topic from it */
+  setLadder: (nodeId: string, forResponse: string, ladder: Ladder | null) => void;
   setMaterialSummary: (nodeId: string, summary: string, topic?: string) => void;
 }
 
