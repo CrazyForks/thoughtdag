@@ -76,6 +76,8 @@ import RoleTemplateChips from './components/ui/RoleTemplateChips';
 import SearchToggles from './components/ui/SearchToggles';
 import Tutorial from './components/Tutorial';
 import WhatsNewDialog from './components/ui/WhatsNewDialog';
+import LadderJobCard from './components/ui/LadderJobCard';
+if (import.meta.env.DEV) void import('./lib/ladder-lab');
 import ReleaseNotesDialog from './components/ui/ReleaseNotesDialog';
 import AgentCwdChip from './components/ui/AgentCwdChip';
 import { pluginUpdateCommand } from './lib/plugin-update';
@@ -185,6 +187,7 @@ export default function App() {
     <>
       {hydrated && <Canvas />}
       <Toaster />
+      <LadderJobCard />
       <GlobalTooltip />
       <RoleManagerModal />
       <MemoryManagerModal />

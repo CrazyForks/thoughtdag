@@ -4,7 +4,7 @@ import { Archive, ArchiveRestore, BookOpen, Copy, Files, FlaskConical, GitFork, 
 import { useStore } from '../store';
 import { useUiStore, confirmDialog, toast } from '../lib/ui-store';
 import { recapToNote } from '../lib/recap';
-import { reselectLadder } from '../lib/ladder-reselect';
+import { updateSummaries } from '../lib/ladder-reselect';
 import { useT, fmt, t as ti } from '../i18n';
 
 // Right-click on a node: the app's own context menu (same visual language
@@ -72,7 +72,7 @@ export default function NodeContextMenu({ x, y, nodeId, onClose }: {
         </button>
       )}
       {hasResponse && (node.data.response?.length ?? 0) >= 400 && (
-        <button className={item} onClick={run(() => { void reselectLadder(nodeId); })} data-reselect-ladder>
+        <button className={item} onClick={run(() => { void updateSummaries([nodeId]); })} data-reselect-ladder>
           <Layers size={14} strokeWidth={1.75} className={icon} /> {t('ctx.reselectLadder')}
         </button>
       )}

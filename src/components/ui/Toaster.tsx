@@ -14,13 +14,14 @@ const KIND_ICONS: Record<ToastItem['kind'], typeof Info> = {
 };
 
 export default function Toaster() {
+  const jobShowing = useUiStore((s) => !!s.ladderJob);
   const toasts = useUiStore((s) => s.toasts);
   const dismissToast = useUiStore((s) => s.dismissToast);
 
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-[90] flex flex-col gap-2 max-w-[380px]" data-toaster>
+    <div className={`fixed ${jobShowing ? 'bottom-[104px]' : 'bottom-4'} right-4 z-[90] flex flex-col gap-2 max-w-[380px]`} data-toaster>
       {toasts.map((t) => {
         const Icon = KIND_ICONS[t.kind];
         return (

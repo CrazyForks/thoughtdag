@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { AlignVerticalJustifyStart, Archive, ClipboardList, Copy, FileDown, GitBranch, Highlighter, Trash2 } from 'lucide-react';
+import { AlignVerticalJustifyStart, Archive, ClipboardList, Copy, FileDown, GitBranch, Highlighter, Layers, Trash2 } from 'lucide-react';
 import { useStore } from '../store';
 import { confirmDialog } from '../lib/ui-store';
+import { updateSummaries } from '../lib/ladder-reselect';
 import { selectionMarkdown, downloadMarkdown } from '../lib/export';
 import { isImeComposing } from '../utils';
 import { useT, t as ti, fmt } from '../i18n';
@@ -123,6 +124,15 @@ export default function SelectionToolbar() {
             title={`${t('archive.label')} — ${t('archive.batchTitle')}`}
           >
             <Archive size={14} strokeWidth={1.75} />
+          </button>
+
+          <button
+            onClick={() => { void updateSummaries(selectedNodeIds); }}
+            className="bg-wash hover:bg-line text-ink-muted w-8 h-7 rounded-lg transition-colors flex items-center justify-center"
+            title={`${t('toolbar.reselectLadders')} — ${t('toolbar.reselectLaddersTitle')}`}
+            data-batch-reselect
+          >
+            <Layers size={14} strokeWidth={1.75} />
           </button>
 
           <button
