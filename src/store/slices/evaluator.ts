@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand';
+import { shownStaleIds } from '../../lib/stale-judge';
 import type { ThoughtData } from '../../types';
 import { buildContext } from '../context-builder';
 import { runNodeGeneration, autoRunCounts } from '../streaming';
@@ -74,7 +75,7 @@ export const createEvaluatorSlice: StateCreator<StoreState, [], [], EvaluatorSli
       undefined,
       node.data.excludedAttachmentIds,
       node.data.includedAttachmentIds,
-      get().staleIds,
+      shownStaleIds(get()),
     );
     const messages = ctx.messages;
     const appliedRole = messages.find((m) => m.role === 'system')?.content || undefined;

@@ -3,6 +3,7 @@ import { compileContextBundle, type ContextBundle } from './context-bundle';
 import { useStore } from '../store';
 import { useProjects } from '../store/projects';
 import { toast } from './ui-store';
+import { shownStaleIds } from './stale-judge';
 import { t, fmt } from '../i18n';
 
 // The experiment loop, outbound half. The working pattern this serves:
@@ -73,7 +74,7 @@ export async function takeToExperiment(nodeId: string, mode: 'branch' | 'continu
   const bundle = await compileContextBundle(nodeId, st.nodes as ThoughtNode[], st.edges as ThoughtEdge[], {
     now: new Date().toISOString(),
     projectId: project,
-    staleIds: st.staleIds,
+    staleIds: shownStaleIds(st),
   });
   const anchor: ExperimentAnchor = { project, node: nodeId, bundle: bundle.id, mode };
   const md = renderHandoffMarkdown(bundle, anchor);
