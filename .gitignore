@@ -56,3 +56,6 @@ desktop/why.mjs
 /docs/recall-panel-zh.png
 /docs/memory-dossier-en.png
 /docs/memory-dossier-zh.png
+
+# IDE
+.idea/workspace.xml

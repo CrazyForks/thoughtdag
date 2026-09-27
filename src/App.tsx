@@ -1162,6 +1162,9 @@ function Canvas() {
         nodesDraggable={!isViewerMode}
         nodesConnectable={!isViewerMode}
         panOnDrag={isViewerMode ? true : [1, 2]}
+        panOnScroll
+        zoomOnScroll={false}
+        zoomOnPinch
         zoomOnDoubleClick={false}
         connectionLineStyle={{ stroke: themePalette.accent, strokeDasharray: '8 4', strokeWidth: 2 }}
         onSelectionChange={onSelectionChange}
