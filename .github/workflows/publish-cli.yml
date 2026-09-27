@@ -37,7 +37,9 @@ jobs:
         with:
           node-version: 24
 
-      - run: npm install -g npm@latest && npm --version
+      # npm 12 changed pack --json output; keep the tested npm 11 format and
+      # OIDC publishing support instead of upgrading major versions implicitly.
+      - run: npm install -g npm@11.19.0 && npm --version
 
       - run: npm ci
 

@@ -17,7 +17,7 @@
   "scripts": {
     "build": "cd .. && npm run cli:build",
     "prepack": "npm run build",
-    "test": "npm run build && node --test test/*.test.mjs"
+    "test": "npm run build && npm --prefix .. run desktop:why && node --test test/*.test.mjs"
   },
   "engines": {
     "node": ">=20"
