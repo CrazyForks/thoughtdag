@@ -55,6 +55,13 @@ export const WHATS_NEW: WhatsNewEntry[] = [
           en: 'The takeaway and brief are now written by the model. It first reads the plaques of the earlier steps in the thread, then writes only what this step adds, a conclusion, a decision or a turn, without repeating what came before; the abstract stays verbatim sentences of the answer, as evidence. Older nodes switch over with "Update node summaries".',
         },
       },
+      {
+        title: { zh: '🖐️ 触控板双指滑动即平移', en: '🖐️ Two-finger scroll pans' },
+        body: {
+          zh: '在触控板上双指滑动就能移动画布，不用再按住按键拖。捏合缩放不变。鼠标滚轮现在同样是平移，缩放请按住 ⌘（Windows 上是 Ctrl）再滚。感谢 @Pireirik 的贡献。',
+          en: 'On a trackpad, a two-finger scroll moves the canvas; no button to hold. Pinch still zooms. A mouse wheel now pans too; hold ⌘ (Ctrl on Windows) to zoom with it. Contributed by @Pireirik.',
+        },
+      },
     ],
   },
   {

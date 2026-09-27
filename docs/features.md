@@ -7,7 +7,7 @@ This is a scan of current product areas. The feature guides explain how to use t
 ## Canvas and navigation
 
 - Multiple canvases with create, rename, switch, archive, and delete flows.
-- Infinite canvas with middle/right-drag panning, wheel zoom, node movement, and box selection.
+- Infinite canvas: two-finger scroll or middle/right-drag pans, pinch or ⌘/Ctrl + wheel zooms, nodes move, a drag box selects.
 - Three semantic zoom levels: full cards, takeaway plaques, and icon-level markers.
 - Minimap, zoom controls, frame navigator, node search, structural arrow-key navigation, and root-path highlighting.
 - **Tidy layout**, local **Align**, frames, annotations, undo, and redo.

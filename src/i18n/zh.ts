@@ -62,7 +62,7 @@ export const zh: Record<keyof typeof en, string> = {
   'tutorial.step4.title': '4 · 剪线与连线',
   'tutorial.step4.desc': '点选连线可删除，那段历史即退出上下文。节点间拖线，思路汇合。「将发送」随时预览确切上下文。',
   'tutorial.step5.title': '5 · 缩小看地图',
-  'tutorial.step5.desc': '滚轮缩小，卡片折成一行收获句，关键步骤戴上徽章：✕ 排除 · ⚖ 决策 · ↩ 转向 · ? 待解。再缩只剩图章骨架。远看形状，近读全文。',
+  'tutorial.step5.desc': '捏合或 ⌘/Ctrl 加滚轮缩小，卡片折成一行收获句，关键步骤戴上徽章：✕ 排除 · ⚖ 决策 · ↩ 转向 · ? 待解。再缩只剩图章骨架。远看形状，近读全文。',
   'tutorial.step6.title': '6 · 材料与阅读器',
   'tutorial.step6.desc': '粘贴成便签，网址成快照，文档成文件节点。双击打开阅读器，圈选即问，答案带页码落回画布。不连线就不进上下文。',
   'tutorial.step7.title': '7 · 引用',
