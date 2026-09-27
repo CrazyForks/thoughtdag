@@ -37,7 +37,11 @@ export function LadderMorph({ ladder, level, fontSize, ink = true, weight = 'fon
     const el = host.current; if (!el) return;
     const spans = [...el.querySelectorAll<HTMLSpanElement>('[data-id]')];
     const before = prev.current;
-    if (before && before.level !== level) {
+    // animate only what the person can see, and only when it is not a wall of words: an offscreen plaque or a very
+    // long level just switches. Hundreds of plaques morphing at once was the zoom's CPU spike.
+    const r = el.getBoundingClientRect();
+    const onScreen = r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth && r.width > 0;
+    if (before && before.level !== level && onScreen && spans.length <= 140) {
       for (const s of spans) {
         const b = before.rects.get(s.dataset.id ?? '');
         if (b) {
@@ -64,14 +68,19 @@ export function LadderMorph({ ladder, level, fontSize, ink = true, weight = 'fon
     prev.current = { level, rects, html: spans.map((s) => s.outerHTML).join('') };
   }, [level, fs, ladder]);
 
+  // Spans: a surviving word stays its own span (it slides by id); a run of arriving words becomes ONE span
+  // (it only fades), so an abstract of 300 words costs a few dozen spans, not 300.
+  const segments: { id: string; text: string; skeleton: boolean }[] = [];
+  items.forEach((p, n) => {
+    const glue = n + 1 < items.length && needsSpace(p.text, p.space, items[n + 1].text) ? ' ' : '';
+    const isSkeleton = skeleton ? skeleton.has(p.id) : true;
+    const last = segments[segments.length - 1];
+    if (!isSkeleton && last && !last.skeleton) last.text += p.text + glue;
+    else segments.push({ id: p.id, text: p.text + glue, skeleton: isSkeleton });
+  });
   return (
     <div ref={host} className={`relative leading-[1.3] ${weight} ${className}`} style={{ fontSize: fs }} data-zoom-text data-zoom-level={level}>
-      {items.map((p, n) => {
-        const glue = n + 1 < items.length && needsSpace(p.text, p.space, items[n + 1].text) ? ' ' : '';
-        const isSkeleton = skeleton ? skeleton.has(p.id) : true;
-        const tone = !ink || isSkeleton ? 'text-ink' : 'text-ink-muted font-medium';
-        return <span key={p.id} data-id={p.id} className={`inline-block whitespace-pre will-change-transform ${tone}`}>{p.text + glue}</span>;
-      })}
+      {segments.map((sg) => <span key={sg.id} data-id={sg.id} className={`inline-block whitespace-pre-wrap will-change-transform ${!ink || sg.skeleton ? 'text-ink' : 'text-ink-muted font-medium'}`}>{sg.text}</span>)}
     </div>
   );
 }

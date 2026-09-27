@@ -31,9 +31,9 @@ export type ToolOp = 'read' | 'write' | 'edit' | 'run' | 'search' | 'fetch' | 'a
 
 /** One word of a ladder's abstract; `space` when the source had whitespace after it. */
 export interface LadderToken { t: string; space?: boolean }
-/** A ladder level item: an index into the abstract's tokens, or a short glue string the model inserted. */
+/** A ladder level item: an index into the abstract's tokens, or a free-text word (a written level, or a local ladder's), carrying its trailing space. */
 export type LadderItem = number | string;
-/** Nested summaries for one answer version: topic ⊂ takeaway ⊂ brief ⊂ abstract (indices only; glue is free). */
+/** Nested summaries for one answer version: topic ⊂ takeaway ⊂ brief (written by the model, seeing the thread) ⊂ abstract (sentences of the answer, verbatim). */
 export interface Ladder {
   tokens: LadderToken[];
   /** the abstract: whole sentences of the answer, verbatim, in order */
@@ -45,6 +45,12 @@ export interface Ladder {
   topic: LadderItem[];
   /** the model that selected */
   model?: string;
+  /** what the selection could see: the compiled conversation, the thread's own ladders, or this answer alone */
+  context?: 'full' | 'thread' | 'none';
+  /** the epistemic move the writing model saw (a judge may still decide the plaque's type) */
+  move?: 'insight' | 'ruleout' | 'decision' | 'pivot' | 'open';
+  /** the answer was judged a revision of its parent's (most sentences shared) */
+  revision?: boolean;
 }
 
 export interface Highlight {

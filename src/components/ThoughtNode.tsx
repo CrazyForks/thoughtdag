@@ -24,7 +24,7 @@ import { Markdown, HighlightedMarkdown } from './Markdown';
 import FanOutModal from './FanOutModal';
 import ReasoningDisclosure from './ui/ReasoningDisclosure';
 import ZoomText from './ZoomText';
-import { buildLocalLadder, LOCAL_LADDER_MIN_CHARS } from '../lib/ladder';
+import { useLocalLadder } from '../lib/local-ladder-cache';
 import { ApprovalCard } from './ui/ApprovalCard';
 import { AgentTrace } from './ui/AgentTrace';
 import { SquareTerminal } from 'lucide-react';
@@ -343,8 +343,7 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
   // nodes, failed builds); computed only while the card is folded
   const storedLadder = data.summaryLadders?.[data.responseIndex] ?? undefined;
   const versionTopic = activeTopic(data);
-  const localLadder = useMemo(() => (zoomedOut && !storedLadder && (data.response?.length ?? 0) >= LOCAL_LADDER_MIN_CHARS) ? buildLocalLadder(data.question, data.response, versionSummary, versionTopic) : null,
-    [zoomedOut, storedLadder, data.question, data.response, versionSummary, versionTopic]);
+  const localLadder = useLocalLadder(zoomedOut && !storedLadder, id, data.question, data.response, versionSummary, versionTopic);
   const versionLadder = storedLadder ?? localLadder ?? undefined;
   const takeawayType = data.summaryTypes?.[data.responseIndex] ?? undefined;
   const takeawayConfidence = data.summaryTypeConfidences?.[data.responseIndex] ?? undefined;

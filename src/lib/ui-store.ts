@@ -32,6 +32,8 @@ const MCP_KEY = 'thoughtdag.mcpTools';
 const AUTO_PAUSE_KEY = 'thoughtdag.autoRefreshPaused';
 const HIDE_ANNOTATIONS_KEY = 'thoughtdag.hideAnnotations';
 
+export interface LadderJob { total: number; done: number; failed: number; skipped: number; model: string; running: boolean; cancelled: boolean; finishedAt?: number; /** the last transport error, shown when something did not succeed */ lastError?: string }
+
 interface UiState {
   toasts: ToastItem[];
   confirmRequest: ConfirmRequest | null;
@@ -43,6 +45,9 @@ interface UiState {
   /** the model that selects zoom ladders: 'answering' = the model that wrote the answer (agents fall back to the default), or a model id */
   ladderModel: string;
   setLadderModel: (id: string) => void;
+  /** the summary update running now (selection toolbar / right-click), for the bottom-right card */
+  ladderJob: LadderJob | null;
+  setLadderJob: (job: LadderJob | null | ((j: LadderJob | null) => LadderJob | null)) => void;
   /** how much recall may bring in: a share of the answering model's window (input tokens), lean / standard / generous */
   recallScale: 'lean' | 'standard' | 'generous';
   setRecallScale: (s: 'lean' | 'standard' | 'generous') => void;
@@ -198,6 +203,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   recallEnabled: localStorage.getItem(RECALL_KEY) === 'on',
   ladderModel: localStorage.getItem('thoughtdag.ladderModel') || 'answering',
   setLadderModel: (id) => { localStorage.setItem('thoughtdag.ladderModel', id); set({ ladderModel: id }); },
+  ladderJob: null,
+  setLadderJob: (job) => set((st) => ({ ladderJob: typeof job === 'function' ? job(st.ladderJob) : job })),
   recallScale: ((): 'lean' | 'standard' | 'generous' => { const v = localStorage.getItem('thoughtdag.recallScale'); return v === 'lean' || v === 'generous' ? v : 'standard'; })(),
   setRecallScale: (s) => { localStorage.setItem('thoughtdag.recallScale', s); set({ recallScale: s }); },
   judge: (() => { try { const raw = localStorage.getItem(JUDGE_KEY); return raw ? { enabled: true, provider: 'none', openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '', ...JSON.parse(raw) } : { enabled: true, provider: 'none' as const, openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' }; } catch { return { enabled: true, provider: 'none' as const, openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' }; } })(),

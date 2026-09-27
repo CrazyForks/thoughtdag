@@ -1,5 +1,5 @@
 import type { ThoughtNode, ThoughtData } from '../types';
-import { buildLocalLadder, LOCAL_LADDER_MIN_CHARS } from './ladder';
+import { requestLocalLadder } from './local-ladder-cache';
 import type { Ladder } from '../types';
 
 // Shared by the timeline rail and the timeline overview modal: every
@@ -67,7 +67,8 @@ export function collectTimeline(nodes: ThoughtNode[], now: number, opts: { /** a
       const type = d.summaryTypes?.[d.responseIndex ?? 0] ?? undefined;
       const summary = d.summaries?.[d.responseIndex ?? 0];
       const topic = d.summaryTopics?.[d.responseIndex ?? 0] ?? undefined;
-      const ladder = opts.ladders ? (d.summaryLadders?.[d.responseIndex ?? 0] ?? ((d.response?.length ?? 0) >= LOCAL_LADDER_MIN_CHARS ? buildLocalLadder(d.question, d.response, summary, topic) : null)) : null;
+      // a stored ladder, else the cached local one (built off-thread; the overview re-renders as they land)
+      const ladder = opts.ladders ? (d.summaryLadders?.[d.responseIndex ?? 0] ?? requestLocalLadder(n.id, d.question, d.response, summary, topic)) : null;
       const created = createdAt ? Date.parse(createdAt) : NaN;
       const modified = modifiedAt ? Date.parse(modifiedAt) : NaN;
       return {
