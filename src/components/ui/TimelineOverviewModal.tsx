@@ -5,6 +5,8 @@ import { useStore } from '../../store';
 import { useUiStore } from '../../lib/ui-store';
 import { useDateLocale, useI18n, useT, fmt } from '../../i18n';
 import { collectTimeline } from '../../lib/timeline';
+import { type LadderLevel } from '../../lib/ladder';
+import { LadderMorph } from '../ZoomText';
 import { generateGedankengang, getCached, graphFingerprint, type Gedankengang } from '../../lib/gedankengang';
 
 // The third overview, after highlights and materials: the canvas as a
@@ -21,7 +23,15 @@ export default function TimelineOverviewModal({ onLocate }: { onLocate: (nodeId:
   const dateLocale = useDateLocale();
   const lang = useI18n((s) => s.lang);
   // The modal never renders the recent-edit glow, so the clock is moot: 0.
-  const entries = useMemo(() => collectTimeline(nodes, 0), [nodes]);
+  const entries = useMemo(() => collectTimeline(nodes, 0, { ladders: true }), [nodes]);
+  // How much of each step to show. The slider is continuous, like the canvas
+  // zoom: type size and row spacing follow it smoothly, and the text level
+  // (topic, takeaway, brief, abstract) hands off at the half-steps with the
+  // same word morph the plaques use. The modal keeps one height throughout.
+  const [detail, setDetail] = useState(1);
+  const level = Math.round(detail) as LadderLevel;
+  const rowStyle = { paddingTop: 4 + detail * 5, paddingBottom: 4 + detail * 5, transition: 'padding 160ms ease-out' };
+  const fontPx = 13 + detail * 0.9;
   // The journey paragraph: session-cached per (graph fingerprint, interface
   // language) — reopening is free until the map changes, and switching the
   // language toggle narrates in the other language.
@@ -52,11 +62,16 @@ export default function TimelineOverviewModal({ onLocate }: { onLocate: (nodeId:
 
   return createPortal((
     <div className="fixed inset-0 z-[60] bg-ink/30 backdrop-blur-sm flex items-center justify-center p-6" onClick={close}>
-      <div className="bg-card rounded-2xl shadow-2xl border border-line w-[640px] max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-card rounded-2xl shadow-2xl border border-line w-[640px] h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2 px-5 py-3 border-b border-line shrink-0">
           <History size={15} strokeWidth={1.75} className="text-accent" />
           <span className="text-sm font-semibold text-ink">{t('tlov.title')}</span>
           <span className="text-2xs text-ink-faint">{fmt(t('tlov.count'), { n: entries.length })}</span>
+          <label className="flex items-center gap-2 ml-3 text-2xs text-ink-faint" title={t('tlov.detailTitle')}>
+            <span>{t('tlov.detail')}</span>
+            <input type="range" min={0} max={3} step={0.01} value={detail} onChange={(e) => setDetail(Number(e.target.value))} className="w-28 accent-accent" data-tlov-detail />
+            <span className="text-ink-muted w-8">{t(`ladder.level${level}` as 'ladder.level0')}</span>
+          </label>
           <div className="flex-1" />
           <button
             onClick={() => { close(); useUiStore.getState().setThoughtMapOpen(true); }}
@@ -118,17 +133,22 @@ export default function TimelineOverviewModal({ onLocate }: { onLocate: (nodeId:
                     {day || t('tlov.undated')}
                   </div>
                 )}
-                <div className="group flex items-center gap-2.5 py-1.5 border-b border-line/50 last:border-0">
+                <div className="group flex items-start gap-2.5 border-b border-line/50 last:border-0" style={rowStyle}>
                   <span
                     className="w-2 h-2 rounded-full shrink-0"
                     style={{ background: e.color, opacity: e.archived ? 0.35 : 1 }}
                   />
                   <span className="text-2xs font-mono text-ink-faint shrink-0 w-11">{fmtClock(e.createdAt)}</span>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm truncate ${e.archived ? 'text-ink-faint line-through' : e.badged ? 'text-ink' : 'text-ink-muted'}`}>
-                      {e.topic && <span className="font-medium text-accent">{e.topic} · </span>}
-                      {e.label || '…'}
-                    </p>
+                    {e.ladder ? (
+                      // the level whole, morphing word by word as the slider crosses a half-step; the shorter level's words keep full ink
+                      <div className={e.archived ? 'opacity-50 line-through' : ''}><LadderMorph ladder={e.ladder} level={level} fontSize={fontPx} weight={e.badged ? 'font-semibold' : 'font-medium'} className="whitespace-pre-wrap break-words" /></div>
+                    ) : (
+                      // no ladder (a short answer): the takeaway, or the topic at the lowest level
+                      <p className={`leading-snug whitespace-pre-wrap break-words ${e.archived ? 'text-ink-faint line-through' : e.badged ? 'text-ink' : 'text-ink-muted'}`} style={{ fontSize: fontPx, transition: 'font-size 160ms ease-out' }}>
+                        {level === 0 ? (e.topic || e.label || '…') : <>{e.topic && <span className="font-medium text-accent">{e.topic} · </span>}{e.label || '…'}</>}
+                      </p>
+                    )}
                     {e.modifiedAt && e.modifiedAt !== e.createdAt && (
                       <p className="text-2xs text-ink-faint">{t('timeline.modified')} {new Date(e.modifiedAt).toLocaleString(dateLocale)}</p>
                     )}

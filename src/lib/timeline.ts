@@ -1,4 +1,6 @@
 import type { ThoughtNode, ThoughtData } from '../types';
+import { buildLocalLadder, LOCAL_LADDER_MIN_CHARS } from './ladder';
+import type { Ladder } from '../types';
 
 // Shared by the timeline rail and the timeline overview modal: every
 // non-frame node as a chronicle entry, sorted by creation time. Creation
@@ -20,6 +22,9 @@ export type TimelineEntry = {
   /** Micro topic (≤6 CJK chars) when the judge wrote one — narrow surfaces
       lead with it. */
   topic?: string;
+  /** The version's zoom ladder (a local one when none is stored), when asked for: the overview
+      lets the reader pick how much of each step to show. */
+  ladder?: Ladder;
   /** A typed turn (ruled out / decided / pivoted / open) — the landmarks;
       unbadged waypoints render lighter and shorter. */
   badged: boolean;
@@ -49,7 +54,7 @@ function materialName(d: ThoughtData): string | undefined {
   return undefined;
 }
 
-export function collectTimeline(nodes: ThoughtNode[], now: number): TimelineEntry[] {
+export function collectTimeline(nodes: ThoughtNode[], now: number, opts: { /** also attach each entry's ladder (a local one when none is stored); the overview asks, the rail does not */ ladders?: boolean } = {}): TimelineEntry[] {
   return nodes
     .filter((n) => (n.data as ThoughtData).stepKind !== 'frame')
     .map((n, i) => {
@@ -62,6 +67,7 @@ export function collectTimeline(nodes: ThoughtNode[], now: number): TimelineEntr
       const type = d.summaryTypes?.[d.responseIndex ?? 0] ?? undefined;
       const summary = d.summaries?.[d.responseIndex ?? 0];
       const topic = d.summaryTopics?.[d.responseIndex ?? 0] ?? undefined;
+      const ladder = opts.ladders ? (d.summaryLadders?.[d.responseIndex ?? 0] ?? ((d.response?.length ?? 0) >= LOCAL_LADDER_MIN_CHARS ? buildLocalLadder(d.question, d.response, summary, topic) : null)) : null;
       const created = createdAt ? Date.parse(createdAt) : NaN;
       const modified = modifiedAt ? Date.parse(modifiedAt) : NaN;
       return {
@@ -71,6 +77,7 @@ export function collectTimeline(nodes: ThoughtNode[], now: number): TimelineEntr
           // takeaways mid-clause (narrow surfaces clamp via CSS anyway).
           label: (summary || materialName(d) || d.question || '').slice(0, 120),
           topic,
+          ...(ladder ? { ladder } : {}),
           badged: !!type && type !== 'insight',
           type: type ?? undefined,
           createdAt,
