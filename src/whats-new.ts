@@ -10,11 +10,16 @@
 
 import type { Lang } from './i18n';
 
+/** A short clip or picture bundled with the app (public/whats-new/…), so it
+ *  shows offline: an .mp4/.webm plays muted in a loop, anything else is an image. */
+export interface WhatsNewMedia { src: Record<Lang, string>; alt: Record<Lang, string>; /** intrinsic size, for a stable box while it loads */ width: number; height: number }
+
 export interface WhatsNewItem {
   title: Record<Lang, string>;
   body: Record<Lang, string>;
   /** where to read more, if anywhere */
   link?: { label: Record<Lang, string>; href: string };
+  media?: WhatsNewMedia;
 }
 
 export interface WhatsNewEntry {
@@ -25,12 +30,69 @@ export interface WhatsNewEntry {
   announce: boolean;
   /** one line under the version: what this release is about */
   lead: Record<Lang, string>;
+  /** shown under the lead */
+  media?: WhatsNewMedia;
   items: WhatsNewItem[];
 }
 
 const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
+  {
+    version: '0.5.2',
+    date: '2026-09-27',
+    announce: true,
+    lead: {
+      zh: '🔍 上下文管理重大更新！现在，无论画布缩放至何种比例，节点内容始终保持极佳的阅读体验。',
+      en: '🔍 A major update to context management! Whatever the zoom, every node on the canvas now stays a pleasure to read.',
+    },
+    media: { src: { zh: 'whats-new/zoom-ladder-zh.mp4', en: 'whats-new/zoom-ladder-en.mp4' }, alt: { zh: '缩小画布时，牌匾上的结论逐词长成短述再长成摘要', en: 'Zooming out, a plaque\'s takeaway grows word by word into a brief, then an abstract' }, width: 960, height: 600 },
+    items: [
+      {
+        title: { zh: '🪜 智能四层摘要', en: '🪜 Four smart summary levels' },
+        body: {
+          zh: '每个回答自动构建「主题、结论、短述、完整概要」四个递进层级，随缩放比例自动无缝切换。',
+          en: 'Every answer builds four progressive levels, topic, takeaway, brief and full abstract, and switches between them seamlessly as you zoom.',
+        },
+      },
+      {
+        title: { zh: '✨ 丝滑的视觉过渡', en: '✨ Silky visual transitions' },
+        body: {
+          zh: '缩放时，文字会逐词自然展开或收起。保留的关键词会平滑移动，新文本自然淡入，核心重点始终高亮加深。视线聚焦零中断，数十个节点的全局脉络一眼即达。',
+          en: 'As you zoom, text unfolds or folds word by word. The words that stay glide into place, new text fades in, and the key points stay highlighted in full ink. Your focus is never broken, and the shape of dozens of nodes reads at a glance.',
+        },
+      },
+      {
+        title: { zh: '🔁 新旧节点全面兼容', en: '🔁 New and old nodes alike' },
+        body: {
+          zh: '新回答自动生效该特性；旧节点会在浏览时实时生成摘要层级，若需更精准的 AI 总结，只需右键一键生成。',
+          en: 'New answers get it automatically; older nodes build their levels live as you browse, and for a sharper AI-selected summary, one right-click does it.',
+        },
+      },
+      {
+        title: { zh: '🎚️ 时间线详略随手调', en: '🎚️ Timeline detail at your fingertips' },
+        body: {
+          zh: '时间线弹窗新增详略滑块，从主题一路拉到完整概要，字号与行距随手指流动，每一步文字完整呈现，告别省略号。',
+          en: 'The timeline overview gains a detail slider: glide from topic to full abstract, type and spacing flowing with your drag, every step shown whole, no ellipsis anywhere.',
+        },
+        media: { src: { zh: 'whats-new/timeline-detail-zh.mp4', en: 'whats-new/timeline-detail-en.mp4' }, alt: { zh: '拖动时间线弹窗的详略滑块，每一步的文字逐词展开', en: 'Dragging the timeline overview\'s detail slider, each step\'s text unfolds word by word' }, width: 720, height: 760 },
+      },
+      {
+        title: { zh: '🛡️ 所见即所发', en: '🛡️ What you see is what is sent' },
+        body: {
+          zh: '判断模型认定上游改动与答案无关时，「上游已变」标记现在同时从预览和请求中退场，两者始终一致。感谢 Agent Memory Atlas 的审阅指出这一点。',
+          en: 'When the decision model rules an upstream change irrelevant, the "upstream changed" mark now leaves the preview and the request together, always in step. Thanks to the Agent Memory Atlas review for catching it.',
+        },
+      },
+      {
+        title: { zh: '🧹 右键菜单焕新', en: '🧹 A refreshed right-click menu' },
+        body: {
+          zh: '「重新生成」更简洁，CLI 相关操作合并为一项，新增「用模型重选摘要」。手动修改过的回答会自动重做摘要。',
+          en: '"Regenerate" is simpler, the CLI actions merge into one, and "Reselect the summary with a model" joins the menu. Hand-edited answers get their summaries redone automatically.',
+        },
+      },
+    ],
+  },
   {
     // a patch: the 0.5 entry below stays the announcement, this one is history only
     version: '0.5.1',
@@ -61,6 +123,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       },
       {
         title: { zh: '提问时自动回忆', en: 'Recall as you ask' },
+        media: { src: { zh: 'whats-new/jev-recall.mp4', en: 'whats-new/jev-recall.mp4' }, alt: { zh: '回忆流程里，判断模型半秒内从候选片段中选出相关的几条', en: 'In the recall flow the decision model picks the relevant excerpts from the candidates in under a second' }, width: 1200, height: 720 },
         body: {
           zh: '开着「回忆」提问，先判断问题涉及哪些主题，把档案整份带进去；问的是细节时再补几条原话。带了什么、花了多少，面板上一条一条看得见，不想要的划掉就不带。带入量三档：省、标准、多带。',
           en: 'With recall on, a question is first matched to its topics and their dossiers ride in whole; a question about a detail brings a few verbatim excerpts too. What came in and what it cost is listed item by item; strike one and it stays out. Three amounts: lean, standard, generous.',

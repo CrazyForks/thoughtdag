@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n, useT, fmt } from '../../i18n';
 import { useUiStore } from '../../lib/ui-store';
 import { appVersion } from '../../lib/app-version';
-import { announcedSince, type WhatsNewEntry, type WhatsNewItem } from '../../whats-new';
+import { announcedSince, type WhatsNewEntry, type WhatsNewItem, type WhatsNewMedia } from '../../whats-new';
 import type { Lang } from '../../i18n';
 
 // On the first launch after an update: what changed since the version this
@@ -20,8 +20,9 @@ const params = new URLSearchParams(window.location.search);
 
 function decide(): WhatsNewEntry[] {
   if (!appVersion) return [];
-  const forced = params.get('wn') === '1';
-  if (forced) return announcedSince(null, appVersion);
+  const forced = params.get('wn');
+  if (forced === '1') return announcedSince(null, appVersion);
+  if (forced) return announcedSince(forced, appVersion); // ?wn=<version>: preview the dialog as someone upgrading from that version
   let seen: string | null = null;
   try { seen = localStorage.getItem(SEEN_KEY); } catch { /* storage unavailable: never nag */ }
   if (seen === null) {
@@ -39,6 +40,19 @@ function decide(): WhatsNewEntry[] {
   return announcedSince(seen, appVersion);
 }
 
+/** A bundled clip or picture: a clip plays muted in a loop, a still shows as is; the box keeps its ratio while loading. */
+export function WhatsNewMediaView({ media, lang }: { media: WhatsNewMedia; lang: Lang }) {
+  const src = media.src[lang];
+  const isClip = /\.(mp4|webm)$/i.test(src);
+  return (
+    <div className="mt-3 rounded-xl border border-line overflow-hidden bg-wash" style={{ aspectRatio: `${media.width} / ${media.height}` }} data-whats-new-media>
+      {isClip
+        ? <video src={`${import.meta.env.BASE_URL}${src}`} autoPlay loop muted playsInline className="w-full h-full object-cover" aria-label={media.alt[lang]} />
+        : <img src={`${import.meta.env.BASE_URL}${src}`} alt={media.alt[lang]} className="w-full h-full object-cover" />}
+    </div>
+  );
+}
+
 /** The numbered items of one release; shared with the release history. */
 export function WhatsNewItems({ items, lang }: { items: WhatsNewItem[]; lang: Lang }) {
   if (items.length === 0) return null;
@@ -50,6 +64,7 @@ export function WhatsNewItems({ items, lang }: { items: WhatsNewItem[]; lang: La
           <div className="min-w-0">
             <div className="text-sm font-medium text-ink">{it.title[lang]}</div>
             <p className="text-sm text-ink-muted leading-relaxed mt-1 [overflow-wrap:anywhere]">{it.body[lang]}</p>
+            {it.media && <WhatsNewMediaView media={it.media} lang={lang} />}
             {it.link && (
               <a
                 href={it.link.href}
@@ -118,6 +133,7 @@ export default function WhatsNewDialog() {
                 </div>
               )}
               <p className="text-sm text-ink-muted leading-relaxed [overflow-wrap:anywhere]">{entry.lead[lang]}</p>
+              {entry.media && <WhatsNewMediaView media={entry.media} lang={lang} />}
               <WhatsNewItems items={entry.items} lang={lang} />
             </li>
           ))}
