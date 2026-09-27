@@ -77,6 +77,28 @@ jobs:
         working-directory: cli
         run: npm publish --provenance --access public --loglevel verbose
 
+      - name: Wait for the npm version to be publicly readable
+        run: |
+          local_v=$(node -p "require('./cli/package.json').version")
+          for attempt in $(seq 1 18); do
+            if npm view "thoughtdag@${local_v}" version mcpName --json --prefer-online > "$RUNNER_TEMP/npm-entry.json"; then
+              node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          const pkg = JSON.parse(fs.readFileSync('cli/package.json', 'utf8'));
+          const actual = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/npm-entry.json`, 'utf8'));
+          assert.equal(actual.version, pkg.version);
+          assert.equal(actual.mcpName, pkg.mcpName);
+          JS
+              break
+            fi
+            if [ "$attempt" -eq 18 ]; then
+              echo 'The npm version is not public yet; rerun after propagation.' >&2
+              exit 1
+            fi
+            sleep 10
+          done
+
       - name: Check MCP Registry version
         id: registry
         run: |
@@ -103,7 +125,19 @@ jobs:
         if: steps.registry.outputs.publish == 'true'
         run: |
           "$RUNNER_TEMP/mcp-publisher" login github-oidc
-          "$RUNNER_TEMP/mcp-publisher" publish cli/server.json
+          for attempt in $(seq 1 6); do
+            if "$RUNNER_TEMP/mcp-publisher" publish cli/server.json > "$RUNNER_TEMP/mcp-publish.log" 2>&1; then
+              cat "$RUNNER_TEMP/mcp-publish.log"
+              break
+            fi
+            cat "$RUNNER_TEMP/mcp-publish.log"
+            # The Registry may see a different npm cache immediately after
+            # publication. Retry only this explicit package-visibility error.
+            if ! grep -q 'version .*was not found' "$RUNNER_TEMP/mcp-publish.log" || [ "$attempt" -eq 6 ]; then
+              exit 1
+            fi
+            sleep 10
+          done
 
       - name: Verify the public Registry entry
         env:
