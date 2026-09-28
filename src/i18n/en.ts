@@ -429,6 +429,8 @@ export const en = {
   'toolbar.exportEvents': 'Export event log (.csv)',
   'toolbar.exportEventsTitle': 'Timestamped record of canvas operations (asks, generations, highlights, archiving) for R/Python analysis',
   'toolbar.menuShare': 'Share read-only link',
+  'toolbar.menuWheelPans': 'Wheel pans the canvas',
+  'toolbar.wheelPansTitle': 'On: the wheel and a two-finger scroll pan the canvas; pinch or hold ⌘/Ctrl while scrolling to zoom. Suits a trackpad. Off: the wheel zooms.',
   'toolbar.menuAnnotationsHide': 'Hide annotations',
   'toolbar.menuAnnotationsShow': 'Show annotations',
   'toolbar.hideAnnotations': 'Hide annotations (frames & unlinked material)',

@@ -16,7 +16,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import 'highlight.js/styles/github.css';
-import { ArrowRight, BookOpen, Bot, Brain, CircleHelp, Download, Drama, Eye, FileText, Frame, GitBranch, Highlighter, ImageDown, KeyRound, LayoutGrid, Loader2, MessageCircleQuestion, MoreHorizontal, Paperclip, Redo2, Scissors, Search, Share2, SquareTerminal, Stethoscope, StickyNote, Trash2, Undo2, Workflow, X, ListRestart, FolderSync, Minimize2, Rewind, History as HistoryIcon } from 'lucide-react';
+import { ArrowRight, BookOpen, Bot, Brain, CircleHelp, Download, Drama, Eye, FileText, FolderSync, Frame, GitBranch, Hand, Highlighter, History as HistoryIcon, ImageDown, KeyRound, LayoutGrid, ListRestart, Loader2, MessageCircleQuestion, Minimize2, MoreHorizontal, Paperclip, Redo2, Rewind, Scissors, Search, Share2, SquareTerminal, Stethoscope, StickyNote, Trash2, Undo2, Workflow, X } from 'lucide-react';
 import './index.css';
 import ThoughtNode from './components/ThoughtNode';
 import ParadigmNode from './components/ParadigmNode';
@@ -210,6 +210,8 @@ function Canvas() {
   const setTutorialOpen = useUiStore((s) => s.setTutorialOpen);
   const annotationsHidden = useUiStore((s) => s.annotationsHidden);
   const setAnnotationsHidden = useUiStore((s) => s.setAnnotationsHidden);
+  const wheelPans = useUiStore((s) => s.wheelPans);
+  const setWheelPans = useUiStore((s) => s.setWheelPans);
   const [inputValue, setInputValue] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [rootRole, setRootRole] = useState('');
@@ -1162,8 +1164,10 @@ function Canvas() {
         nodesDraggable={!isViewerMode}
         nodesConnectable={!isViewerMode}
         panOnDrag={isViewerMode ? true : [1, 2]}
-        panOnScroll
-        zoomOnScroll={false}
+        // The wheel zooms, as through 0.5.2; a switch in the ⋯ menu makes it pan instead (trackpad style, #52),
+        // where a pinch or ⌘/Ctrl + wheel zooms. A browser cannot tell a mouse wheel from a two-finger scroll.
+        panOnScroll={wheelPans}
+        zoomOnScroll={!wheelPans}
         zoomOnPinch
         zoomOnDoubleClick={false}
         connectionLineStyle={{ stroke: themePalette.accent, strokeDasharray: '8 4', strokeWidth: 2 }}
@@ -1749,6 +1753,15 @@ function Canvas() {
                   <StickyNote size={14} strokeWidth={1.75} className={`shrink-0 ${annotationsHidden ? 'text-accent' : 'text-ink-faint'}`} /> {annotationsHidden ? t('toolbar.menuAnnotationsShow') : t('toolbar.menuAnnotationsHide')}
                 </button>
               )}
+              <button
+                onClick={() => { setMoreOpen(false); setWheelPans(!wheelPans); }}
+                className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-wash transition-colors flex items-center gap-2.5"
+                title={t('toolbar.wheelPansTitle')}
+                aria-pressed={wheelPans}
+                data-wheel-pans
+              >
+                <Hand size={14} strokeWidth={1.75} className={`shrink-0 ${wheelPans ? 'text-accent' : 'text-ink-faint'}`} /> <span className="flex-1">{t('toolbar.menuWheelPans')}</span>{wheelPans && <span className="text-accent">✓</span>}
+              </button>
               {hasNodes && (
                 <button
                   onClick={() => {

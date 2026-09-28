@@ -39,6 +39,17 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    // a patch: the 0.5.2 entry stays the announcement, this one is history only
+    version: '0.5.4',
+    date: '2026-09-29',
+    announce: false,
+    lead: {
+      zh: '鼠标滚轮恢复缩放画布，和 0.5.2 一样。0.5.3 起滚轮改成了平移，这对触控板顺手，却让鼠标用户没法用滚轮缩放。触控板用户可以在画布 ⋯ 菜单打开「滚轮平移画布」：双指滑动即平移，捏合或按住 ⌘/Ctrl 滚动来缩放。',
+      en: 'The mouse wheel zooms the canvas again, as in 0.5.2. Since 0.5.3 it panned, which suits a trackpad but left mouse users without wheel zoom. On a trackpad, turn on ⋯ → Wheel pans the canvas: a two-finger scroll pans, pinch or hold ⌘/Ctrl while scrolling to zoom.',
+    },
+    items: [],
+  },
+  {
     // a patch: the 0.5.2 entry below stays the announcement, this one is history only
     version: '0.5.3',
     date: '2026-09-27',

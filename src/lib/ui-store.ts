@@ -31,6 +31,8 @@ export type AgentEffort = string;
 const MCP_KEY = 'thoughtdag.mcpTools';
 const AUTO_PAUSE_KEY = 'thoughtdag.autoRefreshPaused';
 const HIDE_ANNOTATIONS_KEY = 'thoughtdag.hideAnnotations';
+/** 'on' = the wheel (and a trackpad's two-finger scroll) pans the canvas; off, the default, it zooms as it did through 0.5.2 */
+const WHEEL_PANS_KEY = 'thoughtdag.wheelPans';
 
 export interface LadderJob { total: number; done: number; failed: number; skipped: number; model: string; running: boolean; cancelled: boolean; finishedAt?: number; /** the last transport error, shown when something did not succeed */ lastError?: string }
 
@@ -59,6 +61,8 @@ interface UiState {
   autoRefreshPaused: boolean;
   /** View mode: hide frames + unlinked content nodes (annotation layer off). */
   annotationsHidden: boolean;
+  /** Canvas wheel: false (default) zooms, true pans (trackpad style; zoom by pinch or ⌘/Ctrl + wheel). */
+  wheelPans: boolean;
   /** Panel mode: opened by double-clicking a node, closed via its X. While
    *  on, the panel follows the selection; single clicks only select. */
   panelOpen: boolean;
@@ -86,6 +90,7 @@ interface UiState {
   setMcpEnabled: (enabled: boolean) => void;
   setAutoRefreshPaused: (paused: boolean) => void;
   setAnnotationsHidden: (hidden: boolean) => void;
+  setWheelPans: (pans: boolean) => void;
   setDraft: (key: string, text: string) => void;
   setPanelWidth: (w: number) => void;
   /** User-editable role option library (persisted). */
@@ -214,6 +219,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   mcpEnabled: localStorage.getItem(MCP_KEY) === 'on',
   autoRefreshPaused: localStorage.getItem(AUTO_PAUSE_KEY) === 'yes',
   annotationsHidden: localStorage.getItem(HIDE_ANNOTATIONS_KEY) === 'yes',
+  wheelPans: localStorage.getItem(WHEEL_PANS_KEY) === 'on',
   panelOpen: false,
   panelWidth: (() => { const raw = localStorage.getItem('thoughtdag.panelWidth'); const n = raw ? parseInt(raw, 10) : NaN; return Number.isFinite(n) ? n : 520; })(),
   selectedModel: localStorage.getItem(MODEL_KEY) || null,
@@ -364,6 +370,10 @@ export const useUiStore = create<UiState>((set, get) => ({
   setAnnotationsHidden: (hidden) => {
     localStorage.setItem(HIDE_ANNOTATIONS_KEY, hidden ? 'yes' : 'no');
     set({ annotationsHidden: hidden });
+  },
+  setWheelPans: (pans) => {
+    try { localStorage.setItem(WHEEL_PANS_KEY, pans ? 'on' : 'off'); } catch { /* the choice still holds for this session */ }
+    set({ wheelPans: pans });
   },
   setAutoRefreshPaused: (paused) => {
     localStorage.setItem(AUTO_PAUSE_KEY, paused ? 'yes' : 'no');
