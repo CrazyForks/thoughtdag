@@ -56,7 +56,21 @@ docker build -f cli/Dockerfile -t thoughtdag-mcp cli
 docker run --rm -i --network none thoughtdag-mcp
 ```
 
-An empty container answers MCP initialization and `tools/list`; history queries have no results until you explicitly provide local data. For Glama, paste this Dockerfile into the listing's build configuration. No model key, private session, or hosted endpoint is needed for the directory check.
+An empty container answers MCP initialization and `tools/list`; history queries have no results until you explicitly provide local data. No model key, private session, or hosted endpoint is needed for the directory check.
+
+Glama generates its own Dockerfile from the listing's **Admin → Dockerfile** form. Use Node.js `22` and these build steps:
+
+```json
+["npm install --global --ignore-scripts --no-audit --no-fund thoughtdag@0.2.2"]
+```
+
+Use these CMD arguments (Glama adds its own `mcp-proxy` wrapper):
+
+```json
+["env", "THOUGHTDAG_HOME=/tmp/thoughtdag-index", "THOUGHTDAG_SESSION_ROOTS=/data/sessions", "THOUGHTDAG_CANVAS_ROOTS=/data/canvases", "THOUGHTDAG_MEMORY_ROOTS=", "thoughtdag", "mcp"]
+```
+
+Leave placeholder credentials empty, then build and release. The repository root builds the web frontend; it does not produce `dist/thoughtdag.mjs`. Keep the pinned CLI version in this configuration aligned with the version you intend to list. Glama's generated image is separate from the non-root image above.
 
 For actual local use, mount only the history directories you choose, read-only, at `/data/sessions` and optionally `/data/canvases`. The derived index is stored separately at `/home/node/.thoughtdag`. Query absolute artifact paths recorded in those sessions; the container's default working directory is not your host project's path. The native `npx` configuration above is the simpler option for project-relative queries. A cloud-hosted copy cannot see the history on your computer.
 
