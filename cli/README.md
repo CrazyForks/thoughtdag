@@ -47,6 +47,19 @@ Requires Node.js 20 or newer and supported session logs on the machine running t
 
 The four tools search and recall history; they cannot edit a canvas, modify source sessions, or replace the client's conversation. Derived indexes and caches are written under `~/.thoughtdag`. Retrieved text is returned to the calling agent and may enter that agent's model context; review the client's provider settings before using private history.
 
+### Container and directory checks
+
+The [Dockerfile](https://github.com/chenxiachan/thoughtdag/blob/main/cli/Dockerfile) installs the published CLI version as a non-root stdio server. It does not copy the repository or any session data into the image. From the repository root:
+
+```bash
+docker build -f cli/Dockerfile -t thoughtdag-mcp cli
+docker run --rm -i --network none thoughtdag-mcp
+```
+
+An empty container answers MCP initialization and `tools/list`; history queries have no results until you explicitly provide local data. For Glama, paste this Dockerfile into the listing's build configuration. No model key, private session, or hosted endpoint is needed for the directory check.
+
+For actual local use, mount only the history directories you choose, read-only, at `/data/sessions` and optionally `/data/canvases`. The derived index is stored separately at `/home/node/.thoughtdag`. Query absolute artifact paths recorded in those sessions; the container's default working directory is not your host project's path. The native `npx` configuration above is the simpler option for project-relative queries. A cloud-hosted copy cannot see the history on your computer.
+
 ## Optional Codex skill
 
 The repository also contains a Codex skill for opening a session in the desktop app or running CLI history queries:
