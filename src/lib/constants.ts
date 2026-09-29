@@ -18,10 +18,11 @@ export const NODE_CSS_WIDTH = 520;
 // Gaps sit at the tight end: enough air for the wires and the edge chips,
 // no more — a denser canvas keeps more of the graph in one glance.
 export const LAYOUT_COL_WIDTH = 540;
-export const LAYOUT_H_GAP = 48;
-// 72 is lifted from a real working canvas — the density its author settled
-// into by hand, adopted as the default.
-export const LAYOUT_V_GAP = 72;
+export const LAYOUT_H_GAP = 64;
+// 72 was lifted from a real working canvas — the density its author settled
+// into by hand; a third more air (2026-09) so the map-zoom plaques, which
+// outgrow the work card, meet their neighbours less often.
+export const LAYOUT_V_GAP = 96;
 
 // Collapsed node card height, used by layout estimation and collapse shifting.
 export const COLLAPSED_NODE_HEIGHT = 80;
