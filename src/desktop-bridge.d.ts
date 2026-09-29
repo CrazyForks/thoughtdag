@@ -118,7 +118,7 @@ interface DesktopAgentsBridge {
   capabilities?: { nativePicker: boolean };
   /** where the runtime's binary is, or null when not installed */
   available(): Promise<Record<string, string | null>>;
-  models(runtime?: 'pi' | 'codex' | 'claude-code'): Promise<{ installed: boolean; models: DesktopAgentModel[]; default: string | null; thinkingLevel?: string | null; error?: string }>;
+  models(runtime?: 'pi' | 'codex' | 'claude-code'): Promise<{ installed: boolean; models: DesktopAgentModel[]; default: string | null; thinkingLevel?: string | null; /** where the host looked, when the CLI was not found (PATH, the login shell's PATH, the usual homes) */ searched?: string[]; error?: string }>;
   /** resolves with the run id at once; events follow through onEvent */
   run(request: DesktopAgentRunRequest): Promise<string>;
   abort(runId: string): Promise<boolean>;

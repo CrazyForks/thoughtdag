@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { API_BASE } from './constants';
 import { storedProviders, pushProviders } from './runtime-providers';
-import { agentModels, AGENT_PROVIDER, AGENT_RUNTIMES, agentTarget, isAgentModel } from './agents/agent-runtime';
+import { agentCatalog, AGENT_PROVIDER, AGENT_RUNTIMES, agentTarget, isAgentModel, type RuntimeStatus } from './agents/agent-runtime';
+import type { AgentRuntime } from '../types';
 
 export interface ModelInfo {
   id: string;
@@ -23,7 +24,7 @@ export interface Capabilities {
   vision: boolean;
 }
 
-export type ModelData = { models: ModelInfo[]; default: string | null; capabilities?: Capabilities; /** the agent runtimes are being asked right now */ agentsPending?: boolean };
+export type ModelData = { models: ModelInfo[]; default: string | null; capabilities?: Capabilities; /** the agent runtimes are being asked right now */ agentsPending?: boolean; /** what each agent runtime answered the last time it was asked (absent until asked) */ runtimes?: Partial<Record<AgentRuntime, RuntimeStatus>> };
 
 // Model list is fetched once per session and shared by every picker
 let cache: ModelData | null = null;
@@ -136,10 +137,11 @@ async function refreshAgents(): Promise<void> {
   agentsRefreshing = (async () => {
     const before = cache!;
     setModelsCache({ ...before, agentsPending: true });
-    const extra = await agentModels().catch(() => [] as ModelInfo[]);
+    const asked = await agentCatalog().catch(() => ({ models: [] as ModelInfo[], runtimes: {} as Partial<Record<AgentRuntime, RuntimeStatus>> }));
+    const extra = asked.models;
     try { localStorage.setItem(AGENT_CACHE_KEY, JSON.stringify(extra)); } catch { /* ignore */ }
     const own = (cache ?? before).models.filter((m) => !isRuntimeAgent(m));
-    setModelsCache({ ...(cache ?? before), models: [...own, ...withResolvedNames(extra)], agentsPending: false });
+    setModelsCache({ ...(cache ?? before), models: [...own, ...withResolvedNames(extra)], agentsPending: false, runtimes: asked.runtimes });
   })().finally(() => { agentsRefreshing = null; });
   return agentsRefreshing;
 }
@@ -147,6 +149,12 @@ async function refreshAgents(): Promise<void> {
 /** The first picker to open in this launch asks the runtimes for their
  *  catalogs (the spinner in the agent group covers the wait); later opens
  *  reuse the answer. Harmless when there is no agents bridge. */
+/** Ask the runtimes again now (the picker's recheck after the person installed a CLI or fixed their PATH). */
+export function recheckAgents(): Promise<void> {
+  agentsAsked = true;
+  return getModelsOnce().then(() => refreshAgents());
+}
+
 export function ensureAgentsFresh(): void {
   if (agentsAsked || !hasAgentsBridge()) return;
   agentsAsked = true;

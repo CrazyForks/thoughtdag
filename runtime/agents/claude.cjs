@@ -16,19 +16,13 @@ const { randomUUID } = require('node:crypto');
 const { snapshotDir, diffSnapshots } = require('./fs-diff.cjs');
 
 const fsp = fs.promises;
-const CANDIDATE_DIRS = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', path.join(os.homedir(), '.local', 'bin'), path.join(os.homedir(), '.claude', 'local'), path.join(os.homedir(), '.npm-global', 'bin'), path.join(os.homedir(), '.bun', 'bin')];
+const { locate, childEnv: envWith } = require('./where.cjs');
+const EXTRA_HOMES = [path.join(os.homedir(), '.claude', 'local')];   // the CLI's own install location, on top of the usual ones
 
-async function executable(p) { try { await fsp.access(p, fs.constants.X_OK); return true; } catch { return false; } }
-async function findClaude() {
-  const names = process.platform === 'win32' ? ['claude.cmd', 'claude.exe', 'claude'] : ['claude'];
-  const dirs = [...(process.env.PATH || '').split(path.delimiter), ...CANDIDATE_DIRS].filter(Boolean);
-  for (const d of dirs) for (const n of names) { const p = path.join(d, n); if (await executable(p)) return p; }
-  return null;
-}
-function childEnv() {
-  const seen = new Set((process.env.PATH || '').split(path.delimiter).filter(Boolean));
-  return { ...process.env, PATH: [...seen, ...CANDIDATE_DIRS.filter((d) => !seen.has(d))].join(path.delimiter) };
-}
+/** The claude binary and the directories walked to find it (see where.cjs). */
+let located = null;
+const findClaude = () => (located ??= locate('claude', EXTRA_HOMES));
+const childEnv = () => envWith(EXTRA_HOMES);
 
 /** Claude Code has no model list; its aliases resolve to the newest model
  *  of each family inside the CLI, so they never go stale. The CLI's own
@@ -114,14 +108,19 @@ function createClaudeRuntime({ log } = {}) {
   const say = log || (() => {});
   const runs = new Map();     // runId → state
   let binPromise = null;
-  const bin = () => { if (!binPromise) binPromise = findClaude(); return binPromise; };
+  const bin = () => {
+    if (!binPromise) binPromise = findClaude().then((r) => { if (!r.path) { located = null; binPromise = null; } return r.path; });
+    return binPromise;
+  };
+  /** Where the lookup walked, for the picker's "not found" note. */
+  const searched = async () => (await findClaude()).searched;
 
   return {
     available: () => bin(),
 
     async models() {
       const b = await bin();
-      if (!b) return { installed: false, models: [], default: null };
+      if (!b) return { installed: false, models: [], default: null, searched: await searched() };
       const [efforts, defaultEffort] = await Promise.all([effortsOf(b), configuredEffort()]);
       return { installed: true, models: MODELS.map((m) => ({ ...m, efforts, defaultEffort })), default: 'claude/claude-code/opus' };
     },

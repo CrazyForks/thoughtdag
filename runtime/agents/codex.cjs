@@ -17,19 +17,13 @@ const { snapshotDir, diffSnapshots } = require('./fs-diff.cjs');
 
 const fsp = fs.promises;
 const RESPONSE_MS = 30 * 1000;
-const CANDIDATE_DIRS = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', path.join(os.homedir(), '.bun', 'bin'), path.join(os.homedir(), '.npm-global', 'bin'), path.join(os.homedir(), '.local', 'bin')];
+const { locate, childEnv: envWith } = require('./where.cjs');
+const EXTRA_HOMES = [path.join(os.homedir(), '.codex', 'bin')];
 
-async function executable(p) { try { await fsp.access(p, fs.constants.X_OK); return true; } catch { return false; } }
-async function findCodex() {
-  const names = process.platform === 'win32' ? ['codex.cmd', 'codex.exe', 'codex'] : ['codex'];
-  const dirs = [...(process.env.PATH || '').split(path.delimiter), ...CANDIDATE_DIRS].filter(Boolean);
-  for (const d of dirs) for (const n of names) { const p = path.join(d, n); if (await executable(p)) return p; }
-  return null;
-}
-function childEnv() {
-  const seen = new Set((process.env.PATH || '').split(path.delimiter).filter(Boolean));
-  return { ...process.env, PATH: [...seen, ...CANDIDATE_DIRS.filter((d) => !seen.has(d))].join(path.delimiter) };
-}
+/** The codex binary and the directories walked to find it (see where.cjs). */
+let located = null;
+const findCodex = () => (located ??= locate('codex', EXTRA_HOMES));
+const childEnv = () => envWith(EXTRA_HOMES);
 
 /** The guard file the canvas writes per working directory, as Codex policy. */
 async function policyFor(cwd) {
@@ -58,7 +52,12 @@ function createCodexRuntime({ log } = {}) {
   const byThread = new Map(); // threadId → runId
   const serverAsks = new Map(); // question id → { rpcId, respond(answer) }
   let binPromise = null;
-  const bin = () => { if (!binPromise) binPromise = findCodex(); return binPromise; };
+  const bin = () => {
+    if (!binPromise) binPromise = findCodex().then((r) => { if (!r.path) { located = null; binPromise = null; } return r.path; });
+    return binPromise;
+  };
+  /** Where the lookup walked, for the picker's "not found" note. */
+  const searched = async () => (await findCodex()).searched;
 
   const write = (obj) => { try { proc.stdin.write(JSON.stringify(obj) + '\n'); return true; } catch { return false; } };
   const send = (method, params, timeoutMs = RESPONSE_MS) => new Promise((resolve, reject) => {
@@ -283,7 +282,7 @@ function createCodexRuntime({ log } = {}) {
 
     async models() {
       const b = await bin();
-      if (!b) return { installed: false, models: [], default: null };
+      if (!b) return { installed: false, models: [], default: null, searched: await searched() };
       await ensureServer();
       const r = await send('model/list', {});
       noteEfforts(r);

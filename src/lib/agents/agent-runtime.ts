@@ -57,19 +57,32 @@ export function agentTarget(id: string): { runtime: AgentRuntime; provider: stri
 
 /** Every live runtime's configured models as picker entries; a runtime
  *  that is not installed contributes nothing. */
-export async function agentModels(): Promise<ModelInfo[]> {
+/** What a runtime said when asked for its catalog: present or not, and where the host looked when not. */
+export type RuntimeStatus = { installed: boolean; searched?: string[]; error?: string };
+
+/** Every live runtime's configured models as picker entries, plus each runtime's status; a runtime that is not installed contributes no models. */
+export async function agentCatalog(): Promise<{ models: ModelInfo[]; runtimes: Partial<Record<AgentRuntime, RuntimeStatus>> }> {
   const bridge = window.desktopAgents;
-  if (!bridge) return [];
+  if (!bridge) return { models: [], runtimes: {} };
   // the runtimes answer side by side: one slow catalog does not queue the others
-  const answers = await Promise.all(LIVE_RUNTIMES.map((runtime) => bridge.models(runtime).catch(() => null)));
-  const out: ModelInfo[] = [];
+  const answers = await Promise.all(LIVE_RUNTIMES.map((runtime) => bridge.models(runtime).catch((e: unknown) => ({ installed: false, models: [], default: null, error: e instanceof Error ? e.message : String(e) }))));
+  const models: ModelInfo[] = [];
+  const runtimes: Partial<Record<AgentRuntime, RuntimeStatus>> = {};
   LIVE_RUNTIMES.forEach((runtime, i) => {
     const def = AGENT_RUNTIMES[runtime];
     const r = answers[i];
+    const note = r as { searched?: string[]; error?: string } | null;
+    runtimes[runtime] = { installed: !!r?.installed, ...(note?.searched ? { searched: note.searched } : {}), ...(note?.error ? { error: note.error } : {}) };
     if (!r?.installed) return; // not installed, or it did not answer: it stays out of the list
-    for (const m of r.models) out.push({ id: `${def.prefix}${m.provider}/${m.id}`, name: `${def.label} · ${m.name}`, provider: AGENT_PROVIDER, vision: m.vision, efforts: m.efforts ?? [], defaultEffort: m.defaultEffort ?? null });
+    for (const m of r.models ?? []) models.push({ id: `${def.prefix}${m.provider}/${m.id}`, name: `${def.label} · ${m.name}`, provider: AGENT_PROVIDER, vision: m.vision, efforts: m.efforts ?? [], defaultEffort: m.defaultEffort ?? null });
   });
-  return out;
+  return { models, runtimes };
+}
+
+/** Every live runtime's configured models as picker entries; a runtime
+ *  that is not installed contributes nothing. */
+export async function agentModels(): Promise<ModelInfo[]> {
+  return (await agentCatalog()).models;
 }
 
 export type AgentRoute = { cwd: string; sessionPath?: string; forkEntryId?: string; continue?: boolean };

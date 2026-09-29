@@ -23,32 +23,14 @@ const fsp = fs.promises;
 const GUARD = path.join(__dirname, 'pi-guard.mjs');
 const IDLE_MS = Number(process.env.TD_AGENT_IDLE_MS) || 10 * 60 * 1000; // a Pi process (session or catalog) retires after this long without a listener
 const RESPONSE_MS = 30 * 1000;
-const CANDIDATE_DIRS = [
-  '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin',
-  path.join(os.homedir(), '.bun', 'bin'), path.join(os.homedir(), '.npm-global', 'bin'),
-  path.join(os.homedir(), '.local', 'bin'), path.join(os.homedir(), '.pi', 'bin'),
-];
+const { locate, childEnv: envWith } = require('./where.cjs');
+const EXTRA_HOMES = [path.join(os.homedir(), '.pi', 'bin')];   // pi's own home, on top of the usual ones (see where.cjs)
 
-async function executable(p) {
-  try { await fsp.access(p, fs.constants.X_OK); return true; } catch { return false; }
-}
-
-/** The pi binary: PATH first (a terminal launch), then the usual homes
- *  (a Finder launch carries almost no PATH). */
-async function findPi() {
-  const names = process.platform === 'win32' ? ['pi.cmd', 'pi.exe', 'pi'] : ['pi'];
-  const dirs = [...(process.env.PATH || '').split(path.delimiter), ...CANDIDATE_DIRS].filter(Boolean);
-  for (const d of dirs) for (const n of names) { const p = path.join(d, n); if (await executable(p)) return p; }
-  return null;
-}
-
-/** PATH for the child: the shell's plus the usual homes, so Pi's own bash
- *  tool finds git, node and friends even under a Finder launch. */
-function childEnv() {
-  const seen = new Set((process.env.PATH || '').split(path.delimiter).filter(Boolean));
-  const extra = CANDIDATE_DIRS.filter((d) => !seen.has(d));
-  return { ...process.env, PATH: [...seen, ...extra].join(path.delimiter) };
-}
+/** The pi binary and the directories walked to find it (PATH, the login shell's PATH, the usual homes). */
+let located = null;
+const findPi = () => (located ??= locate('pi', EXTRA_HOMES));
+/** PATH for the child: the shell's plus the usual homes, so Pi's own bash tool finds git, node and friends even under a Finder launch. */
+const childEnv = () => envWith(EXTRA_HOMES);
 
 class PiProcess {
   constructor(bin, cwd, opts) {
@@ -191,7 +173,12 @@ function createPiRuntime({ log } = {}) {
   const runs = new Map();      // runId → { proc, abort() }
   let binPromise = null;
 
-  const bin = () => { if (!binPromise) binPromise = findPi(); return binPromise; };
+  const bin = () => {
+    if (!binPromise) binPromise = findPi().then((r) => { if (!r.path) { located = null; binPromise = null; } return r.path; });
+    return binPromise;
+  };
+  /** Where the lookup walked, for the picker's "not found" note. */
+  const searched = async () => (await findPi()).searched;
   // Pi's thinking levels in its own words, from its own `--help`
   // (`--thinking <level>  Set thinking level: off, minimal, …`); read once
   let levelsPromise = null;
@@ -228,7 +215,7 @@ function createPiRuntime({ log } = {}) {
      *  sessionless process in the home directory. */
     async models() {
       const b = await bin();
-      if (!b) return { installed: false, models: [], default: null };
+      if (!b) return { installed: false, models: [], default: null, searched: await searched() };
       const key = '\0catalog';
       let p = procs.get(key);
       if (!p || p.dead) { p = new PiProcess(b, os.homedir(), { log: say, noSession: true, onExit: (d) => { if (procs.get(key) === d) procs.delete(key); } }); procs.set(key, p); }

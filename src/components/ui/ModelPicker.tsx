@@ -3,8 +3,8 @@ import { IN_HARNESS } from '../../lib/embedded';
 import { Check, ChevronDown, Cpu, KeyRound, RefreshCw, Info, Loader2, ChevronRight, Scale } from 'lucide-react';
 import { toast, useUiStore } from '../../lib/ui-store';
 import { profileLines } from '../../lib/profile';
-import { useModels, setModelsCache, ensureAgentsFresh, type ModelInfo } from '../../lib/use-models';
-import { AGENT_PROVIDER, AGENT_RUNTIMES, isAgentModel, runtimeOf } from '../../lib/agents/agent-runtime';
+import { useModels, setModelsCache, ensureAgentsFresh, recheckAgents, type ModelInfo } from '../../lib/use-models';
+import { AGENT_PROVIDER, AGENT_RUNTIMES, LIVE_RUNTIMES, isAgentModel, runtimeOf } from '../../lib/agents/agent-runtime';
 import { JUDGE_LABELS, effectiveProvider, judgeConfigured, judgeTripped } from '../../lib/judge';
 
 // Agent-run models fold by runtime: each runtime lists many models, so only
@@ -86,6 +86,8 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
   // the agent group is listed while the runtimes are still answering, so the
   // picker has somewhere to say so
   if (data?.agentsPending && !providers.includes(AGENT_PROVIDER)) providers.push(AGENT_PROVIDER);
+  // a host that looked for runtimes and found none still gets the group: that is where the "not found" rows live
+  if (!providers.includes(AGENT_PROVIDER) && data?.runtimes && Object.values(data.runtimes).some((s) => s && !s.installed)) providers.push(AGENT_PROVIDER);
 
 
   // Picking an agent model that reports effort levels keeps the menu open and
@@ -164,7 +166,21 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
                 const groups = new Map<string, ModelInfo[]>();
                 for (const m of agentModels) { const label = runtimeLabelOf(m.id); const list = groups.get(label) ?? []; list.push(m); groups.set(label, list); }
                 const activeLabel = activeId ? runtimeLabelOf(activeId) : null;
-                return [...groups.entries()].map(([label, list]) => {
+                // runtimes the host looked for and did not find: named, with where it looked, and a way to ask again
+                const missing = LIVE_RUNTIMES.filter((rt) => data?.runtimes?.[rt] && !data.runtimes[rt]!.installed && !groups.has(AGENT_RUNTIMES[rt].label));
+                const missingRows = missing.map((rt) => {
+                  const st = data!.runtimes![rt]!; const def = AGENT_RUNTIMES[rt]; const bin = def.prefix.replace(/\/$/, '');
+                  const hint = fmt(t('model.runtimeMissingHint'), { bin, dirs: (st.searched ?? []).join('\n') || '—' });
+                  return (
+                    <div key={`missing-${rt}`} className="px-3 py-1.5 text-xs flex items-center gap-2 text-ink-faint" title={st.error ? `${hint}\n${st.error}` : hint} data-runtime-missing={rt}>
+                      <span className="w-3 shrink-0" />
+                      <span className="truncate">{fmt(t('model.runtimeMissing'), { name: def.label })}</span>
+                      <Info size={11} strokeWidth={1.75} className="shrink-0 text-ink-faint/70" />
+                      <button onClick={(e) => { e.stopPropagation(); void recheckAgents(); }} className="ml-auto text-2xs text-accent hover:underline shrink-0" data-runtime-recheck={rt}>{t('model.recheck')}</button>
+                    </div>
+                  );
+                });
+                return [...[...groups.entries()].map(([label, list]) => {
                   const isOpen = openRuntimes.has(label) || label === activeLabel || groups.size === 1;
                   const current = list.find((m) => m.id === activeId);
                   return (
@@ -191,7 +207,7 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
                       ))}
                     </div>
                   );
-                });
+                }), ...missingRows];
               })() : models.filter((m) => m.provider === provider).map((m) => (
                 <div key={m.id}>
                 <button
