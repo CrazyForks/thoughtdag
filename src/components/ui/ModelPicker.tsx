@@ -48,6 +48,12 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
   // opens, not at launch: a CLI to start is seconds and memory the launch
   // should not pay for
   useEffect(() => { if (open) ensureAgentsFresh(); }, [open]);
+  // …except on an install with no model at all: the button is then the
+  // "connect a model" door and the picker never opens, so the agents on this
+  // machine would never be asked — a fresh profile with Pi installed saw only
+  // "connect a model". Asking once here costs what opening the picker costs.
+  const bare = !nodeMode && (data?.models.length ?? 0) === 0 && typeof window !== 'undefined' && !!window.desktopAgents;
+  useEffect(() => { if (bare) ensureAgentsFresh(); }, [bare]);
 
   useEffect(() => {
     if (!open) return;
@@ -78,6 +84,7 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
   // Empty install: the picker IS the call to action. A grey "no model"
   // label reads as a dead control; a keyed accent button reads as the door.
   const noModels = !nodeMode && models.length === 0;
+  const agentsAsked = !!data?.runtimes && Object.keys(data.runtimes).length > 0;
 
   const globalId = selectedModel && models.some((m) => m.id === selectedModel) ? selectedModel : data?.default;
   const activeId = nodeMode ? (value ?? null) : globalId;
@@ -119,7 +126,10 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
       <button
         onClick={(e) => {
           e.stopPropagation();
-          if (noModels) useUiStore.getState().setApiKeyModalOpen(true);
+          // no model yet: the door is the key dialog — unless the host looked for
+          // agent CLIs, in which case the picker has something to say (which
+          // runtime it did not find, and where; plus the same key entry)
+          if (noModels && !agentsAsked) useUiStore.getState().setApiKeyModalOpen(true);
           else { setEffortStepFor(null); setOpen((v) => !v); }
         }}
         className={compact
@@ -131,7 +141,7 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
         data-apikey-entry={noModels || undefined}
       >
         {noModels
-          ? <KeyRound size={14} strokeWidth={1.75} className="shrink-0" />
+          ? (data?.agentsPending ? <Loader2 size={14} strokeWidth={1.75} className="shrink-0 animate-spin" /> : <KeyRound size={14} strokeWidth={1.75} className="shrink-0" />)
           : <Cpu size={14} strokeWidth={1.75} className={`shrink-0 ${compact && !value ? '' : 'text-accent'}`} />}
         <span className="text-xs truncate font-medium">{noModels ? t('model.connectCta') : label}</span>
         {!noModels && <ChevronDown size={12} strokeWidth={1.75} className="shrink-0" />}

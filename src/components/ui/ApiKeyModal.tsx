@@ -260,12 +260,13 @@ export default function ApiKeyModal() {
               </p>
             )}
 
-            {/* the judge: a decision endpoint, configured beside the model keys because it is one more key */}
-            <JudgeSettings />
-
             <button onClick={() => setAdding(true)} className="flex items-center gap-1.5 text-xs text-accent hover:bg-accent/10 px-3 py-1.5 rounded-lg transition-colors" data-provider-add>
               <Plus size={14} strokeWidth={1.75} /> {t('provider.add')}
             </button>
+
+            {/* the judge: a decision endpoint, one more key — offered after the first interface or
+                agent is in place, since it rides the interfaces (a saved OpenRouter key is used as is) */}
+            {(data?.models.length ?? 0) > 0 && <JudgeSettings />}
           </>)}
 
           {adding && (<>
