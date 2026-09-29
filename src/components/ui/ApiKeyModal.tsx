@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Camera, ExternalLink, KeyRound, Loader2, Plus, Trash2, X, Pencil } from 'lucide-react';
+import { Camera, ExternalLink, KeyRound, Loader2, Plus, Trash2, X, Pencil, Scale } from 'lucide-react';
 import { startOpenRouterOAuth } from '../../lib/openrouter-oauth';
 import { useUiStore, toast } from '../../lib/ui-store';
 import { useModels, setModelsCache } from '../../lib/use-models';
@@ -11,6 +11,7 @@ import {
 import { useT, fmt, useI18n } from '../../i18n';
 import { API_BASE } from '../../lib/constants';
 import JudgeSettings from './JudgeSettings';
+import { JUDGE_LABELS, effectiveProvider, judgeConfigured, judgeTripped } from '../../lib/judge';
 
 // The model-interface manager: one door for every way in. Presets carry a
 // baseURL and a key page; the model list is always fetched live from the
@@ -29,6 +30,7 @@ export default function ApiKeyModal() {
   // (a card that appears once, right then), or its own view when the picker's judge row or the
   // memory page asked for it. Either way it never competes with "add an interface".
   const section = useUiStore((s) => s.apiKeyModalSection);
+  const judgeCfg = useUiStore((s) => s.judge);
   const [judgeView, setJudgeView] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
   useEffect(() => { if (open) { setJudgeView(section === 'judge'); setJustAdded(false); } }, [open, section]);
@@ -276,6 +278,19 @@ export default function ApiKeyModal() {
               <Plus size={14} strokeWidth={1.75} /> {t('provider.add')}
             </button>
 
+            {/* the judge on its own, one quiet line: people who run only agents never add an
+                interface, so this is their door (the same view the picker's judge row opens) */}
+            {!justAdded && (() => {
+              const on = judgeCfg.enabled !== false; const configured = judgeConfigured(judgeCfg);
+              const state = !on ? t('judge.stateOff') : !configured ? t('judge.stateNoApi') : judgeTripped() ? t('judge.stateTripped') : fmt(t('judge.stateOn'), { j: JUDGE_LABELS[effectiveProvider(judgeCfg)] });
+              return (
+                <div className="flex items-center gap-2 pt-1 text-2xs text-ink-faint" data-judge-line>
+                  <Scale size={12} strokeWidth={1.75} className="shrink-0" />
+                  <span className="truncate">{t('judge.rowTitle')} · {state}</span>
+                  <button onClick={() => setJudgeView(true)} className="ml-auto text-accent hover:underline shrink-0" data-judge-open>{t('judge.goConfigure')}</button>
+                </div>
+              );
+            })()}
             {justAdded && (
               <div className="border border-accent/30 rounded-xl px-3 py-2.5 bg-accent/5 space-y-2" data-judge-next>
                 <p className="text-xs text-ink font-medium">{t('provider.nextJudge')}</p>
