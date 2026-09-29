@@ -1,8 +1,19 @@
-import { defineConfig } from 'vitepress';
+import { defineConfig, type HeadConfig } from 'vitepress';
 
 const docsBase = process.env.DOCS_BASE || '/';
+const publicDocs = 'https://chenxiachan.github.io/thoughtdag/docs/';
+const pageUrl = (path: string) => publicDocs + path.replace(/(^|\/)index\.md$/, '$1').replace(/\.md$/, '');
 
 const enSidebar = [
+  {
+    text: 'Solve a conversation problem',
+    items: [
+      { text: 'Tutorials', link: '/tutorials/' },
+      { text: 'Edit AI context', link: '/tutorials/edit-ai-context' },
+      { text: 'Branch a conversation', link: '/tutorials/branch-ai-conversations' },
+      { text: 'Reuse past discussions', link: '/tutorials/reuse-past-ai-discussions' },
+    ],
+  },
   {
     text: 'Get started',
     items: [
@@ -54,6 +65,15 @@ const enSidebar = [
 ];
 
 const zhSidebar = [
+  {
+    text: '从实际问题开始',
+    items: [
+      { text: '场景教程', link: '/zh/tutorials/' },
+      { text: '编辑 AI 上下文', link: '/zh/tutorials/edit-ai-context' },
+      { text: '展开对话分支', link: '/zh/tutorials/branch-ai-conversations' },
+      { text: '接上过去的讨论', link: '/zh/tutorials/reuse-past-ai-discussions' },
+    ],
+  },
   {
     text: '开始使用',
     items: [
@@ -107,6 +127,7 @@ const zhSidebar = [
 const enTheme = {
   nav: [
     { text: 'Start', link: '/' },
+    { text: 'Tutorials', link: '/tutorials/' },
     { text: 'Features', link: '/guides/' },
     { text: 'Concepts', link: '/concepts/' },
     { text: 'Reference', link: '/reference/' },
@@ -122,10 +143,11 @@ const enTheme = {
 const zhTheme = {
   nav: [
     { text: '开始', link: '/zh/' },
+    { text: '教程', link: '/zh/tutorials/' },
     { text: '功能', link: '/zh/guides/' },
     { text: '概念', link: '/zh/concepts/' },
     { text: '参考', link: '/zh/reference/' },
-    { text: '下载', link: 'https://chenxiachan.github.io/thoughtdag/?lang=zh#download' },
+    { text: '下载', link: 'https://chenxiachan.github.io/thoughtdag/zh.html#download' },
   ],
   sidebar: zhSidebar,
   outline: { label: '本页内容', level: [2, 3] },
@@ -148,6 +170,37 @@ export default defineConfig({
   base: docsBase,
   cleanUrls: true,
   lastUpdated: true,
+  sitemap: {
+    hostname: publicDocs,
+    transformItems: (items) => items.filter((item) => item.url !== '404'),
+  },
+  transformHead({ pageData, siteConfig, title, description }) {
+    if (pageData.relativePath === '404.md') return [['meta', { name: 'robots', content: 'noindex' }]];
+    const rewrite = (path: string) => siteConfig.rewrites.map[path] || path;
+    const path = rewrite(pageData.relativePath);
+    const enPath = path.replace(/^zh\//, '');
+    const zhPath = `zh/${enPath}`;
+    const pages = new Set(siteConfig.pages.map(rewrite));
+    const url = pageUrl(path);
+    const head: HeadConfig[] = [
+      ['link', { rel: 'canonical', href: url }],
+      ['meta', { property: 'og:type', content: 'article' }],
+      ['meta', { property: 'og:title', content: title }],
+      ['meta', { property: 'og:description', content: description }],
+      ['meta', { property: 'og:url', content: url }],
+      ['meta', { property: 'og:locale', content: path.startsWith('zh/') ? 'zh_CN' : 'en_US' }],
+      ['meta', { property: 'og:image', content: `${publicDocs}media/tutorials/branch-selected-v1-poster.jpg` }],
+      ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ];
+    if (pages.has(enPath) && pages.has(zhPath)) {
+      head.push(
+        ['link', { rel: 'alternate', hreflang: 'en', href: pageUrl(enPath) }],
+        ['link', { rel: 'alternate', hreflang: 'zh-CN', href: pageUrl(zhPath) }],
+        ['link', { rel: 'alternate', hreflang: 'x-default', href: pageUrl(enPath) }],
+      );
+    }
+    return head;
+  },
   markdown: {
     lineNumbers: true,
   },

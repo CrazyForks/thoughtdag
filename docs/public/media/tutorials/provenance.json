@@ -1,0 +1,139 @@
+[
+  {
+    "slug": "branch",
+    "title": {
+      "zh": "展开支线",
+      "en": "Explore a branch"
+    },
+    "source": "marketing/linkedin/thinking-with-ai/branch-clean-v1.mp4",
+    "parts": [
+      [
+        0,
+        12
+      ]
+    ],
+    "speed": 1.25,
+    "poster_time": 6.3,
+    "linkedin_position": 1,
+    "description": {
+      "zh": "选中一句话，展开支线，再回到原来的阅读计划。",
+      "en": "Select a passage, explore a side question, and return to your reading plan."
+    },
+    "tutorial": 2,
+    "kind": "concept illustration",
+    "revision": "linkedin-selected-v1",
+    "source_sha256": "2549a7f0e21c2018a02a926050809c78fcab7060e5410d7540839b11815f22e7",
+    "video": "/media/tutorials/branch-selected-v1.mp4",
+    "gif": "/media/tutorials/branch-selected-v1.gif",
+    "poster": "/media/tutorials/branch-selected-v1-poster.jpg",
+    "audio": false,
+    "duration_seconds": 9.6,
+    "width": 1200,
+    "height": 720
+  },
+  {
+    "slug": "zoom",
+    "title": {
+      "zh": "缩放阅读",
+      "en": "Read at different depths"
+    },
+    "source": "video/out/review/thoughtdag-zoom-en-v2.mp4",
+    "parts": [
+      [
+        0,
+        16.8
+      ]
+    ],
+    "speed": 1.25,
+    "poster_time": 7.7,
+    "linkedin_position": 2,
+    "description": {
+      "zh": "缩小看讨论的全貌，再放大阅读细节。",
+      "en": "Zoom out to find your place, then move closer to read the detail."
+    },
+    "tutorial": 2,
+    "kind": "concept illustration",
+    "revision": "linkedin-selected-v1",
+    "source_sha256": "a4685f585ce5007ac0296b63b8b5c6a4f35de9e135857493dfc0fe1a4a89cd27",
+    "video": "/media/tutorials/zoom-selected-v1.mp4",
+    "gif": "/media/tutorials/zoom-selected-v1.gif",
+    "poster": "/media/tutorials/zoom-selected-v1-poster.jpg",
+    "audio": false,
+    "duration_seconds": 13.44,
+    "width": 1600,
+    "height": 1000
+  },
+  {
+    "slug": "history",
+    "title": {
+      "zh": "接上旧思路",
+      "en": "Reuse earlier thinking"
+    },
+    "source": "docs/recall-story-en.mp4",
+    "parts": [
+      [
+        0,
+        2.2
+      ],
+      [
+        6,
+        11.8
+      ],
+      [
+        14.5,
+        16
+      ]
+    ],
+    "speed": 1,
+    "poster_time": 4.9,
+    "linkedin_position": 3,
+    "description": {
+      "zh": "把过去的判断与条件，接到今天的新问题上。",
+      "en": "Bring earlier judgments and conditions into a new question."
+    },
+    "tutorial": 3,
+    "edits": "Omit legacy speed comparisons and the return wire to an ancestor; retain the question, earlier records, source-linked judgments, follow-up, and closing card.",
+    "kind": "concept illustration",
+    "revision": "linkedin-selected-v1",
+    "source_sha256": "a93009422505fe046f5a46a5da688931e8a9c82e0d535cfab29f3eb784f43ed3",
+    "video": "/media/tutorials/history-selected-v1.mp4",
+    "gif": "/media/tutorials/history-selected-v1.gif",
+    "poster": "/media/tutorials/history-selected-v1-poster.jpg",
+    "audio": false,
+    "duration_seconds": 9.48,
+    "width": 1200,
+    "height": 720
+  },
+  {
+    "slug": "context-edit",
+    "title": {
+      "zh": "编辑上下文",
+      "en": "Edit the context"
+    },
+    "source": "marketing/linkedin/thinking-with-ai/context-edit-v2.mp4",
+    "parts": [
+      [
+        0,
+        20
+      ]
+    ],
+    "speed": 1.25,
+    "poster_time": 9.1,
+    "linkedin_position": null,
+    "description": {
+      "zh": "保留支线，移除进入后续问题的连接；改变条件后，重新生成。",
+      "en": "Keep the side discussion, remove its route into a later question, and regenerate after changing a condition."
+    },
+    "tutorial": 1,
+    "kind": "concept illustration",
+    "revision": "linkedin-selected-v1",
+    "source_sha256": "0ee3c7b27db388b0be08dd5c3a46d47967e0a535cd7458103ee893f6c468b5bb",
+    "video": "/media/tutorials/context-edit-selected-v1.mp4",
+    "gif": "/media/tutorials/context-edit-selected-v1.gif",
+    "poster": "/media/tutorials/context-edit-selected-v1-poster.jpg",
+    "audio": false,
+    "duration_seconds": 16.0,
+    "width": 1200,
+    "height": 820
+  }
+]

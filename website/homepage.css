@@ -1,0 +1,48 @@
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('assets/fonts/inter-latin-variable.woff2') format('woff2');
+}
+.home-intro { max-width: 1220px; margin: auto; padding: 108px 28px 40px; }
+.home-hero { display: grid; grid-template-columns: 1fr 1.08fr; gap: 38px; align-items: center; }
+.home-eyebrow { margin: 0 0 16px; color: var(--purple); font-size: 12px; font-weight: 650; }
+.home-intro h1, html[lang="zh-CN"] .home-intro h1 { margin: 0; max-width: 15em; font-size: clamp(32px, 3.3vw, 46px); line-height: 1.14; letter-spacing: -.045em; font-weight: 750; }
+html[lang="zh-CN"] .home-intro h1 { letter-spacing: -.025em; line-height: 1.3; }
+.home-definition { max-width: 40em; color: var(--muted); font-size: 15px; line-height: 1.7; margin: 20px 0; }
+.home-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.home-actions a { border: 1px solid var(--line); border-radius: 9px; padding: 10px 14px; font-size: 13px; font-weight: 600; }
+.home-actions a:first-child { background: var(--ink); border-color: var(--ink); color: white; }
+.home-figure { margin: 0; min-width: 0; }
+.home-figure video, .home-card video { display: block; width: 100%; aspect-ratio: 5 / 3; object-fit: contain; border: 1px solid var(--line); border-radius: 12px; background: #faf9f6; }
+.home-figure figcaption, .home-media-note { font-size: 11px; color: var(--muted); line-height: 1.6; margin: 8px 0 0; }
+.home-guides { padding-top: 40px; scroll-margin-top: 85px; }
+.home-guides h2, .home-faq h2 { font-size: 20px; letter-spacing: -.025em; font-weight: 650; margin: 0 0 18px; }
+.home-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.home-card { background: white; border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; }
+.home-card h3 { margin: 14px 0 8px; font-size: 16px; line-height: 1.4; letter-spacing: -.02em; }
+.home-card p { color: var(--muted); font-size: 13px; line-height: 1.65; margin: 0 0 12px; }
+.home-card a { margin-top: auto; color: var(--purple); font-size: 13px; font-weight: 600; padding: 5px 0; }
+.home-card a:hover, .home-faq a:hover { text-decoration: underline; }
+.home-faq { padding-top: 32px; max-width: 850px; }
+.home-faq details { border-bottom: 1px solid var(--line); padding: 12px 0; font-size: 14px; line-height: 1.7; }
+.home-faq summary { cursor: pointer; font-weight: 600; }
+.home-faq p { color: var(--muted); margin: 10px 0 0; }
+.home-faq a { color: var(--purple); }
+#story { scroll-margin-top: 62px; }
+@media (max-width: 900px) {
+  .home-hero { grid-template-columns: 1fr; gap: 24px; }
+  .home-intro h1, html[lang="zh-CN"] .home-intro h1 { max-width: 20em; }
+  .home-figure { max-width: 680px; }
+}
+@media (max-width: 620px) {
+  .home-intro { padding: 92px 18px 28px; }
+  .home-cards { grid-template-columns: 1fr; }
+  .home-card { padding: 12px; }
+  .home-guides { padding-top: 28px; }
+  .nav { padding: 0 12px; }
+  .nav-actions { gap: 3px; }
+  .nav-link { padding: 9px; }
+  .brand { gap: 6px; font-size: 14px; }
+}

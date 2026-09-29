@@ -1,3 +1,7 @@
+---
+description: 安装开源 ThoughtDAG 桌面版，连接模型，在对话画布上编辑 AI 上下文、展开分支并复用过去的思路。
+---
+
 # 安装与快速开始
 
 ThoughtDAG 把 LLM 对话变成一张可编辑的图。每个节点是一轮问答，连进节点的内容决定模型下一次真正看到什么。
@@ -7,6 +11,10 @@ ThoughtDAG 把 LLM 对话变成一张可编辑的图。每个节点是一轮问�
 
 **[下载 ThoughtDAG](https://chenxiachan.github.io/thoughtdag/?lang=zh#download)** · [全部版本](https://github.com/chenxiachan/thoughtdag/releases/latest)
 :::
+
+## 从一个问题开始
+
+[移除不需要的上下文](/zh/tutorials/edit-ai-context) · [展开支线问题](/zh/tutorials/branch-ai-conversations) · [接上过去的讨论](/zh/tutorials/reuse-past-ai-discussions)
 
 ## 安装桌面版
 

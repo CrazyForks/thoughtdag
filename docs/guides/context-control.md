@@ -1,5 +1,7 @@
 # Control context
 
+For a worked example, follow [How to edit AI context while keeping past conversations](/tutorials/edit-ai-context).
+
 ## Inspect the next request
 
 Before a follow-up, click the **“will send ~… tok · … messages”** summary line above the input in the [node panel](/guides/conversations#floating-panel-areas). The expanded preview groups the next request into materials, explicit references, and conversation turns, and shows message, file, and token estimates. It previews the next panel follow-up; it is not a separate canvas menu.

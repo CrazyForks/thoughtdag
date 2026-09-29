@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ThoughtDAG — Make LLM context visible and editable</title>
+    <title>ThoughtDAG — Open-source AI canvas for editable context</title>
     <meta
       name="description"
-      content="ThoughtDAG indexes local agent conversations across tools, finds the turns relevant to your work, and turns them into editable context graphs."
+      content="ThoughtDAG is an open-source AI conversation canvas. Edit LLM context, branch a discussion, and bring selected past conversations into your next question."
     />
     <meta name="robots" content="index,follow,max-image-preview:large" />
     <meta name="theme-color" content="#f8f6fb" />
@@ -20,7 +20,7 @@
     <link
       rel="alternate"
       hreflang="zh-CN"
-      href="https://chenxiachan.github.io/thoughtdag/?lang=zh"
+      href="https://chenxiachan.github.io/thoughtdag/zh.html"
     />
     <link
       rel="alternate"
@@ -28,10 +28,10 @@
       href="https://chenxiachan.github.io/thoughtdag/"
     />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="ThoughtDAG — Make LLM context visible and editable" />
+    <meta property="og:title" content="ThoughtDAG — Open-source AI canvas for editable context" />
     <meta
       property="og:description"
-      content="Find relevant turns across local agent conversations, then decide what the model sees next."
+      content="Edit AI context, explore side questions, and connect your next conversation to earlier thinking. Three practical tutorials with short animations."
     />
     <meta property="og:url" content="https://chenxiachan.github.io/thoughtdag/" />
     <meta
@@ -51,8 +51,8 @@
         "@type": "SoftwareApplication",
         "name": "ThoughtDAG",
         "applicationCategory": "DeveloperApplication",
-        "operatingSystem": "Web",
-        "description": "An open-source local index and visual workspace for finding agent conversations and editing the context sent to models.",
+        "operatingSystem": "macOS, Windows, Linux, Web",
+        "description": "An open-source AI conversation canvas for editing LLM context, branching discussions, and citing selected local conversation history.",
         "license": "https://opensource.org/licenses/MIT",
         "codeRepository": "https://github.com/chenxiachan/thoughtdag",
         "url": "https://chenxiachan.github.io/thoughtdag/"
@@ -286,7 +286,7 @@
         letter-spacing: 0.04em;
         color: #5f51cf;
       }
-      .story-intro h1 {
+      .story-intro h2 {
         font-size: clamp(34px, 6vw, 64px);
         line-height: 1.16;
         font-weight: 800;
@@ -294,7 +294,7 @@
         margin: 0;
         max-width: 900px;
       }
-      .story-intro h1 span { color: #6b5ce7; }
+      .story-intro h2 span { color: #6b5ce7; }
       .story-intro-hint {
         margin-top: 26px;
         font-size: 14px;
@@ -1657,6 +1657,7 @@
         .repair-stat strong { font-size: 17px; }
       }
     </style>
+    <link rel="stylesheet" href="homepage.css" />
   </head>
   <body>
     <nav class="nav" aria-label="Primary navigation">
@@ -1665,8 +1666,8 @@
         <span>ThoughtDAG</span>
       </a>
       <div class="nav-actions">
-        <a class="nav-link" href="#top" data-en="How it works" data-zh="工作原理"
-          >How it works</a
+        <a class="nav-link" href="#tutorials" data-en="Tutorials" data-zh="场景教程"
+          >Tutorials</a
         >
         <a class="nav-link" href="#research" data-en="Research" data-zh="研究"
           >Research</a
@@ -1687,14 +1688,15 @@
           rel="noreferrer"
           >GitHub</a
         >
-        <button
+        <a
           class="nav-link language-toggle"
           id="language-toggle"
-          type="button"
+          href="zh.html"
+          hreflang="zh-CN"
           aria-label="Switch language"
         >
           中文
-        </button>
+        </a>
         <a
           class="nav-link primary"
           href="#download"
@@ -1707,16 +1709,74 @@
 
     <div id="top"></div>
 
+    <main class="home-intro">
+      <div class="home-hero">
+        <div>
+          <p class="home-eyebrow" data-en="ThoughtDAG · Open source · MIT" data-zh="ThoughtDAG · 开源 · MIT 许可">ThoughtDAG · Open source · MIT</p>
+          <h1 data-en-html="Connect your next question<br>to your earlier thinking." data-zh-html="让每一次对话，<br>都能接上过去的思路。">Connect your next question<br>to your earlier thinking.</h1>
+          <p class="home-definition" data-en="ThoughtDAG is an open-source AI conversation canvas. Edit the context sent to your model, explore a side question, and bring selected past discussions into what you ask next." data-zh="ThoughtDAG 是开源 AI 对话画布。你可以编辑发给模型的上下文，沿一句话展开支线，再把过去有用的讨论接到新问题上。">ThoughtDAG is an open-source AI conversation canvas. Edit the context sent to your model, explore a side question, and bring selected past discussions into what you ask next.</p>
+          <div class="home-actions">
+            <a href="#download" data-en="Get ThoughtDAG" data-zh="下载 ThoughtDAG">Get ThoughtDAG</a>
+            <a href="#tutorials" data-en="Try a tutorial ↓" data-zh="从一个问题开始 ↓">Try a tutorial ↓</a>
+            <a href="#story" data-en="Explore the interactive story" data-zh="查看交互故事">Explore the interactive story</a>
+          </div>
+        </div>
+        <figure class="home-figure">
+          <video controls loop muted playsinline preload="metadata" src="docs/media/tutorials/branch-selected-v1.mp4" poster="docs/media/tutorials/branch-selected-v1-poster.jpg" aria-label="Illustration of branching from an answer and returning to the main discussion"></video>
+          <figcaption data-en="Select a passage, explore a side question, then return to your plan. Illustrated interaction." data-zh="选中一句话，展开支线，再回到原来的计划。交互示意动画。">Select a passage, explore a side question, then return to your plan. Illustrated interaction.</figcaption>
+        </figure>
+      </div>
+      <section class="home-guides" id="tutorials" aria-labelledby="tutorial-heading">
+        <h2 id="tutorial-heading" data-en="What is getting in the way of your next question?" data-zh="你在继续追问时，遇到了什么问题？">What is getting in the way of your next question?</h2>
+        <div class="home-cards">
+          <article class="home-card">
+            <video controls loop muted playsinline preload="none" src="docs/media/tutorials/context-edit-selected-v1.mp4" poster="docs/media/tutorials/context-edit-selected-v1-poster.jpg" aria-label="Illustration of removing an unwanted context path and regenerating"></video>
+            <h3 data-en="An old assumption keeps coming back." data-zh="旧假设总在影响后面的回答。">An old assumption keeps coming back.</h3>
+            <p data-en="Inspect the next request. Remove an unwanted route, keep the earlier discussion, and regenerate." data-zh="看清下一次请求，移除不需要的输入路线，再重新生成。原来的讨论仍然保留。">Inspect the next request. Remove an unwanted route, keep the earlier discussion, and regenerate.</p>
+            <a href="docs/tutorials/edit-ai-context" data-en-href="docs/tutorials/edit-ai-context" data-zh-href="docs/zh/tutorials/edit-ai-context" data-en="How to edit AI context →" data-zh="如何编辑 AI 上下文 →">How to edit AI context →</a>
+          </article>
+          <article class="home-card">
+            <video controls loop muted playsinline preload="none" src="docs/media/tutorials/zoom-selected-v1.mp4" poster="docs/media/tutorials/zoom-selected-v1-poster.jpg" aria-label="Illustration of zooming between detailed answers and the conversation map"></video>
+            <h3 data-en="A side question derails the main thread." data-zh="想追问一句话，又怕打断主线。">A side question derails the main thread.</h3>
+            <p data-en="Explore a branch, keep your place in the map, and connect useful findings to a later question." data-zh="展开支线，缩小看清讨论全貌，再把有用的发现接到后续问题。">Explore a branch, keep your place in the map, and connect useful findings to a later question.</p>
+            <a href="docs/tutorials/branch-ai-conversations" data-en-href="docs/tutorials/branch-ai-conversations" data-zh-href="docs/zh/tutorials/branch-ai-conversations" data-en="How to branch an AI conversation →" data-zh="如何展开 AI 对话分支 →">How to branch an AI conversation →</a>
+          </article>
+          <article class="home-card">
+            <video controls loop muted playsinline preload="none" src="docs/media/tutorials/history-selected-v1.mp4" poster="docs/media/tutorials/history-selected-v1-poster.jpg" aria-label="Illustration of connecting past judgments and constraints to a new question"></video>
+            <h3 data-en="You remember a conclusion, but not why." data-zh="记得过去的结论，却想不起为什么。">You remember a conclusion, but not why.</h3>
+            <p data-en="Find supported local conversations, check the original conditions, and cite the parts you need." data-zh="找到本地历史对话，核对当时的条件，再引用真正需要的部分。">Find supported local conversations, check the original conditions, and cite the parts you need.</p>
+            <a href="docs/tutorials/reuse-past-ai-discussions" data-en-href="docs/tutorials/reuse-past-ai-discussions" data-zh-href="docs/zh/tutorials/reuse-past-ai-discussions" data-en="How to reuse past AI discussions →" data-zh="如何接上过去的 AI 讨论 →">How to reuse past AI discussions →</a>
+          </article>
+        </div>
+        <p class="home-media-note" data-en="Illustrated workflows. Each tutorial includes steps to try in the app and a downloadable GIF." data-zh="以上为交互示意动画。教程包含可在应用里操作的步骤，以及可下载的 GIF。">Illustrated workflows. Each tutorial includes steps to try in the app and a downloadable GIF.</p>
+      </section>
+      <section class="home-faq" aria-labelledby="home-faq-heading">
+        <h2 id="home-faq-heading" data-en="Before you start" data-zh="开始前，先说清三件事">Before you start</h2>
+        <details>
+          <summary data-en="Can I edit context without deleting the conversation?" data-zh="能不删聊天记录，只移除上下文吗？">Can I edit context without deleting the conversation?</summary>
+          <p data-en="Yes. Removing a wire removes that route into a later request while keeping the nodes. Check other input paths, attachments, and Recall too. An existing answer does not change until you edit or regenerate it." data-zh="可以。删除连线会移除进入后续请求的那条路线，节点仍然保留。还要检查其他路径、附件和回忆条目；已有回答需要编辑或重新生成，才会改变。">Yes. Removing a wire removes that route into a later request while keeping the nodes. Check other input paths, attachments, and Recall too. An existing answer does not change until you edit or regenerate it.</p>
+        </details>
+        <details>
+          <summary data-en="How does branching support nonlinear thinking?" data-zh="非线性思考，具体怎么用在 AI 对话里？">How does branching support nonlinear thinking?</summary>
+          <p data-en="Keep alternative questions on separate branches, compare them on the canvas, and connect selected findings to a new downstream question. A branch inherits its upstream conversation path; selecting a passage does not limit context to those words alone." data-zh="把不同问题放到各自的支线上，在画布里比较，再把选中的发现接到新的后续问题。支线会继承上游对话路径；选中一句话追问，不代表模型只会看到这句话。">Keep alternative questions on separate branches, compare them on the canvas, and connect selected findings to a new downstream question. A branch inherits its upstream conversation path; selecting a passage does not limit context to those words alone.</p>
+        </details>
+        <details>
+          <summary data-en="Will all my past chats appear automatically?" data-zh="过去所有聊天都会自动出现吗？">Will all my past chats appear automatically?</summary>
+          <p data-en="No. The desktop app indexes supported local records you have connected. It cannot restore unsaved history or automatically access chats stored only in a web account. When you use a remote model, the material included in a request is sent to that service." data-zh="不会。桌面版索引的是已经接入、受支持的本地记录，不能恢复未保存的历史，也不会自动读取只存在于网页账号里的聊天。使用远程模型时，请求中包含的材料会发送给对应服务。">No. The desktop app indexes supported local records you have connected. It cannot restore unsaved history or automatically access chats stored only in a web account. When you use a remote model, the material included in a request is sent to that service.</p>
+        </details>
+      </section>
+    </main>
+
     <section class="story" id="story" aria-label="ThoughtDAG interactive story">
       <div class="stage" id="stage">
         <div class="story-intro" id="story-intro">
             <p class="story-intro-name">ThoughtDAG</p>
-            <h1
+            <h2
               data-en-html="Your thinking deserves a map<br /><span>A wire is the context</span>"
               data-zh-html="思考值得一张地图<br /><span>连线即上下文</span>"
             >
               Your thinking deserves a map<br /><span>A wire is the context</span>
-            </h1>
+            </h2>
             <p class="story-intro-hint" data-en="Scroll" data-zh="向下滚动">Scroll</p>
           </div>
           <div class="world" id="world">
@@ -2828,8 +2888,11 @@ dsh web</code>
         const filmDuration = document.getElementById("film-duration");
         const mobileVideoQuery = matchMedia("(max-width: 760px)");
         const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-        let currentLanguage =
-          new URLSearchParams(location.search).get("lang") === "zh" ? "zh" : "en";
+        let currentLanguage = location.pathname.endsWith('/zh.html') ? 'zh' : 'en';
+        // Keep existing shared Chinese links working while exposing a static locale URL.
+        if (new URLSearchParams(location.search).get('lang') === 'zh' && currentLanguage !== 'zh') {
+          location.replace('zh.html' + location.hash);
+        }
 
         const chapters = [
           {
@@ -2901,8 +2964,8 @@ dsh web</code>
           document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
           document.title =
             language === "zh"
-              ? "ThoughtDAG — 连线即上下文"
-              : "ThoughtDAG — Make LLM context visible and editable";
+              ? "ThoughtDAG — 开源 AI 对话画布与上下文编辑工具"
+              : "ThoughtDAG — Open-source AI canvas for editable context";
           story.setAttribute(
             "aria-label",
             language === "zh" ? "ThoughtDAG 交互故事" : "ThoughtDAG interactive story",
@@ -3144,11 +3207,6 @@ dsh web</code>
             });
           });
           rail.appendChild(button);
-        });
-
-        languageToggle.addEventListener("click", () => {
-          applyLanguage(currentLanguage === "en" ? "zh" : "en", true);
-          requestRender();
         });
 
         addEventListener("scroll", requestRender, { passive: true });

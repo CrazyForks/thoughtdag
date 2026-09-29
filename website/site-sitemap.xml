@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://chenxiachan.github.io/thoughtdag/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://chenxiachan.github.io/thoughtdag/" />
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://chenxiachan.github.io/thoughtdag/zh.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://chenxiachan.github.io/thoughtdag/" />
+  </url>
+  <url>
+    <loc>https://chenxiachan.github.io/thoughtdag/zh.html</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://chenxiachan.github.io/thoughtdag/" />
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://chenxiachan.github.io/thoughtdag/zh.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://chenxiachan.github.io/thoughtdag/" />
+  </url>
+  <url>
+    <loc>https://chenxiachan.github.io/thoughtdag/stories/context-repair/</loc>
+  </url>
+  <url>
+    <loc>https://chenxiachan.github.io/thoughtdag/research/context-repair-pilot-v2/</loc>
+  </url>
+</urlset>

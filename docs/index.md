@@ -1,3 +1,7 @@
+---
+description: Install the open-source ThoughtDAG desktop app, connect a model, and start editing AI context on a conversation canvas.
+---
+
 # Install and quick start
 
 ThoughtDAG turns LLM conversations into an editable graph. Each node contains a question and answer; incoming wires determine what the model sees next.
@@ -7,6 +11,10 @@ The desktop app provides the complete experience: local session discovery, Sessi
 
 **[Download ThoughtDAG](https://chenxiachan.github.io/thoughtdag/#download)** · [All releases](https://github.com/chenxiachan/thoughtdag/releases/latest)
 :::
+
+## Start from a problem
+
+[Edit unwanted context](/tutorials/edit-ai-context) · [Explore a side question](/tutorials/branch-ai-conversations) · [Reuse past discussions](/tutorials/reuse-past-ai-discussions)
 
 ## Install the desktop app
 
