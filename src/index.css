@@ -555,6 +555,11 @@ body.tdag-connecting, body.tdag-connecting * {
 .thought-node.map-node::before {
   display: none;
 }
+/* a plaque whose ladder text runs past the node's layout footprint ends in a fade */
+[data-plaque-line][data-clipped] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
+}
 .map-node.root-node { border-color: color-mix(in srgb, var(--color-accent) 85%, var(--color-line)); }
 .map-node.orange-node { border-color: color-mix(in srgb, var(--color-warm) 88%, var(--color-line)); }
 .map-node.evaluator-node { border-color: color-mix(in srgb, var(--color-watch) 82%, var(--color-line)); }

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo, useLayoutEffect, type RefObject } from 'react';
 import { describeModel } from '../lib/use-models';
 import { toolFingerprint, turnComposition, footprint, conclusionOf } from '../lib/turn-insight';
 import { Handle, Position, useReactFlow, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
@@ -25,6 +25,9 @@ import FanOutModal from './FanOutModal';
 import ReasoningDisclosure from './ui/ReasoningDisclosure';
 import ZoomText from './ZoomText';
 import { useLocalLadder } from '../lib/local-ladder-cache';
+import { estimateNodeHeight } from '../lib/layout';
+import { COLLAPSED_LAYOUT_HEIGHT, LAYOUT_V_GAP } from '../lib/constants';
+import { levelText } from '../lib/ladder-core';
 import { ApprovalCard } from './ui/ApprovalCard';
 import { AgentTrace } from './ui/AgentTrace';
 import { SquareTerminal } from 'lucide-react';
@@ -32,6 +35,23 @@ import { useT, fmt } from '../i18n';
 import MentionSurface from './ui/NodeMention';
 import { useMentions } from '../lib/mentions';
 import { isViewerMode } from '../lib/viewer';
+
+// The map plaque never outgrows the footprint the layout reserved for the
+// node (a folded node's 240px slot plus half a gap; an open card its own
+// estimated height): the ladder's abstract at 22px runs far past a folded
+// strip, and that overrun was every map-zoom overlap. Text past the cap is
+// clipped under a fade, and one zoom step in shows the rest.
+function usePlaqueClip(ref: RefObject<HTMLDivElement | null>, live: boolean, cap: number, ladder: unknown): void {
+  useLayoutEffect(() => {
+    const wrap = ref.current; const host = wrap?.firstElementChild as HTMLElement | null;
+    if (!live || !wrap || !host) return;
+    // a DOM mark, not state: the fade is a paint detail the layout never reads
+    const check = () => { if (host.offsetHeight > wrap.clientHeight + 1) wrap.dataset.clipped = ''; else delete wrap.dataset.clipped; };
+    check();
+    const ro = new ResizeObserver(check); ro.observe(host); ro.observe(wrap);
+    return () => { ro.disconnect(); delete wrap.dataset.clipped; };
+  }, [ref, live, cap, ladder]);
+}
 
 export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
   // Actions are stable references: selecting them one by one (instead of a
@@ -343,8 +363,11 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
   // nodes, failed builds); computed only while the card is folded
   const storedLadder = data.summaryLadders?.[data.responseIndex] ?? undefined;
   const versionTopic = activeTopic(data);
-  const localLadder = useLocalLadder(zoomedOut && !storedLadder, id, data.question, data.response, versionSummary, versionTopic);
+  const localLadder = useLocalLadder((zoomedOut || data.isCollapsed) && !storedLadder, id, data.question, data.response, versionSummary, versionTopic);
   const versionLadder = storedLadder ?? localLadder ?? undefined;
+  const plaqueCap = Math.max(COLLAPSED_LAYOUT_HEIGHT + LAYOUT_V_GAP / 2, estimateNodeHeight({ id, data } as ThoughtNodeType));
+  const plaqueLine = useRef<HTMLDivElement>(null);
+  usePlaqueClip(plaqueLine, zoomedOut && !glyphTier && !!versionLadder, plaqueCap, versionLadder);
   const takeawayType = data.summaryTypes?.[data.responseIndex] ?? undefined;
   const takeawayConfidence = data.summaryTypeConfidences?.[data.responseIndex] ?? undefined;
   const conclusive = data.summaryConclusiveness?.[data.responseIndex] ?? undefined;
@@ -484,7 +507,8 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
         // title — the reader's entry point — so there question leads and
         // the takeaway is the subtitle.
         <div
-          className="drag-handle cursor-grab active:cursor-grabbing px-6 py-5 relative"
+          className="drag-handle cursor-grab active:cursor-grabbing px-6 py-5 relative flex flex-col overflow-hidden"
+          style={{ maxHeight: plaqueCap }}
           onDoubleClick={(e) => {
             e.stopPropagation();
             // a plaque is a map label: double-click dives to working scale
@@ -495,11 +519,11 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
           {(versionSummary || data.response) ? (
             isRoot ? (
               <>
-                <div className="text-2xl font-semibold text-ink leading-snug line-clamp-3">
+                <div className="text-2xl font-semibold text-ink leading-snug line-clamp-3 shrink-0">
                   {data.question}
                 </div>
                 {versionLadder ? (
-                  <div className="mt-1.5" data-plaque-line><ZoomText ladder={versionLadder} /></div>
+                  <div ref={plaqueLine} className="mt-1.5 min-h-0 shrink overflow-hidden" data-plaque-line><ZoomText ladder={versionLadder} /></div>
                 ) : (
                 <div className="text-lg text-ink-muted leading-snug line-clamp-2 mt-1.5">
                   {versionSummary || data.response.replace(/[#*`>-]/g, '').slice(0, 140)}
@@ -513,11 +537,11 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
               // topic (when the judge wrote one) in muted ink, so the
               // turning points read first.
               <>
-                <div className="text-lg text-ink-muted leading-snug line-clamp-2">
+                <div className="text-lg text-ink-muted leading-snug line-clamp-2 shrink-0">
                   {data.question}
                 </div>
                 {versionLadder ? (
-                  <div className="mt-1.5" title={!badge && conclusiveNote ? conclusiveNote : undefined} data-plaque-line>
+                  <div ref={plaqueLine} className="mt-1.5 min-h-0 shrink overflow-hidden" title={!badge && conclusiveNote ? conclusiveNote : undefined} data-plaque-line>
                     <ZoomText ladder={versionLadder} />
                   </div>
                 ) : (
@@ -533,7 +557,7 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
             </div>
           )}
           {toolMarks.length > 0 && (
-            <div className="mt-1.5 text-lg text-ink-faint tracking-wide select-none" title={marksTitle} data-map-tool-marks>{marksLine}</div>
+            <div className="mt-1.5 text-lg text-ink-faint tracking-wide select-none shrink-0" title={marksTitle} data-map-tool-marks>{marksLine}</div>
           )}
         </div>
       ) : (
@@ -1061,7 +1085,14 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
               {prints.slice(0, 3).map((f) => `${f.op === 'read' ? '📖' : '✏️'} ${f.name}`).join('   ')}{prints.length > 3 ? `   +${prints.length - 3}` : ''}
             </div>
           )}
-          {versionSummary ? (
+          {versionLadder ? (
+            // the same abstract the map plaque shows, at strip size: zooming
+            // in from the plaque changes the type, not the words, and the
+            // strip fills the 240px the layout keeps for a folded node
+            <div className="text-xs text-ink-faint mt-1.5 leading-relaxed line-clamp-6" data-folded-abstract>
+              {levelText(versionLadder, 3)}
+            </div>
+          ) : versionSummary ? (
             <div className="text-xs text-ink-faint mt-1.5 leading-relaxed line-clamp-2">
               {versionSummary}
             </div>
