@@ -8,8 +8,37 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 cpSync('website', out, { recursive: true, filter: (p) => !p.endsWith('.mjs') });
 cpSync('docs/.vitepress/dist', `${out}/docs`, { recursive: true });
-const doc = parse(readFileSync('website/index.html', 'utf8'));
 const attr = (node, name) => node.attrs?.find((a) => a.name === name)?.value;
+
+// The download block carries a hard-coded fallback version; the page rewrites it from the GitHub
+// API at runtime, but that call is rate-limited for anonymous visitors, so the build stamps the
+// latest release in: THOUGHTDAG_RELEASE from the workflow, else the API, else the fallback stays.
+async function latestRelease() {
+  if (process.env.THOUGHTDAG_RELEASE) return process.env.THOUGHTDAG_RELEASE.trim();
+  try {
+    const res = await fetch('https://api.github.com/repos/chenxiachan/thoughtdag/releases/latest', { signal: AbortSignal.timeout(5000) });
+    if (res.ok) return (await res.json()).tag_name;
+  } catch { /* offline build keeps the fallback */ }
+  return null;
+}
+const release = await latestRelease();
+const version = release ? release.replace(/^v/, '') : null;
+const VERSION_RE = /\d+\.\d+\.\d+/g;
+function stampRelease(node) {
+  if (version && node.attrs) {
+    const id = attr(node, 'id') || '';
+    if (id === 'dl-version') node.childNodes = [{ nodeName: '#text', value: `v${version}`, parentNode: node }];
+    if (/^dl-(mac-arm|mac-x64|win|linux)$/.test(id) && attr(node, 'href')) {
+      const a = node.attrs.find((x) => x.name === 'href'); a.value = a.value.replace(VERSION_RE, version);
+    }
+  }
+  node.childNodes?.forEach(stampRelease);
+}
+const enDoc = parse(readFileSync('website/index.html', 'utf8'));
+stampRelease(enDoc);
+writeFileSync(`${out}/index.html`, serialize(enDoc));
+const doc = parse(readFileSync('website/index.html', 'utf8'));
+stampRelease(doc);
 const setAttr = (node, name, value) => {
   const existing = node.attrs.find((a) => a.name === name);
   if (existing) existing.value = value;
@@ -57,4 +86,4 @@ function localize(node) {
 localize(doc);
 writeFileSync(`${out}/zh.html`, serialize(doc));
 writeFileSync(`${out}/.nojekyll`, '');
-console.log(`Built English and static Chinese landing pages with docs: ${out}`);
+console.log(`Built English and static Chinese landing pages with docs: ${out}${version ? ` (downloads stamped v${version})` : ' (release lookup failed; fallback version kept)'}`);

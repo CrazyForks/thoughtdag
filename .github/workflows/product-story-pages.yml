@@ -42,7 +42,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Resolve latest release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "tag=$(gh api repos/${{ github.repository }}/releases/latest --jq .tag_name)" >> "$GITHUB_OUTPUT"
+
       - name: Build website and documentation
+        env:
+          THOUGHTDAG_RELEASE: ${{ steps.release.outputs.tag }}
         run: npm run website:build
 
       - name: Check pages and discovery metadata
