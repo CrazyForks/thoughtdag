@@ -39,6 +39,17 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    // a quiet release: the 0.5.2 entry stays the announcement, this one is history only
+    version: '0.5.5',
+    date: '2026-09-29',
+    announce: false,
+    lead: {
+      zh: '换档不再互相盖住：缩小到地图层时，节点的牌子不会超出布局留给它的位置，写不下的摘要在底部渐隐，再放大一档就能看全；折叠卡显示和牌子同一段摘要，放大缩小之间只是字号在变。节点间距略微拉开，已有画布的位置不动，按「一键排版」才换成新间距。另外：从 Finder 启动时也能找到本机的 Pi、Codex、Claude Code 命令行，找不到会说明查过哪些地方，可重新检测；子 Agent 的运行展开在父画布上，作为那一轮旁边的分支；模型接口分成「慢思考 · 回答模型」和「快思考 · 判断模型」两页，只用 Agent 的人也能单独接判断模型；新装机没有模型时会先问一次本机的 Agent。',
+      en: 'Zoom tiers no longer cover each other: at map zoom a node\'s plaque stays inside the room the layout keeps for it, an abstract that runs past it fades out at the bottom and shows in full one step in; the folded card carries the same abstract as the plaque, so zooming only changes the type size. Node gaps open slightly; existing canvases keep their positions until you choose Tidy layout. Also: the Pi, Codex and Claude Code CLIs are found under a Finder launch, and a missing one says where it looked, with a recheck; a subagent\'s run unfolds on the parent canvas as a branch beside its turn; the model dialog has two pages, slow thinking for answering models and fast thinking for the decision model, which agent-only users can connect on its own; a fresh install with no model asks the local agents first.',
+    },
+    items: [],
+  },
+  {
     // a patch: the 0.5.2 entry stays the announcement, this one is history only
     version: '0.5.4',
     date: '2026-09-29',
