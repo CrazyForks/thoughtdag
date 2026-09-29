@@ -11,7 +11,7 @@ import {
 import { useT, fmt, useI18n } from '../../i18n';
 import { API_BASE } from '../../lib/constants';
 import JudgeSettings from './JudgeSettings';
-import { JUDGE_LABELS, effectiveProvider, judgeConfigured, judgeTripped } from '../../lib/judge';
+import { judgeConfigured } from '../../lib/judge';
 
 // The model-interface manager: one door for every way in. Presets carry a
 // baseURL and a key page; the model list is always fetched live from the
@@ -226,7 +226,14 @@ export default function ApiKeyModal() {
       <div className="bg-card rounded-2xl shadow-2xl border border-line w-[560px] max-h-[86vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2 px-5 py-3 border-b border-line shrink-0">
           <KeyRound size={15} strokeWidth={1.75} className="text-accent shrink-0" />
-          <span className="text-sm font-semibold text-ink flex-1">{t('provider.title')}</span>
+          <span className="text-sm font-semibold text-ink">{t('provider.title')}</span>
+          {/* two doors, one per kind of model: the slow thinking that answers, the fast thinking that judges */}
+          <div className="flex-1 flex justify-center">
+            <div className="inline-flex rounded-lg border border-line bg-wash/60 p-0.5 text-xs" data-apikey-tabs>
+              <button onClick={() => { setJudgeView(false); resetAdd(); }} className={`px-3 py-1 rounded-md transition-colors ${!judgeView ? 'bg-card text-ink shadow-sm' : 'text-ink-muted hover:text-ink'}`} data-apikey-tab="slow">{t('provider.tabSlow')}</button>
+              <button onClick={() => { setJudgeView(true); resetAdd(); }} className={`px-3 py-1 rounded-md transition-colors ${judgeView ? 'bg-card text-ink shadow-sm' : 'text-ink-muted hover:text-ink'}`} data-apikey-tab="fast">{t('provider.tabFast')}</button>
+            </div>
+          </div>
           <button onClick={() => { setOpen(false); resetAdd(); }} className="text-ink-faint hover:text-ink w-7 h-7 rounded-lg hover:bg-wash flex items-center justify-center transition-colors shrink-0">
             <X size={15} strokeWidth={1.75} />
           </button>
@@ -234,8 +241,8 @@ export default function ApiKeyModal() {
 
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3">
           {judgeView && !adding && (<>
+            <p className="text-xs text-ink-muted leading-relaxed">{t('provider.fastIntro')}</p>
             <JudgeSettings />
-            <button onClick={() => setJudgeView(false)} className="text-xs text-accent hover:underline" data-judge-back>{t('provider.backToList')}</button>
           </>)}
           {!judgeView && !adding && (<>
             {(data?.models.length ?? 0) === 0 && (
@@ -278,26 +285,12 @@ export default function ApiKeyModal() {
               <Plus size={14} strokeWidth={1.75} /> {t('provider.add')}
             </button>
 
-            {/* the judge on its own, one quiet line: people who run only agents never add an
-                interface, so this is their door (the same view the picker's judge row opens) */}
-            {!justAdded && (() => {
-              const on = judgeCfg.enabled !== false; const configured = judgeConfigured(judgeCfg);
-              const state = !on ? t('judge.stateOff') : !configured ? t('judge.stateNoApi') : judgeTripped() ? t('judge.stateTripped') : fmt(t('judge.stateOn'), { j: JUDGE_LABELS[effectiveProvider(judgeCfg)] });
-              return (
-                <div className="flex items-center gap-2 pt-1 text-2xs text-ink-faint" data-judge-line>
-                  <Scale size={12} strokeWidth={1.75} className="shrink-0" />
-                  <span className="truncate">{t('judge.rowTitle')} · {state}</span>
-                  <button onClick={() => setJudgeView(true)} className="ml-auto text-accent hover:underline shrink-0" data-judge-open>{t('judge.goConfigure')}</button>
-                </div>
-              );
-            })()}
-            {justAdded && (
-              <div className="border border-accent/30 rounded-xl px-3 py-2.5 bg-accent/5 space-y-2" data-judge-next>
-                <p className="text-xs text-ink font-medium">{t('provider.nextJudge')}</p>
-                <p className="text-2xs text-ink-muted">{t('judge.oneLine')}</p>
-                <JudgeSettings />
-                <div className="flex justify-end"><button onClick={() => setJustAdded(false)} className="text-xs px-3 py-1 rounded-lg bg-accent text-white" data-judge-next-done>{t('common.done')}</button></div>
-              </div>
+            {justAdded && !judgeConfigured(judgeCfg) && (
+              <p className="text-2xs text-ink-muted flex items-center gap-2" data-judge-next>
+                <Scale size={12} strokeWidth={1.75} className="shrink-0 text-accent" />
+                <span>{t('provider.nextJudge')}</span>
+                <button onClick={() => setJudgeView(true)} className="text-accent hover:underline" data-judge-open>{t('judge.goConfigure')}</button>
+              </p>
             )}
           </>)}
 
