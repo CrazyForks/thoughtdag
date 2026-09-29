@@ -238,7 +238,7 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
               ))}
             </div>
           ))}
-          {!nodeMode && <JudgeRow onOpen={() => { setOpen(false); useUiStore.getState().setApiKeyModalOpen(true); }} />}
+          {!nodeMode && <JudgeRow onOpen={() => { setOpen(false); useUiStore.getState().setApiKeyModalOpen(true, 'judge'); }} />}
           {!nodeMode && (
             <div className="flex items-center pr-1 border-t border-line mt-1 pt-1">
             <span className="text-2xs text-ink-faint uppercase tracking-wider font-medium px-3 py-1.5 shrink-0">{t('model.interfaces')}</span>

@@ -25,6 +25,13 @@ export default function ApiKeyModal() {
   const data = useModels();
   const [providers, setProviders] = useState<RuntimeProvider[]>(() => storedProviders());
   useEffect(() => { if (open) setProviders(storedProviders()); }, [open]);
+  // The judge is not on the interfaces screen: it is the step after an interface is added
+  // (a card that appears once, right then), or its own view when the picker's judge row or the
+  // memory page asked for it. Either way it never competes with "add an interface".
+  const section = useUiStore((s) => s.apiKeyModalSection);
+  const [judgeView, setJudgeView] = useState(false);
+  const [justAdded, setJustAdded] = useState(false);
+  useEffect(() => { if (open) { setJudgeView(section === 'judge'); setJustAdded(false); } }, [open, section]);
   const [adding, setAdding] = useState(false);
   // Landing quick-connect: open straight onto the recommended preset
   const presetHint = useUiStore((s) => s.apiKeyPresetHint);
@@ -199,6 +206,7 @@ export default function ApiKeyModal() {
     if (await commit(next)) {
       toast('success', fmt(t('provider.added'), { n: models.length, name }));
       resetAdd();
+      setJustAdded(true);
     }
   };
 
@@ -223,7 +231,11 @@ export default function ApiKeyModal() {
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3">
-          {!adding && (<>
+          {judgeView && !adding && (<>
+            <JudgeSettings />
+            <button onClick={() => setJudgeView(false)} className="text-xs text-accent hover:underline" data-judge-back>{t('provider.backToList')}</button>
+          </>)}
+          {!judgeView && !adding && (<>
             {(data?.models.length ?? 0) === 0 && (
               <p className="text-xs text-ink-muted leading-relaxed">{t('provider.introEmpty')}</p>
             )}
@@ -264,9 +276,14 @@ export default function ApiKeyModal() {
               <Plus size={14} strokeWidth={1.75} /> {t('provider.add')}
             </button>
 
-            {/* the judge: a decision endpoint, one more key — offered after the first interface or
-                agent is in place, since it rides the interfaces (a saved OpenRouter key is used as is) */}
-            {(data?.models.length ?? 0) > 0 && <JudgeSettings />}
+            {justAdded && (
+              <div className="border border-accent/30 rounded-xl px-3 py-2.5 bg-accent/5 space-y-2" data-judge-next>
+                <p className="text-xs text-ink font-medium">{t('provider.nextJudge')}</p>
+                <p className="text-2xs text-ink-muted">{t('judge.oneLine')}</p>
+                <JudgeSettings />
+                <div className="flex justify-end"><button onClick={() => setJustAdded(false)} className="text-xs px-3 py-1 rounded-lg bg-accent text-white" data-judge-next-done>{t('common.done')}</button></div>
+              </div>
+            )}
           </>)}
 
           {adding && (<>

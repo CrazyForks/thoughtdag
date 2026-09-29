@@ -134,7 +134,9 @@ interface UiState {
   setMemoryManagerOpen: (open: boolean) => void;
   /** Browser-side API key dialog (the .env-free path in). */
   apiKeyModalOpen: boolean;
-  setApiKeyModalOpen: (open: boolean) => void;
+  /** which part the dialog opens on: the interfaces (default), or the judge alone (from the picker's judge row and the memory page) */
+  apiKeyModalSection: 'providers' | 'judge';
+  setApiKeyModalOpen: (open: boolean, section?: 'providers' | 'judge') => void;
   /** Monotonic signal: each bump asks the global model picker to drop open
       (the "look, your models are here" moment after a connect succeeds). */
   modelPickerPing: number;
@@ -319,7 +321,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   pluginUpdate: null,
   setPluginUpdate: (u) => set({ pluginUpdate: u }),
   apiKeyModalOpen: false,
-  setApiKeyModalOpen: (open) => set({ apiKeyModalOpen: open }),
+  apiKeyModalSection: 'providers',
+  setApiKeyModalOpen: (open, section) => set({ apiKeyModalOpen: open, apiKeyModalSection: open ? (section ?? 'providers') : 'providers' }),
   modelPickerPing: 0,
   searchHitIds: null,
   setSearchHitIds: (ids) => set({ searchHitIds: ids }),
