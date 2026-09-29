@@ -105,6 +105,7 @@ function cardFromHead(rootKey: string, rel: string, head: string, mtime: number,
       runner: 'codex', rootKey, rel, sessionId: id, cwd: meta.payload.cwd ?? null,
       title: firstUserLine(head) ?? `session ${id.slice(0, 8)}`, mtime, size,
       subagent: !!meta.payload.parent_thread_id,
+      ...(meta.payload.parent_thread_id ? { parentSessionId: meta.payload.parent_thread_id } : {}),
     };
   }
   // claude-code: every event line carries top-level sessionId + cwd; a

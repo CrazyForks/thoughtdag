@@ -8,6 +8,7 @@ import { scanSessions, groupByCwd, disabledRoots, setRootDisabled, type SessionC
 import { diffAgainstWatermark, markSeen, markAllSeen, changeKeyOf, type CardChange } from '../lib/atlas/watermark';
 import { useProjects, switchProject, setProjectArchived, subscribedSessionIds } from '../store/projects';
 import { useT, t as ti, fmt } from '../i18n';
+import { withSubagents } from '../lib/atlas/subagents';
 import { toast } from '../lib/ui-store';
 
 // The session atlas: the external world's view. Project folders on the
@@ -279,7 +280,7 @@ export default function SessionAtlas({ onClose, onSwitched, focusSessionId, init
       // (600MB+ rollouts exist) must never be read whole
       const { streamRunnerConversation } = await import('../lib/adapters');
       const { importOrAppendConversation, shellSessionReader } = await import('../lib/atlas/canonical');
-      const conv = await streamRunnerConversation(shellSessionReader(card.rootKey, card.rel));
+      const conv = await withSubagents(await streamRunnerConversation(shellSessionReader(card.rootKey, card.rel)), card.rootKey, card.rel, cards);
       const result = await importOrAppendConversation(conv);
       if (!result) throw new Error(ti('handoff.notASession'));
       if (result.kind === 'appended') toast('success', fmt(ti('atlas.appended'), { n: result.turns }), 9000);
@@ -303,7 +304,7 @@ export default function SessionAtlas({ onClose, onSwitched, focusSessionId, init
       const { mergeSessionsIntoProject, shellSessionReader } = await import('../lib/atlas/canonical');
       const convs = [];
       for (const card of picked.values()) {
-        convs.push(await streamRunnerConversation(shellSessionReader(card.rootKey, card.rel)));
+        convs.push(await withSubagents(await streamRunnerConversation(shellSessionReader(card.rootKey, card.rel)), card.rootKey, card.rel, cards));
         seen(card);
       }
       const result = await mergeSessionsIntoProject(convs, projectId);
@@ -338,7 +339,7 @@ export default function SessionAtlas({ onClose, onSwitched, focusSessionId, init
     try {
       const { streamRunnerConversation } = await import('../lib/adapters');
       const { importOrAppendConversation, shellSessionReader } = await import('../lib/atlas/canonical');
-      const conv = await streamRunnerConversation(shellSessionReader(card.rootKey, card.rel));
+      const conv = await withSubagents(await streamRunnerConversation(shellSessionReader(card.rootKey, card.rel)), card.rootKey, card.rel, cards);
       if (!conv) throw new Error(ti('handoff.notASession'));
       const { deleteProject } = await import('../store/projects');
       await deleteProject(twin.id);
@@ -820,7 +821,7 @@ export default function SessionAtlas({ onClose, onSwitched, focusSessionId, init
                       try {
                         const { streamRunnerConversation } = await import('../lib/adapters');
                         const { mountConversationToProject, shellSessionReader } = await import('../lib/atlas/canonical');
-                        const conv = await streamRunnerConversation(shellSessionReader(card.rootKey, card.rel));
+                        const conv = await withSubagents(await streamRunnerConversation(shellSessionReader(card.rootKey, card.rel)), card.rootKey, card.rel, cards);
                         const result = await mountConversationToProject(conv, p.id);
                         if (!result) throw new Error(ti('handoff.notASession'));
                         toast('success', fmt(ti('atlas.mountedChapter'), { n: result.kind === 'mounted' || result.kind === 'appended' ? result.turns : 0 }), 9000);
