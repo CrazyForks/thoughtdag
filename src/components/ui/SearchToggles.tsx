@@ -1,6 +1,7 @@
 import { Globe, GraduationCap } from 'lucide-react';
 import { hasWhy } from '../../lib/why-bridge';
 import { useUiStore } from '../../lib/ui-store';
+import RecallChip from './RecallChip';
 import { useModels } from '../../lib/use-models';
 import { directWithoutSearch } from '../../lib/direct-llm';
 import { useT } from '../../i18n';
@@ -15,8 +16,6 @@ export default function SearchToggles({ size = 16 }: { size?: number }) {
   const setScholar = useUiStore((s) => s.setScholarSearchEnabled);
   // recall: the why layer's exact words from past conversations and memories,
   // brought into the ask as listed items; only where a local index answers
-  const recall = useUiStore((s) => s.recallEnabled);
-  const setRecall = useUiStore((s) => s.setRecallEnabled);
   const recallAvailable = hasWhy();
   const t = useT();
   // no key, no button: search that cannot run must not be offerable
@@ -64,24 +63,11 @@ export default function SearchToggles({ size = 16 }: { size?: number }) {
         <GraduationCap size={size} strokeWidth={1.75} />
       </button>
       {recallAvailable && (
-        // recall is a switch, not a third search icon: a track and a knob, its
-        // name beside it, set apart from the two searches by a hairline
+        // recall is a quiet chip after a hairline, not a third search icon: it
+        // names itself and its reach, and opens the menu (switch, reach, amount)
         <>
           <span className="w-px h-4 bg-line mx-0.5 shrink-0" aria-hidden />
-          <button
-            type="button"
-            role="switch"
-            aria-checked={recall}
-            onClick={() => setRecall(!recall)}
-            title={recall ? t('toolbar.recall') : t('toolbar.recallOff')}
-            className="shrink-0 h-8 pl-0.5 pr-2 rounded-full flex items-center gap-1.5 hover:bg-wash transition-colors"
-            data-recall-toggle
-          >
-            <span className={`relative w-9 h-5 rounded-full transition-colors ${recall ? 'bg-accent' : 'bg-line-strong'}`}>
-              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${recall ? 'translate-x-4' : ''}`} />
-            </span>
-            <span className={`text-2xs font-medium ${recall ? 'text-accent' : 'text-ink-muted'}`}>{t('toolbar.recallLabel')}</span>
-          </button>
+          <RecallChip />
         </>
       )}
     </>

@@ -3,7 +3,6 @@ import { ChevronDown, ChevronRight, History, Loader2, X, RotateCcw } from 'lucid
 import { useStore } from '../../store';
 import { recallTokens, recallMore, recallHeld } from '../../lib/recall';
 import { JUDGE_LABELS, type JudgeProviderId } from '../../lib/judge';
-import RecallScaleSelect from '../ui/RecallScaleSelect';
 import { useT, fmt } from '../../i18n';
 import type { RecallItem, RecallMeta } from '../../types';
 
@@ -114,7 +113,7 @@ export default function RecallSection({ nodeId, items, meta, recallOn, progress 
                   <button onClick={() => { setHeldBusy(true); void recallHeld(nodeId).finally(() => setHeldBusy(false)); }} disabled={heldBusy} className="text-accent hover:bg-accent/10 px-1.5 py-0.5 rounded disabled:opacity-50" data-recall-held-add>{heldBusy ? '…' : t('panel.recallHeldAdd')}</button>
                 </div>
               )}
-              {meta.budget ? <div className="flex items-center gap-2 flex-wrap">{fmt(t('panel.recallUsed'), { b: meta.budget, u: total })}<RecallScaleSelect /></div> : null}
+              {meta.budget ? <div className="flex items-center gap-2 flex-wrap">{fmt(t('panel.recallUsed'), { b: meta.budget, u: total })}</div> : null}
               {meta.reach && <div>{fmt(t('panel.recallReach'), { r: t(meta.reach === 'light' ? 'recall.reachLight' : meta.reach === 'deep' ? 'recall.reachDeep' : 'recall.reachFull') })}</div>}
               {meta.judge && <div>{fmt(t('panel.recallJudge'), { j: JUDGE_LABELS[meta.judge.provider as JudgeProviderId] ?? meta.judge.provider })} · {t(meta.judge.calibrated ? 'judge.calibrated' : 'judge.uncalibrated')}</div>}
               {meta.judgeError && <div className="text-amber-600">{fmt(t('panel.recallJudgeFailed'), { e: meta.judgeError })}</div>}

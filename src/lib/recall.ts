@@ -90,7 +90,7 @@ export const RECALL_SCALES = {
 } as const;
 const WINDOW_GUARD = 0.4;
 export type RecallScale = keyof typeof RECALL_SCALES;
-const scale = () => RECALL_SCALES[useUiStore.getState().recallScale ?? 'standard'];
+const scale = (name?: RecallScale) => RECALL_SCALES[name ?? useUiStore.getState().recallScale ?? 'standard'];
 const RECALL_MAX_TERMS = 4;
 const ITEM_CAP_CHARS = 2400;
 const STOP = new Set(['the', 'and', 'for', 'with', 'that', 'this', 'from', 'what', 'which', 'about', 'have', 'does', 'into', 'your', 'you', 'are', 'was', 'were', 'how', 'why', 'when', 'where', 'can', 'could', 'should', 'would', 'please', 'help', 'need', 'want', 'tell', 'explain', 'like', 'just', 'also', 'then', 'than', 'them', 'they', 'there', 'here', 'some', 'any', 'all', 'our', 'out', 'not', 'but', 'use', 'used', 'using', 'make', 'made', 'get', 'got', 'one', 'two', 'new', 'old', 'now', 'let', 'lets', 'me', 'my', 'we', 'us', 'it', 'its', 'is', 'be', 'to', 'of', 'in', 'on', 'at', 'by', 'as', 'or', 'an', 'a', 'do', 'did', 'has', 'had', 'been', 'being', 'will', 'more', 'most', 'many', 'much', 'very', 'really', 'thing', 'things', 'something', 'anything', 'everything', 'know', 'think', 'see', 'look', 'find', 'give', 'take', 'same', 'other', 'another', 'each', 'every', 'between', 'before', 'after', 'again', 'still', 'over', 'under', 'only', 'first', 'last', 'next', 'previous', 'earlier', 'later', 'time', 'times', 'today', 'yesterday', 'tomorrow']);
@@ -126,6 +126,9 @@ export interface RecallOptions {
   model?: string;
   /** a wide recall reports the judge's progress here */
   onProgress?: (done: number, total: number) => void;
+  /** the reach and the amount the ask was made with (its node's snapshot); the defaults otherwise */
+  reach?: RecallReach;
+  scale?: RecallScale;
 }
 export interface RecallOutcome { items: RecallItem[]; meta: RecallMeta }
 
@@ -155,9 +158,9 @@ export function reachEstimate(total: number): { seconds: number; dollars: number
 export const RELEVANCE_KEEP = 0.5;
 export const RELEVANCE_HOLD = 0.3;
 /** …and the budget is the picked amount, never more than two fifths of the answering model's window — the same with or without a judge. */
-export function judgedBudget(model?: string): number {
+export function judgedBudget(model?: string, amount?: RecallScale): number {
   const ctx = model ? contextLengthFor(model) : undefined;
-  const sc = scale();
+  const sc = scale(amount);
   return ctx ? Math.min(sc.budget, Math.floor(ctx * WINDOW_GUARD)) : sc.budget;
 }
 const keyOf = (h: { session: string; turn: number }) => `${h.session}#${h.turn}`;
@@ -206,9 +209,9 @@ export async function fetchRecallItems(question: string, opts: RecallOptions = {
   const bridge = whyBridge();
   if (!bridge) return { items: [], meta };
   const judged = judgeAvailable();
-  const limit = opts.limit ?? (judged ? Infinity : scale().cap);
-  const budget = opts.budget ?? judgedBudget(opts.model);
-  const reach: RecallReach = judged ? reachOf() : 'light';
+  const limit = opts.limit ?? (judged ? Infinity : scale(opts.scale).cap);
+  const budget = opts.budget ?? judgedBudget(opts.model, opts.scale);
+  const reach: RecallReach = judged ? (opts.reach ?? reachOf()) : 'light';
   const poolSize = judged ? RECALL_REACH[reach].pool : RECALL_POOL;
   // find takes a number: a full reach lists every turn below, the finds only mark matched terms
   const findLimit = Number.isFinite(poolSize) ? poolSize : 100_000;
@@ -407,7 +410,7 @@ export async function recallMore(nodeId: string): Promise<number> {
   if (!node) return 0;
   const have = node.data.recallItems ?? [];
   const { useProjects } = await import('../store/projects');
-  const out = await fetchRecallItems(node.data.question, { excludeSession: useProjects.getState().activeId, excludeKeys: new Set(have.map(keyOf)), limit: scale().more, budget: Math.floor(judgedBudget(node.data.model ?? useUiStore.getState().selectedModel ?? undefined) / 2), model: node.data.model ?? useUiStore.getState().selectedModel ?? undefined });
+  const out = await fetchRecallItems(node.data.question, { excludeSession: useProjects.getState().activeId, excludeKeys: new Set(have.map(keyOf)), reach: node.data.recallReach, scale: node.data.recallScale, limit: scale(node.data.recallScale).more, budget: Math.floor(judgedBudget(node.data.model ?? useUiStore.getState().selectedModel ?? undefined) / 2), model: node.data.model ?? useUiStore.getState().selectedModel ?? undefined });
   if (!out.items.length) return 0;
   useStore.setState((s) => ({
     nodes: s.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, recallItems: [...(n.data.recallItems ?? []), ...out.items], recallMeta: { ...(n.data.recallMeta ?? { corrections: [], pool: 0, total: 0 }), ...out.meta, corrections: [...(n.data.recallMeta?.corrections ?? []), ...out.meta.corrections] } } } : n)),

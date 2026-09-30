@@ -201,6 +201,9 @@ export interface ThoughtData extends Record<string, unknown> {
   scholarSearch?: boolean; // same for arXiv / Semantic Scholar tools
   /** may this node's generation recall past conversations and memories (the why layer)? snapshotted at ask time like the search switches */
   recall?: boolean;
+  /** the reach and the amount this ask's recall ran with (snapshotted like the switch; undefined = the defaults at the time) */
+  recallReach?: 'light' | 'deep' | 'full';
+  recallScale?: 'lean' | 'standard' | 'generous';
   /** what recall brought in for this node: listed, priced, removable; reused as they stand on a rerun */
   recallItems?: RecallItem[];
   recallMeta?: RecallMeta;

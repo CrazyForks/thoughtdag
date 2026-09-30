@@ -56,6 +56,9 @@ interface UiState {
   /** how far a judged recall reaches: 40 hits read in full, 2,000 hits by their heads, or every turn */
   recallReach: 'light' | 'deep' | 'full';
   setRecallReach: (r: 'light' | 'deep' | 'full') => void;
+  /** the composer's recall menu: what the next ask uses instead of the defaults; the ask spends it */
+  recallOverride: { enabled?: boolean; reach?: 'light' | 'deep' | 'full'; scale?: 'lean' | 'standard' | 'generous' } | null;
+  setRecallOverride: (o: { enabled?: boolean; reach?: 'light' | 'deep' | 'full'; scale?: 'lean' | 'standard' | 'generous' } | null) => void;
   /** how many items one recall brings in, and the token budget they share */
   /** the judge (a System One decision endpoint) recall and other judgements may ask */
   judge: import('./judge').JudgeSettings;
@@ -222,6 +225,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   setRecallScale: (s) => { localStorage.setItem('thoughtdag.recallScale', s); set({ recallScale: s }); },
   recallReach: ((): 'light' | 'deep' | 'full' => { const v = localStorage.getItem('thoughtdag.recallReach'); return v === 'deep' || v === 'full' ? v : 'light'; })(),
   setRecallReach: (r) => { localStorage.setItem('thoughtdag.recallReach', r); set({ recallReach: r }); },
+  recallOverride: null,
+  setRecallOverride: (o) => set((s) => ({ recallOverride: o === null ? null : { ...(s.recallOverride ?? {}), ...o } })),
   judge: (() => { try { const raw = localStorage.getItem(JUDGE_KEY); return raw ? { enabled: true, provider: 'none', openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '', ...JSON.parse(raw) } : { enabled: true, provider: 'none' as const, openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' }; } catch { return { enabled: true, provider: 'none' as const, openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' }; } })(),
   scholarSearchEnabled: localStorage.getItem(SCHOLAR_SEARCH_KEY) !== 'off',
   // MCP is parked until the personalization system is designed (external
@@ -441,4 +446,13 @@ export function confirmDialog(opts: Omit<ConfirmRequest, 'resolve'>): Promise<bo
 // setPanelOpen on the orphan does nothing. Tests must use window.__ui.
 if (import.meta.env.DEV) {
   Object.assign(window, { __ui: useUiStore });
+}
+
+/** The recall settings an ask starts with: the composer menu's one-ask override where set, else the
+ *  defaults (the judge page's). The ask spends the override, so the next ask is back on the defaults. */
+export function recallSnapshot(): { recall: boolean; recallReach: 'light' | 'deep' | 'full'; recallScale: 'lean' | 'standard' | 'generous' } {
+  const s = useUiStore.getState();
+  const o = s.recallOverride;
+  if (o) useUiStore.setState({ recallOverride: null });
+  return { recall: o?.enabled ?? s.recallEnabled, recallReach: o?.reach ?? s.recallReach, recallScale: o?.scale ?? s.recallScale };
 }

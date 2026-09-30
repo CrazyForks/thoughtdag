@@ -7,7 +7,7 @@ import { COLORS } from '../../lib/constants';
 import type { ContextMessage, ImageAttachment } from '../../lib/api';
 import { buildContext, resolveExplicitRole, applyRoleOverride, type MessageSource } from '../context-builder';
 import { activeAbortControllers, autoRunCounts, runNodeGeneration, triggerParadigmCascade } from '../streaming';
-import { useUiStore, toast } from '../../lib/ui-store';
+import { useUiStore, toast, recallSnapshot } from '../../lib/ui-store';
 // the stale set a request carries is the one the preview shows: the fingerprint's minus the judge's dismissals (#51)
 import { shownStaleIds } from '../../lib/stale-judge';
 import { t, fmt } from '../../i18n';
@@ -60,7 +60,7 @@ export const createLlmSlice: StateCreator<StoreState, [], [], LlmSlice> = (set, 
         // the input, so reruns of this node keep behaving the same way
         webSearch: useUiStore.getState().webSearchEnabled,
         scholarSearch: useUiStore.getState().scholarSearchEnabled,
-        recall: useUiStore.getState().recallEnabled,
+        ...recallSnapshot(),
       },
     };
 
@@ -220,7 +220,7 @@ export const createLlmSlice: StateCreator<StoreState, [], [], LlmSlice> = (set, 
           autoRerunRounds: rounds,
           webSearch: useUiStore.getState().webSearchEnabled,
           scholarSearch: useUiStore.getState().scholarSearchEnabled,
-          recall: useUiStore.getState().recallEnabled,
+          ...recallSnapshot(),
         },
       });
       newEdges.push(follow ? {
@@ -307,7 +307,7 @@ export const createLlmSlice: StateCreator<StoreState, [], [], LlmSlice> = (set, 
         roleMode: 'inherit', isRoot: false, isBranch: false,
         webSearch: useUiStore.getState().webSearchEnabled,
         scholarSearch: useUiStore.getState().scholarSearchEnabled,
-        recall: useUiStore.getState().recallEnabled,
+        ...recallSnapshot(),
       },
     };
     const newEdges: ThoughtEdge[] = parents.map((pid) => ({
@@ -500,7 +500,7 @@ export const createLlmSlice: StateCreator<StoreState, [], [], LlmSlice> = (set, 
         isBranch: false,
         webSearch: useUiStore.getState().webSearchEnabled,
         scholarSearch: useUiStore.getState().scholarSearchEnabled,
-        recall: useUiStore.getState().recallEnabled,
+        ...recallSnapshot(),
       },
     };
 
