@@ -40,6 +40,17 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
     // a quiet release: the 0.5.2 entry stays the announcement, this one is history only
+    version: '0.5.6',
+    date: '2026-09-30',
+    announce: false,
+    lead: {
+      zh: '回忆改成安静的小标签，默认关：输入框旁一个「回忆」，点开是开关、搜索范围（轻量 40 条 / 深挖 2,000 条 / 全量）和带入上下文，改的只对这一次提问生效，「设为默认」写回全局；深挖和全量由判断模型分批看候选，全量先告诉你条数、秒数和费用。判断模型页的开关并进供应商下拉（最后一项「关闭，按规则」）；联网和学术搜索也默认关。每个节点都有可缩放的摘要：一句话的回答、笔记、文件都上梯子。双击卡片上的问题，侧栏编辑框带着原文打开。Harness 插件：思维图顶上是自己的标题带（不再压住红绿灯）；自己的模型接口回来了，添加、拉模型列表、调用都走插件；不再提示桌面版新版本，插件更新提示直接说在插件页重新添加哪个包；桌面版 0.2 写的 v4 会话文件进得了对话地图。',
+      en: 'Recall is a quiet chip, off by default: a "Recall" beside the composer opens the switch, the search reach (light 40 / deep 2,000 / full) and the context brought in; a change there holds for the next ask only, "set as default" writes it back. Deep and full have the decision model read candidates in batches; full first says how many turns, seconds and dollars. The decision model page folds its switch into the provider dropdown (last entry: off, rules decide); web and scholar search start off too. Every node zooms: one-line answers, notes and files get a ladder. Double-clicking a card\'s question opens the side panel editor with the text in place. Harness plugin: the map wears its own title band (clear of the traffic lights); its own model interfaces are back, added, listed and called through the plugin; no more desktop-app update nudge, and the plugin\'s own notice names the package to re-add on the Plugins page; the 0.2 desktop\'s v4 session files reach the atlas.',
+    },
+    items: [],
+  },
+  {
+    // a quiet release: the 0.5.2 entry stays the announcement, this one is history only
     version: '0.5.5',
     date: '2026-09-29',
     announce: false,
