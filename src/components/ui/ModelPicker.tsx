@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { IN_HARNESS } from '../../lib/embedded';
 import { Check, ChevronDown, Cpu, KeyRound, RefreshCw, Info, Loader2, ChevronRight, Scale } from 'lucide-react';
 import { toast, useUiStore } from '../../lib/ui-store';
 import { profileLines } from '../../lib/profile';
@@ -242,7 +241,7 @@ export default function ModelPicker({ value, onChange, compact }: PickerProps) {
           {!nodeMode && (
             <div className="flex items-center pr-1 border-t border-line mt-1 pt-1">
             <span className="text-2xs text-ink-faint uppercase tracking-wider font-medium px-3 py-1.5 shrink-0">{t('model.interfaces')}</span>
-            {!IN_HARNESS && <button
+            {<button
               onClick={() => { setOpen(false); useUiStore.getState().setApiKeyModalOpen(true); }}
               className={`flex-1 text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors hover:bg-wash ${
                 models.length === 0 ? 'text-accent font-medium' : 'text-ink-muted'

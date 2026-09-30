@@ -538,7 +538,7 @@ async function visionIdsOf(ctx, providerId, catalogModels) {
   return out
 }
 
-async function modelsPayload(ctx) {
+async function modelsPayload(ctx, ownProviders = []) {
   const cat = await ctx.sessionController.modelCatalog()
   // the harness itself, as an entry: the agent loop with tools, not a bare model
   // the harness's agent loop with tools, once per model it can run on —
@@ -553,13 +553,135 @@ async function modelsPayload(ctx) {
     }
   }
   models.push(...agents)
+  // the person's own interfaces follow, under their own names; a harness id wins a collision
+  const own = ownModelEntries(ownProviders, new Set(models.map(m => m.id)))
+  models.push(...own)
   const def = cat.default ? `${cat.default.provider}/${cat.default.model}` : null
   return {
     models,
     default: def && models.some(m => m.id === def) ? def : (models[0]?.id ?? null),
-    capabilities: { webSearch: false, searchEngine: 'none', scholarSearch: false, vision: models.some(m => m.vision) },
+    capabilities: { webSearch: ownProviders.some(p => isOpenRouterURL(p.baseURL)), searchEngine: 'none', scholarSearch: false, vision: models.some(m => m.vision) },
     harness: { routableProviders: cat.routableProviders ?? [], failures: (cat.failures ?? []).map(f => ({ provider: f.id, message: f.message })) },
   }
+}
+
+// ── the person's own interfaces ────────────────────────────────────────
+// The canvas keeps API interfaces in the browser (the same list the desktop
+// app has) and sends them along with every call and with a registration
+// at boot (POST /runtime-providers). Here they are spoken to directly over
+// the OpenAI-compatible protocol, so a key added inside the harness works
+// the way it does in the app; the harness's own models are untouched.
+const OWN_PROVIDER_CAP = 12
+const OWN_MODEL_CAP = 60
+const isOpenRouterURL = (u) => /openrouter\.ai/i.test(String(u ?? ''))
+
+/** The providers a request or a registration carries, sanitised. */
+function ownProvidersOf(list) {
+  const out = []
+  for (const p of (Array.isArray(list) ? list : []).slice(0, OWN_PROVIDER_CAP)) {
+    const baseURL = String(p?.baseURL ?? '').trim().replace(/\/+$/, '')
+    if (!/^https?:\/\//i.test(baseURL)) continue
+    const name = String(p?.name || 'Custom').slice(0, 40)
+    const models = (Array.isArray(p?.models) ? p.models : [])
+      .map(m => (typeof m === 'string' ? { id: m } : m))
+      .filter(m => m && typeof m.id === 'string' && m.id)
+      .slice(0, OWN_MODEL_CAP)
+      .map(m => ({ id: m.id, ...(typeof m.vision === 'boolean' ? { vision: m.vision } : {}) }))
+    if (models.length === 0) continue
+    out.push({ name, baseURL, apiKey: typeof p?.apiKey === 'string' ? p.apiKey : '', models })
+  }
+  return out
+}
+
+/** Model entries for the picker: the model's short id and its interface's name, like the app shows them. */
+function ownModelEntries(providers, taken) {
+  const entries = []
+  for (const p of providers) {
+    for (const m of p.models) {
+      if (taken.has(m.id)) continue
+      taken.add(m.id)
+      const shortId = m.id.includes('/') ? m.id.split('/').slice(1).join('/') : m.id
+      entries.push({ id: m.id, name: `${shortId} (${p.name})`, provider: p.name, vision: m.vision })
+    }
+  }
+  return entries
+}
+
+/** The interface a requested model belongs to, from the request's own list first, then the registered list. */
+function ownTargetOf(requested, fromBody, registered) {
+  if (typeof requested !== 'string' || !requested) return null
+  for (const p of [...fromBody, ...registered]) if (p.models.some(m => m.id === requested)) return { provider: p, model: requested }
+  return null
+}
+
+/** The canvas's { role, content } messages and images as OpenAI-compatible messages. */
+function ownMessagesOf(body) {
+  const messages = []
+  for (const m of Array.isArray(body?.messages) ? body.messages : []) {
+    if (!m || typeof m.content !== 'string') continue
+    messages.push({ role: m.role === 'system' ? 'system' : m.role === 'assistant' ? 'assistant' : 'user', content: m.content })
+  }
+  if (messages.length === 0) throw new HttpError(400, 'messages: nothing to send')
+  const images = Array.isArray(body?.images) ? body.images.filter(i => i && typeof i.data === 'string' && IMAGE_MEDIA.has(i.mimeType)) : []
+  if (images.length > 0) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role !== 'user') continue
+      messages[i] = { role: 'user', content: [{ type: 'text', text: messages[i].content }, ...images.map(img => ({ type: 'image_url', image_url: { url: `data:${img.mimeType};base64,${img.data}` } }))] }
+      break
+    }
+  }
+  return messages
+}
+
+/** One chat-completions request to the interface; the response as fetched (the caller reads it). */
+async function ownRequest(target, body, stream) {
+  const { provider, model } = target
+  // OpenRouter searches through its `:online` variant and takes a reasoning switch; a fast call never thinks out loud
+  const openrouter = isOpenRouterURL(provider.baseURL)
+  const id = openrouter && body?.webSearch && !model.endsWith(':online') ? `${model}:online` : model
+  const payload = { model: id, messages: ownMessagesOf(body), stream, ...(openrouter ? { reasoning: { enabled: !body?.fast } } : {}) }
+  const headers = { 'content-type': 'application/json', ...(provider.apiKey ? { authorization: `Bearer ${provider.apiKey}` } : {}), ...(openrouter ? { 'HTTP-Referer': 'https://github.com/chenxiachan/thoughtdag', 'X-Title': 'ThoughtDAG' } : {}) }
+  const res = await fetch(`${provider.baseURL}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(payload), signal: AbortSignal.timeout(10 * 60 * 1000) })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    let detail = text.slice(0, 300)
+    try { const j = JSON.parse(text); detail = j?.error?.message ?? j?.message ?? detail } catch { /* not json */ }
+    throw new HttpError(res.status === 401 || res.status === 403 ? 401 : 502, `${provider.name}: HTTP ${res.status}${detail ? ' · ' + detail : ''}`)
+  }
+  return res
+}
+
+/** Stream one answer from the interface as the canvas's frames: { text }, { reasoning }, [DONE]. */
+async function ownStream(res, target, body, isClosed) {
+  const upstream = await ownRequest(target, body, true)
+  const decoder = new TextDecoder()
+  let buffer = ''
+  for await (const chunk of upstream.body) {
+    if (isClosed()) break
+    buffer += decoder.decode(chunk, { stream: true })
+    let nl
+    while ((nl = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, nl).trim(); buffer = buffer.slice(nl + 1)
+      if (!line.startsWith('data:')) continue
+      const data = line.slice(5).trim()
+      if (data === '[DONE]') return
+      let parsed
+      try { parsed = JSON.parse(data) } catch { continue }
+      if (parsed?.error) { res.write(`data: ${JSON.stringify({ error: parsed.error.message ?? String(parsed.error) })}\n\n`); return }
+      const delta = parsed?.choices?.[0]?.delta ?? {}
+      const reasoning = delta.reasoning_content ?? delta.reasoning
+      if (typeof reasoning === 'string' && reasoning) res.write(`data: ${JSON.stringify({ reasoning })}\n\n`)
+      if (typeof delta.content === 'string' && delta.content) res.write(`data: ${JSON.stringify({ text: delta.content })}\n\n`)
+    }
+  }
+}
+
+/** One whole answer from the interface (the canvas's background calls). */
+async function ownCall(target, body) {
+  const upstream = await ownRequest(target, body, false)
+  const j = await upstream.json()
+  const c = j?.choices?.[0]?.message?.content
+  return typeof c === 'string' ? c : Array.isArray(c) ? c.map(x => (typeof x?.text === 'string' ? x.text : '')).join('') : ''
 }
 
 const IMAGE_MEDIA = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
@@ -838,7 +960,7 @@ async function visionModel(ctx) {
 
 /** Resolve the requested model against the catalog, falling back to its default. */
 async function targetOf(ctx, requested) {
-  const payload = await modelsPayload(ctx)
+  const payload = await modelsPayload(ctx)  // the harness's own; the person's interfaces are resolved before this is asked
   const id = requested && payload.models.some(m => m.id === requested) ? requested : payload.default
   const t = splitModelId(id)
   if (!t) throw new HttpError(503, 'no model is routable in this harness')
@@ -947,6 +1069,8 @@ export async function apply(ctx, config) {
     : '/thoughtdag'
   const trustedHosts = new Set(['localhost', '127.0.0.1', ...[...(config?.trustedHosts ?? [])].map(h => String(h).trim().toLowerCase()).filter(Boolean)])
 
+  // the interfaces the canvas registered (memory only: a restart forgets them, the canvas registers again at boot)
+  let registeredProviders = []
   const api = async (req, res) => {
     try {
       const hostname = (typeof req.headers.host === 'string' ? req.headers.host : '').replace(/:\d+$/, '').toLowerCase()
@@ -1094,7 +1218,34 @@ export async function apply(ctx, config) {
         if (await agentsHttp().handle(req, res, path, body)) return
       }
       // ── model connection (the SPA's proxy protocol, on the harness's providers) ──
-      if (path === '/models' && req.method === 'GET') return sendJson(res, 200, await modelsPayload(ctx))
+      if (path === '/models' && req.method === 'GET') return sendJson(res, 200, await modelsPayload(ctx, registeredProviders))
+      // the canvas registers its browser-stored interfaces at boot (and after a change): the list answers with them in it
+      // the interface dialog asks an endpoint what it serves (the /models protocol standard), through this host
+      if (path === '/probe-models' && req.method === 'POST') {
+        const body = await readJson(req, MAX_WRITE_BODY_BYTES)
+        const baseURL = String(body?.baseURL ?? '').trim().replace(/\/+$/, '')
+        if (!/^https?:\/\//i.test(baseURL)) return sendJson(res, 400, { error: 'baseURL required' })
+        try {
+          const r = await fetch(`${baseURL}/models`, { headers: body?.apiKey ? { authorization: `Bearer ${body.apiKey}` } : {}, signal: AbortSignal.timeout(15000) })
+          if (!r.ok) return sendJson(res, r.status, { error: `endpoint answered HTTP ${r.status}` })
+          const j = await r.json()
+          const list = Array.isArray(j?.data) ? j.data : Array.isArray(j?.models) ? j.models : []
+          const models = list.map(m => ({
+            id: typeof (m?.id ?? m?.name) === 'string' ? (m.id ?? m.name).replace(/^models\//, '') : '',
+            ...(typeof m?.created === 'number' ? { created: m.created } : {}),
+            ...(Array.isArray(m?.architecture?.input_modalities) ? { vision: m.architecture.input_modalities.includes('image') } : {}),
+            ...(typeof m?.context_length === 'number' ? { contextLength: m.context_length } : {}),
+          })).filter(m => m.id)
+          return sendJson(res, 200, { models })
+        } catch (error) {
+          return sendJson(res, 502, { error: 'could not reach the endpoint: ' + (error instanceof Error ? error.message : String(error)) })
+        }
+      }
+      if (path === '/runtime-providers' && req.method === 'POST') {
+        const body = await readJson(req, MAX_CALL_BODY_BYTES)
+        registeredProviders = ownProvidersOf(body?.providers)
+        return sendJson(res, 200, await modelsPayload(ctx, registeredProviders))
+      }
       const approvalRoute = /^\/approvals\/([^/]+)$/.exec(path)
       if (approvalRoute !== null && req.method === 'POST') {
         const id = decodeURIComponent(approvalRoute[1])
@@ -1117,6 +1268,22 @@ export async function apply(ctx, config) {
           req.on('close', () => { closed = true })
           try {
             await runAgentTurn(ctx, body, frame => { if (!closed) res.write(`data: ${JSON.stringify(frame)}\n\n`) }, () => closed)
+            if (!closed) res.write('data: [DONE]\n\n')
+          } catch (error) {
+            if (!closed) res.write(`data: ${JSON.stringify({ error: error instanceof Error ? error.message : String(error) })}\n\n`)
+          }
+          res.end()
+          return
+        }
+        // the person's own interface, when the model is one of theirs
+        const own = ownTargetOf(body?.model, ownProvidersOf(body?.providers), registeredProviders)
+        if (own) {
+          if (path === '/claude') return sendJson(res, 200, { text: await ownCall(own, body), model: own.model })
+          res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
+          let closed = false
+          req.on('close', () => { closed = true })
+          try {
+            await ownStream(res, own, body, () => closed)
             if (!closed) res.write('data: [DONE]\n\n')
           } catch (error) {
             if (!closed) res.write(`data: ${JSON.stringify({ error: error instanceof Error ? error.message : String(error) })}\n\n`)
