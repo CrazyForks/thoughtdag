@@ -5,6 +5,9 @@ import remarkMath from 'remark-math';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
+import type { Schema } from 'hast-util-sanitize';
+import type { PluggableList } from 'unified';
 import { Check, Copy } from 'lucide-react';
 import { fuzzyHighlightRegex } from '../lib/highlight-match';
 import { useT } from '../i18n';
@@ -24,7 +27,25 @@ function normalizeMath(src: string): string {
       .replace(/\\\((.+?)\\\)/g, (_, m) => `$${m.trim()}$`)))
     .join('');
 }
-const REHYPE_PLUGINS = [rehypeRaw, rehypeHighlight, rehypeKatex];
+// Raw HTML in an answer is kept for what it is used for (details, sub/sup,
+// kbd, mark, tables, line breaks) and stripped of what can run or embed:
+// iframe, object, embed, script, style, link, meta, base, form. An answer is
+// untrusted text (a shared graph, an imported project, a model quoting a
+// page), and a srcdoc iframe runs with this origin's storage and bridges.
+// The sanitizer sits after rehype-raw and before highlight and KaTeX, so
+// their own markup (hljs spans, KaTeX styles) is never touched.
+const SANITIZE_SCHEMA: Schema = {
+  ...defaultSchema,
+  // footnote ids already carry mdast's own user-content- prefix; a second one would break their links
+  clobberPrefix: '',
+  tagNames: [...(defaultSchema.tagNames ?? []), 'mark'],
+  attributes: {
+    ...defaultSchema.attributes,
+    // remark-math marks its code as language-math plus math-inline / math-display; KaTeX reads all three
+    code: [['className', /^language-./, 'math-inline', 'math-display']],
+  },
+};
+const REHYPE_PLUGINS: PluggableList = [rehypeRaw, [rehypeSanitize, SANITIZE_SCHEMA], rehypeHighlight, rehypeKatex];
 
 // Code blocks get a hover copy button (no toast: too frequent an action —
 // the icon flashes a check instead).
