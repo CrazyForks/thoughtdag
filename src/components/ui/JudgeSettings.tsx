@@ -11,7 +11,7 @@ import { useT, fmt } from '../../i18n';
 // self-hosted /v1/systemone, or the chat model as an uncalibrated stand-in.
 // Off, every decision falls back to its rule.
 
-const PROVIDERS: JudgeProviderId[] = ['openrouter', 'typesafe', 'cloudflare', 'custom', 'llm'];
+const PROVIDERS: JudgeProviderId[] = ['openrouter', 'typesafe', 'cloudflare', 'custom', 'llm', 'off'];
 
 export default function JudgeSettings() {
   const t = useT();
@@ -21,7 +21,7 @@ export default function JudgeSettings() {
   const [test, setTest] = useState<{ ok: true; r: JudgeResult } | { ok: false; error: string } | null>(null);
   const [choosing, setChoosing] = useState(false);
   const storedKey = storedOpenRouterKey();
-  const on = judgeCfg.enabled !== false;
+  const on = judgeCfg.provider !== 'off';
   const configured = judgeConfigured(judgeCfg);
   const effective = effectiveProvider(judgeCfg);
   const tripped = judgeTripped();
@@ -32,8 +32,6 @@ export default function JudgeSettings() {
     catch (e) { setTest({ ok: false, error: e instanceof Error ? e.message : String(e) }); }
     finally { setTesting(false); }
   };
-  // the switch alone: the provider (chosen, or the saved OpenRouter access) stays as it is
-  const toggle = () => { setTest(null); setChoosing(false); setJudge({ enabled: !on }); };
   // a provider that is reachable in principle is checked once, so the row says whether it answers
   useEffect(() => {
     if (!on || !configured || test || testing) return;
@@ -63,19 +61,16 @@ export default function JudgeSettings() {
     <div className="border border-line rounded-xl px-3 py-2.5 bg-surface" data-judge-settings data-judge-on={on ? 'on' : 'off'}>
       <div className="flex items-center gap-2">
         <Scale size={14} strokeWidth={1.75} className="text-accent" />
-        <span className="text-sm font-medium text-ink flex-1">{t('judge.enable')}</span>
+        <span className="text-sm font-medium text-ink flex-1">{t('judge.title')}</span>
         <span className="text-ink-faint cursor-help" title={t('judge.does')} data-judge-info><Info size={13} strokeWidth={1.75} /></span>
-        <button role="switch" aria-checked={on} onClick={toggle} className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${on ? 'bg-accent' : 'bg-line-strong'}`} data-judge-toggle>
-          <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-4' : ''}`} />
-        </button>
       </div>
       <p className="text-2xs text-ink-faint mt-1 leading-relaxed">{t('judge.oneLine')}</p>
 
-      {on && (
+      {(
         <div className="mt-2 space-y-2" data-judge-body>
           {/* what is in use, and whether it answers */}
           <div className="flex items-center gap-2 flex-wrap text-2xs">
-            <span className="text-ink-muted" data-judge-effective={effective}>{usingStored ? t('judge.detected') : configured ? providerLabel(effective) : t('judge.stateNoApi')}</span>
+            <span className="text-ink-muted" data-judge-effective={effective}>{usingStored ? t('judge.detected') : configured ? providerLabel(effective) : on ? t('judge.stateNoApi') : t('judge.stateOff')}</span>
             {!choosing && <button onClick={() => setChoosing(true)} className="text-accent hover:underline" data-judge-other>{t('judge.otherProvider')}</button>}
           </div>
           {(choosing || !configured) && (

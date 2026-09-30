@@ -228,7 +228,14 @@ export const useUiStore = create<UiState>((set, get) => ({
   setRecallReach: (r) => { localStorage.setItem('thoughtdag.recallReach', r); set({ recallReach: r }); },
   recallOverride: null,
   setRecallOverride: (o) => set((s) => ({ recallOverride: o === null ? null : { ...(s.recallOverride ?? {}), ...o } })),
-  judge: (() => { try { const raw = localStorage.getItem(JUDGE_KEY); return raw ? { enabled: true, provider: 'none', openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '', ...JSON.parse(raw) } : { enabled: true, provider: 'none' as const, openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' }; } catch { return { enabled: true, provider: 'none' as const, openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' }; } })(),
+  judge: (() => {
+    const base = { enabled: true, provider: 'none' as const, openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' };
+    let j: import('./judge').JudgeSettings = base;
+    try { const raw = localStorage.getItem(JUDGE_KEY); if (raw) j = { ...base, ...JSON.parse(raw) }; } catch { /* the defaults */ }
+    // the on/off switch became the provider dropdown's "off" entry: a judge switched off before stays off
+    if (j.enabled === false) j = { ...j, enabled: true, provider: 'off' };
+    return j;
+  })(),
   scholarSearchEnabled: localStorage.getItem(SCHOLAR_SEARCH_KEY) === 'on',
   // MCP is parked until the personalization system is designed (external
   // knowledge needs its own provenance surface first) — hidden AND off.

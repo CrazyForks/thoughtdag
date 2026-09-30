@@ -279,7 +279,7 @@ function JudgeRow({ onOpen }: { onOpen: () => void }) {
   const t = useT();
   const judgeCfg = useUiStore((s) => s.judge);
   const setJudge = useUiStore((s) => s.setJudge);
-  const on = judgeCfg.enabled !== false;
+  const on = judgeCfg.provider !== 'off';
   const configured = judgeConfigured(judgeCfg);
   const tripped = judgeTripped();
   const state = !on ? t('judge.stateOff') : !configured ? t('judge.stateNoApi') : tripped ? t('judge.stateTripped') : fmt(t('judge.stateOn'), { j: JUDGE_LABELS[effectiveProvider(judgeCfg)] });
@@ -293,7 +293,7 @@ function JudgeRow({ onOpen }: { onOpen: () => void }) {
             <span className="block text-2xs text-ink-faint truncate">{state}{on && !configured ? <span className="text-accent ml-1">{t('judge.goConfigure')}</span> : null}</span>
           </span>
         </button>
-        <button role="switch" aria-checked={on} onClick={(e) => { e.stopPropagation(); setJudge({ enabled: !on }); }} className={`relative w-8 h-[18px] rounded-full transition-colors shrink-0 ${on ? 'bg-accent' : 'bg-line-strong'}`} data-picker-judge-toggle>
+        <button role="switch" aria-checked={on} onClick={(e) => { e.stopPropagation(); setJudge({ provider: on ? 'off' : 'none' }); }} className={`relative w-8 h-[18px] rounded-full transition-colors shrink-0 ${on ? 'bg-accent' : 'bg-line-strong'}`} data-picker-judge-toggle>
           <span className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-3.5' : ''}`} />
         </button>
       </div>

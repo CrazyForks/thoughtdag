@@ -26,7 +26,8 @@ export interface JudgeAnswer {
   confidence?: number;
 }
 
-export type JudgeProviderId = 'none' | 'openrouter' | 'typesafe' | 'cloudflare' | 'custom' | 'llm';
+/** 'none' = whatever OpenRouter access is saved; 'off' = no judge, every decision falls back to its rule (the former switch) */
+export type JudgeProviderId = 'none' | 'openrouter' | 'typesafe' | 'cloudflare' | 'custom' | 'llm' | 'off';
 
 export interface JudgeSettings {
   /** the switch: wanted at all (on by default); a provider still has to be reachable */
@@ -56,7 +57,7 @@ export const DEFAULT_JUDGE: JudgeSettings = { enabled: true, provider: 'none', o
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '';
 
 export const JUDGE_LABELS: Record<JudgeProviderId, string> = {
-  none: '—', openrouter: 'OpenRouter · Jev', typesafe: 'TypeSafe · Jev', cloudflare: 'Cloudflare · Jev', custom: 'System One endpoint', llm: 'chat model',
+  none: '—', openrouter: 'OpenRouter · Jev', typesafe: 'TypeSafe · Jev', cloudflare: 'Cloudflare · Jev', custom: 'System One endpoint', llm: 'chat model', off: '—',
 };
 
 // ── the decisions the app asks, in one place ──
@@ -191,7 +192,7 @@ export function effectiveProvider(s: JudgeSettings = judgeSettings()): JudgeProv
 
 /** Whether a judge is configured, regardless of whether it is answering right now. */
 export function judgeConfigured(s: JudgeSettings = judgeSettings()): boolean {
-  if (s.enabled === false) return false;
+  if (s.enabled === false || s.provider === 'off') return false;
   switch (effectiveProvider(s)) {
     case 'openrouter': return !!(s.openrouterKey || storedOpenRouterKey());
     case 'typesafe': return !!s.typesafeKey;
