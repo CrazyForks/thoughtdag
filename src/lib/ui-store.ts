@@ -215,7 +215,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   toasts: [],
   confirmRequest: null,
   tutorialOpen: false,
-  webSearchEnabled: localStorage.getItem(WEB_SEARCH_KEY) !== 'off',
+  // the three per-ask permissions (web, scholar, recall) start off: an ask sends nothing anywhere but the model until the person opens a door
+  webSearchEnabled: localStorage.getItem(WEB_SEARCH_KEY) === 'on',
   recallEnabled: localStorage.getItem(RECALL_KEY) === 'on',
   ladderModel: localStorage.getItem('thoughtdag.ladderModel') || 'answering',
   setLadderModel: (id) => { localStorage.setItem('thoughtdag.ladderModel', id); set({ ladderModel: id }); },
@@ -228,7 +229,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   recallOverride: null,
   setRecallOverride: (o) => set((s) => ({ recallOverride: o === null ? null : { ...(s.recallOverride ?? {}), ...o } })),
   judge: (() => { try { const raw = localStorage.getItem(JUDGE_KEY); return raw ? { enabled: true, provider: 'none', openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '', ...JSON.parse(raw) } : { enabled: true, provider: 'none' as const, openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' }; } catch { return { enabled: true, provider: 'none' as const, openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' }; } })(),
-  scholarSearchEnabled: localStorage.getItem(SCHOLAR_SEARCH_KEY) !== 'off',
+  scholarSearchEnabled: localStorage.getItem(SCHOLAR_SEARCH_KEY) === 'on',
   // MCP is parked until the personalization system is designed (external
   // knowledge needs its own provenance surface first) — hidden AND off.
   mcpEnabled: localStorage.getItem(MCP_KEY) === 'on',
