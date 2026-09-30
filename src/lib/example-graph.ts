@@ -105,14 +105,14 @@ const CONTENT: Record<Lang, { nodes: SeedNode[] }> = {
         id: 'chain1',
         q: 'Does this "saved it, so I\'ve basically read it" illusion have a formal name?',
         a: 'Yes — it\'s usually called the **collector\'s fallacy**: collecting a resource produces an immediate sense of progress while the understanding it promises is deferred indefinitely. Research calls the extreme form **digital hoarding**: saving indiscriminately, never organizing, feeling anxious about deleting.\n\nWhat they share: **the pleasure of collecting impersonates the progress of understanding.** System 1 (fast, cheap) does the saving; System 2 (slow, costly) would have to do the reading — the save wins by default.',
-        x: 40, y: 640,
+        x: 40, y: 1000,
         extra: { highlights: [{ id: 'h-ex-1', text: "collector's fallacy" }], summaries: ["It has a name: the collector's fallacy, collecting impersonates understanding"] },
       },
       {
         id: 'branch1',
         q: 'Why does the act of collecting itself feel satisfying?',
         a: 'Because it triggers **anticipatory reward**: acquiring something "useful someday" makes the reward system fire on the **possibility**, not on any realized gain [1]. Possession becomes a psychological stand-in for learning — the material is in hand, so the knowledge feels en route.\n\nPhysical collecting kept this loop in check through physical cost; digital collecting drops the marginal cost to zero, and the loop loses its brake [2].',
-        x: 700, y: 860,
+        x: 700, y: 1220,
         extra: {
           isBranch: true, branchContext: "collector's fallacy",
           references: REFS,
@@ -123,7 +123,7 @@ const CONTENT: Record<Lang, { nodes: SeedNode[] }> = {
         id: 'evaluator',
         q: '[Reviewer] Critique the discussion above: identify overclaims, missing evidence, and unstated assumptions. Be concise.',
         a: '**Critique:** the argument silently equates "rarely reopened" with "worthless". Bookmarks also have **retrieval value**: for many items the correct use is "findable when needed", not "read cover to cover". No figure in this discussion separates the two populations.\n\n*Try asking me a follow-up. I\'m an ordinary node. The red edge slides forward as your thread grows, and I re-critique each new step on my own.*',
-        x: 700, y: 1290,
+        x: 700, y: 1650,
         extra: {
           isEvaluator: true, autoRerun: true,
           rolePrompt: 'You are a rigorous peer reviewer. Critique the reasoning above: identify overclaims, missing evidence, and unstated assumptions.',
@@ -209,7 +209,7 @@ const CONTENT: Record<Lang, { nodes: SeedNode[] }> = {
         },
       },
       // ── frames: the chapters ──
-      { id: 'frame-chain', q: '① The conversation: chain · branch · reviewer', a: '', x: 0, y: 240, w: 1290, h: 1460, extra: { stepKind: 'frame', frameColor: 'violet' } },
+      { id: 'frame-chain', q: '① The conversation: chain · branch · reviewer', a: '', x: 0, y: 240, w: 1290, h: 1820, extra: { stepKind: 'frame', frameColor: 'violet' } },
       { id: 'frame-material', q: '② Materials & wires', a: '', x: 1400, y: 0, w: 640, h: 1560, extra: { stepKind: 'frame', frameColor: 'amber' } },
       { id: 'frame-prune', q: '③ ⚖️ Prune the context', a: '', x: 2160, y: 0, w: 640, h: 1240, extra: { stepKind: 'frame', frameColor: 'sky' } },
       { id: 'frame-read', q: '④ The reading loop: paper → dialogue', a: '', x: 2920, y: 0, w: 1270, h: 1240, extra: { stepKind: 'frame', frameColor: 'green' } },
@@ -245,14 +245,14 @@ const CONTENT: Record<Lang, { nodes: SeedNode[] }> = {
         id: 'chain1',
         q: '这种「收藏了就等于读了」的错觉，有正式的名字吗？',
         a: '有，通常叫**收藏家谬误**（collector\'s fallacy）：收集一份材料带来即时的进度感，而它允诺的理解被无限期推迟。研究里更极端的形态叫**数字囤积**：无差别保存、从不整理、一删就焦虑。\n\n两者的共同点：**收集的快感冒充了理解的进度**。系统一（快、省力）负责存，系统二（慢、费力）才负责读——「存」这个动作天然获胜。',
-        x: 40, y: 640,
+        x: 40, y: 1000,
         extra: { highlights: [{ id: 'h-ex-1', text: '收藏家谬误' }], summaries: ['它有名字：收藏家谬误，收集的快感冒充理解的进度'] },
       },
       {
         id: 'branch1',
         q: '为什么收集这个动作本身就能带来满足感？',
         a: '因为它触发的是**预期奖励**：拿到一份「将来会有用」的材料时，奖励系统对**可能性**放电，而不是对实际收益放电 [1]。拥有感于是成了学习的心理代餐——材料在手，仿佛知识已在途中。\n\n实体收藏时代，这个循环被物理成本约束着；数字收藏把边际成本压到零，循环就没了刹车 [2]。',
-        x: 700, y: 860,
+        x: 700, y: 1220,
         extra: {
           isBranch: true, branchContext: '收藏家谬误',
           references: REFS,
@@ -263,7 +263,7 @@ const CONTENT: Record<Lang, { nodes: SeedNode[] }> = {
         id: 'evaluator',
         q: '[审稿人] 批评上面的讨论：指出夸大之处、缺失的证据和未言明的假设。保持简洁。',
         a: '**批评**：上面的论证把「很少打开」悄悄等同于「毫无价值」，这是未言明的假设。收藏还有**检索价值**：很多条目的正确用法本来就是「需要时找得到」，而不是「通读」。整个讨论没有任何数据区分这两类收藏各占多少。\n\n*试着追问我。我是个普通节点，红色的边会随讨论延伸自动前移，每一步新内容我都会自己重新评审。*',
-        x: 700, y: 1290,
+        x: 700, y: 1650,
         extra: {
           isEvaluator: true, autoRerun: true,
           rolePrompt: '你是一位严格的论文审稿人。批评上文的推理：指出夸大之处、缺失的证据和未言明的假设。',
@@ -349,7 +349,7 @@ const CONTENT: Record<Lang, { nodes: SeedNode[] }> = {
         },
       },
       // ── 分区框：章节 ──
-      { id: 'frame-chain', q: '① 对话：主链 · 分支 · 评审', a: '', x: 0, y: 240, w: 1290, h: 1460, extra: { stepKind: 'frame', frameColor: 'violet' } },
+      { id: 'frame-chain', q: '① 对话：主链 · 分支 · 评审', a: '', x: 0, y: 240, w: 1290, h: 1820, extra: { stepKind: 'frame', frameColor: 'violet' } },
       { id: 'frame-material', q: '② 材料与引用', a: '', x: 1400, y: 0, w: 640, h: 1560, extra: { stepKind: 'frame', frameColor: 'amber' } },
       { id: 'frame-prune', q: '③ ⚖️ 修剪上下文', a: '', x: 2160, y: 0, w: 640, h: 1240, extra: { stepKind: 'frame', frameColor: 'sky' } },
       { id: 'frame-read', q: '④ 阅读闭环：文献长成对话', a: '', x: 2920, y: 0, w: 1270, h: 1240, extra: { stepKind: 'frame', frameColor: 'green' } },
