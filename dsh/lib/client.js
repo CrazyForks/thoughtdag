@@ -33,7 +33,13 @@ window.__ModuleLoader__.load({
       }
 
       const style = document.createElement('style')
-      style.textContent = '.dsh-td-switch{position:fixed;z-index:120;top:12px;left:50%;display:flex;gap:2px;transform:translateX(-50%);border:1px solid #d1d5db;border-radius:999px;background:rgba(255,255,255,.96);padding:3px;backdrop-filter:blur(10px)}.dsh-td-switch button{height:28px;border:0;border-radius:999px;background:transparent;padding:0 11px;color:#6b7280;font:600 12px Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}.dsh-td-switch button:hover{background:#f3f4f6;color:#111827}.dsh-td-switch button.active{background:#111827;color:#fff}.dsh-td-switch[hidden]{display:none}.dsh-td-overlay{position:fixed;z-index:100;inset:0;background:#faf9f7}.dsh-td-overlay[hidden]{display:none}.dsh-td-overlay iframe{display:block;width:100%;height:100%;border:0}'
+      // The map overlay starts below the window's top strip: the desktop host
+      // publishes --dsh-frame-top-clearance on its root (48px under the
+      // hiddenInset traffic lights on macOS, the caption height on Windows,
+      // 0 in native fullscreen), so the lights, the drag strip and the
+      // sidebar controls stay where they are while the map is up (#39).
+      // A browser tab has no such variable and the overlay fills the window.
+      style.textContent = '.dsh-td-switch{position:fixed;z-index:120;top:12px;left:50%;display:flex;gap:2px;transform:translateX(-50%);border:1px solid #d1d5db;border-radius:999px;background:rgba(255,255,255,.96);padding:3px;backdrop-filter:blur(10px)}.dsh-td-switch button{height:28px;border:0;border-radius:999px;background:transparent;padding:0 11px;color:#6b7280;font:600 12px Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}.dsh-td-switch button:hover{background:#f3f4f6;color:#111827}.dsh-td-switch button.active{background:#111827;color:#fff}.dsh-td-switch[hidden]{display:none}.dsh-td-overlay{position:fixed;z-index:100;inset:var(--dsh-frame-top-clearance,0px) 0 0 0;background:#faf9f7}.dsh-td-overlay[hidden]{display:none}.dsh-td-overlay iframe{display:block;width:100%;height:100%;border:0}'
       document.head.append(style)
 
       const host = document.createElement('div')
