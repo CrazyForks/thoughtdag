@@ -40,6 +40,17 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
     // a quiet release: the 0.5.2 entry stays the announcement, this one is history only
+    version: '0.5.7',
+    date: '2026-09-30',
+    announce: false,
+    lead: {
+      zh: '安全修补：回答里的原始 HTML 先经过消毒再渲染，折叠块、上下标、键帽、高亮、表格、换行照旧，能执行脚本或嵌入外部页面的标签（iframe、object、script、style、form 等）被去掉；此前分享链接、导入的画布或模型引用的网页都能借 srcdoc 的 iframe 在本页面的源里执行代码。托管代理的模型探测只接受公网 https 地址，两处网页快照抓取共用一套地址检查并逐跳核对重定向。另外两处小修：「重跑上游已变」只跑确认框里数到的那些，牌子摘要不再参考已归档的步骤。',
+      en: 'Security: raw HTML in an answer is sanitized before rendering; folds, sub/sup, kbd, highlights, tables and line breaks stay, while tags that run scripts or embed pages (iframe, object, script, style, form and the like) are stripped. Until now a shared link, an imported canvas or a page the model quoted could run code in this origin through a srcdoc iframe. The hosted proxy\'s model probe takes public https endpoints only, and both page-snapshot fetchers share one address guard and check every redirect hop. Two small fixes: replay reruns exactly the stale nodes the dialog counts, and plaque summaries no longer read archived steps.',
+    },
+    items: [],
+  },
+  {
+    // a quiet release: the 0.5.2 entry stays the announcement, this one is history only
     version: '0.5.6',
     date: '2026-09-30',
     announce: false,
