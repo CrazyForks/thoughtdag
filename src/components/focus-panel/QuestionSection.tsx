@@ -31,7 +31,9 @@ export default function QuestionSection({
   const setEditing = useStore((s) => s.setEditing);
   const t = useT();
 
-  const [editValue, setEditValue] = useState('');
+  // the draft starts as the question itself: an edit begun on the card (its double-click sets the shared
+  // flag) opens here with the text in place; the panel remounts on every edit start (index.tsx keys it)
+  const [editValue, setEditValue] = useState(question);
 
   const handleDoubleClickQuestion = () => {
     setEditValue(question);
@@ -67,7 +69,9 @@ export default function QuestionSection({
 
   // Same contract as the card editor: click-away keeps a changed draft
   // open and never generates; only an unchanged visit closes.
-  const handleEditBlur = () => {
+  // the card edits the same question in its own box: focus passing between the two is not a click-away
+  const handleEditBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+    if (e.relatedTarget instanceof HTMLTextAreaElement) return;
     if (editValue.trim() === question) setEditing(nodeId, false);
   };
 

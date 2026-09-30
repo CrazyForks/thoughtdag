@@ -135,7 +135,7 @@ export default function FocusPanel({ onFocusNode }: { onFocusNode?: (id: string)
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5">
         <AgentSessionLine data={data} />
         <QuestionSection
-          key={`q-${selectedNodeId}`}
+          key={`q-${selectedNodeId}-${data.isEditing ? 'edit' : 'view'}`}
           nodeId={selectedNodeId!}
           question={data.question}
           isEditing={data.isEditing}

@@ -273,7 +273,9 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
   // elsewhere used to submit the half-written question. Unchanged drafts
   // close silently (the editor was opened to read); changed drafts stay
   // open and wait for an explicit Enter.
-  const handleEditBlur = () => {
+  // the side panel edits the same question in its own box: focus passing between the two is not a click-away
+  const handleEditBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+    if (e.relatedTarget instanceof HTMLTextAreaElement) return;
     if (editValue.trim() === data.question) setEditing(id, false);
   };
 
