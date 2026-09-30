@@ -183,7 +183,10 @@ export function judgeAvailable(s: JudgeSettings = judgeSettings()): boolean {
 /** The provider in effect: the chosen one, else the saved OpenRouter access when there is one. */
 export function effectiveProvider(s: JudgeSettings = judgeSettings()): JudgeProviderId {
   if (s.provider !== 'none') return s.provider;
-  return storedOpenRouterKey() ? 'openrouter' : 'none';
+  // 'none' means "whatever OpenRouter access there is": a key typed into the judge's own
+  // field counts as much as one saved with the interfaces (it used to be ignored until the
+  // provider was picked by hand, so a pasted key seemed to do nothing)
+  return s.openrouterKey || storedOpenRouterKey() ? 'openrouter' : 'none';
 }
 
 /** Whether a judge is configured, regardless of whether it is answering right now. */
