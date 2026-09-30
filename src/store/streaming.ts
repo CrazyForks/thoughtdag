@@ -278,10 +278,11 @@ export async function runNodeGeneration(
     let items = selfData?.recallItems;
     if (!items) {
       const { useProjects } = await import('./projects');
-            const out = await fetchRecallItems(question, { excludeSession: useProjects.getState().activeId, model: requestedModel });
+      const onProgress = (done: number, total: number) => { if (isCurrent()) set((state) => ({ nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, recallProgress: { done, total } } } : n)) })); };
+      const out = await fetchRecallItems(question, { excludeSession: useProjects.getState().activeId, model: requestedModel, onProgress });
       items = out.items;
       if (!isCurrent()) return;
-      set((state) => ({ nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, recallItems: out.items, recallMeta: out.meta } } : n)) }));
+      set((state) => ({ nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, recallItems: out.items, recallMeta: out.meta, recallProgress: null } } : n)) }));
       fillCards(nodeId, out.items);
     }
     const block = recallContextBlock(items);

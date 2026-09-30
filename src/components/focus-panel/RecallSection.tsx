@@ -20,14 +20,18 @@ const cardLine = (i: RecallItem): string => {
 };
 const day = (at?: string) => (at ? at.slice(5, 10) : '');
 
-export default function RecallSection({ nodeId, items, meta, recallOn }: { nodeId: string; items: RecallItem[] | undefined; meta?: RecallMeta; recallOn: boolean }) {
+export default function RecallSection({ nodeId, items, meta, recallOn, progress }: { nodeId: string; items: RecallItem[] | undefined; meta?: RecallMeta; recallOn: boolean; progress?: { done: number; total: number } | null }) {
   const t = useT();
   const [open, setOpen] = useState(true);
   const [how, setHow] = useState(false);
   const [unfolded, setUnfolded] = useState<string | null>(null);
   const [more, setMore] = useState<'idle' | 'busy' | 'none'>('idle');
   const [heldBusy, setHeldBusy] = useState(false);
-  if (!recallOn && !items?.length) return null;
+  if (!recallOn) {
+    // off: no menu; a node that still carries items from an earlier ask says so in one line
+    if (!items?.length) return null;
+    return <section className="px-4 py-2 border-b border-line text-2xs text-ink-faint" data-recall-section data-recall-off>{fmt(t('panel.recallOffHint'), { n: items.length })}</section>;
+  }
   const loadMore = async () => {
     setMore('busy');
     try { const n = await recallMore(nodeId); setMore(n === 0 ? 'none' : 'idle'); } catch { setMore('idle'); }
@@ -55,7 +59,7 @@ export default function RecallSection({ nodeId, items, meta, recallOn }: { nodeI
       </button>
       {open && (
         <div className="mt-2 space-y-1.5">
-          {!items && <p className="text-2xs text-ink-faint italic">{t('panel.recallEmpty')}</p>}
+          {!items && <p className="text-2xs text-ink-faint italic" data-recall-progress={progress ? `${progress.done}/${progress.total}` : undefined}>{progress ? fmt(t('panel.recallJudging'), { done: progress.done, total: progress.total }) : t('panel.recallEmpty')}</p>}
           {items && items.length === 0 && <p className="text-2xs text-ink-faint italic">{t('panel.recallNone')}</p>}
           {items && items.length > 0 && <p className="text-2xs text-ink-muted" data-recall-lead>{leadParts.length ? fmt(t('panel.recallLead'), { what: leadParts.join(t('panel.recallLeadJoin')) }) : t('panel.recallAllOff')}</p>}
           {(items ?? []).map((i) => (
@@ -111,6 +115,7 @@ export default function RecallSection({ nodeId, items, meta, recallOn }: { nodeI
                 </div>
               )}
               {meta.budget ? <div className="flex items-center gap-2 flex-wrap">{fmt(t('panel.recallUsed'), { b: meta.budget, u: total })}<RecallScaleSelect /></div> : null}
+              {meta.reach && <div>{fmt(t('panel.recallReach'), { r: t(meta.reach === 'light' ? 'recall.reachLight' : meta.reach === 'deep' ? 'recall.reachDeep' : 'recall.reachFull') })}</div>}
               {meta.judge && <div>{fmt(t('panel.recallJudge'), { j: JUDGE_LABELS[meta.judge.provider as JudgeProviderId] ?? meta.judge.provider })} · {t(meta.judge.calibrated ? 'judge.calibrated' : 'judge.uncalibrated')}</div>}
               {meta.judgeError && <div className="text-amber-600">{fmt(t('panel.recallJudgeFailed'), { e: meta.judgeError })}</div>}
             </div>

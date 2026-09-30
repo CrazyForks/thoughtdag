@@ -62,6 +62,7 @@ contextBridge.exposeInMainWorld('desktopAgents', {
 contextBridge.exposeInMainWorld('desktopWhy', {
   status: () => ipcRenderer.invoke('why:status'),
   find: (phrase, opts) => ipcRenderer.invoke('why:find', phrase, opts),
+  turns: (opts) => ipcRenderer.invoke('why:turns', opts),
   recall: (session, turn) => ipcRenderer.invoke('why:recall', session, turn),
   memories: () => ipcRenderer.invoke('why:memories'),
   suggest: (term, k) => ipcRenderer.invoke('why:suggest', term, k),

@@ -152,6 +152,8 @@ interface WhyFindHit {
   open: string;
 }
 interface WhyFindResult { phrase: string; turns: number; sessions: number; hits: WhyFindHit[] }
+/** One turn as a full-reach recall sees it: the head of its question and answer, no phrase needed. */
+interface WhyTurnHead { kind: 'turn' | 'memory'; session: string; runner: WhyFindHit['runner']; title: string; cwd: string; file: string; turn: number; at: string | null; q: string; a: string; open: string }
 /** One turn (or memory entry) in full. */
 interface WhyRecalledTurn {
   kind: 'turn' | 'memory';
@@ -170,6 +172,8 @@ interface WhyMemoryFile { id: string; runner: WhyFindHit['runner']; file: string
 interface DesktopWhyBridge {
   status(): Promise<{ available: boolean; home?: string; error?: string }>;
   find(phrase: string, opts?: { scope?: 'q' | 'a' | 'm' | 'all'; limit?: number; cwd?: string }): Promise<WhyFindResult>;
+  /** every turn the index knows, newest first (limit 0 = the count alone) */
+  turns(opts?: { offset?: number; limit?: number; head?: number }): Promise<{ total: number; turns: WhyTurnHead[] }>;
   recall(session: string, turn: number): Promise<WhyRecalledTurn>;
   memories(): Promise<WhyMemoryFile[]>;
   /** near words from the indexed text for a mistyped term */

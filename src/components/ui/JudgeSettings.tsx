@@ -4,6 +4,7 @@ import { useUiStore } from '../../lib/ui-store';
 import { judgeSelfTest, storedOpenRouterKey, judgeConfigured, judgeTripped, effectiveProvider, type JudgeProviderId, type JudgeResult } from '../../lib/judge';
 import { useT, fmt } from '../../i18n';
 import RecallScaleSelect from './RecallScaleSelect';
+import RecallReachSelect from './RecallReachSelect';
 
 // The decision model (the judge), configured where the other keys are.
 // One switch with what it buys; when on, the app looks for a way to reach
@@ -118,6 +119,7 @@ export default function JudgeSettings() {
       <div className="mt-2 pt-2 border-t border-line/70 flex items-center gap-3 flex-wrap">
         <span className="text-2xs text-ink-faint">{t('recall.scaleLead')}</span>
         <RecallScaleSelect />
+        {configured && <RecallReachSelect />}
       </div>
     </div>
   );

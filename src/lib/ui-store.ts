@@ -53,6 +53,9 @@ interface UiState {
   /** how much recall may bring in: a share of the answering model's window (input tokens), lean / standard / generous */
   recallScale: 'lean' | 'standard' | 'generous';
   setRecallScale: (s: 'lean' | 'standard' | 'generous') => void;
+  /** how far a judged recall reaches: 40 hits read in full, 2,000 hits by their heads, or every turn */
+  recallReach: 'light' | 'deep' | 'full';
+  setRecallReach: (r: 'light' | 'deep' | 'full') => void;
   /** how many items one recall brings in, and the token budget they share */
   /** the judge (a System One decision endpoint) recall and other judgements may ask */
   judge: import('./judge').JudgeSettings;
@@ -125,6 +128,9 @@ interface UiState {
   /** inside the harness: a newer plugin on the registry than the one running */
   pluginUpdate: { current: string; latest: string } | null;
   setPluginUpdate: (u: { current: string; latest: string } | null) => void;
+  /** inside the harness: whether the host shows its title band over the map (its own 对话|思维图 switch), and whether it is the desktop app */
+  harnessHost: { bar: boolean; desktop: boolean } | null;
+  setHarnessHost: (h: { bar: boolean; desktop: boolean } | null) => void;
   highlightsOverviewOpen: boolean;
   setHighlightsOverviewOpen: (open: boolean) => void;
   materialsOverviewOpen: boolean;
@@ -214,6 +220,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   setLadderJob: (job) => set((st) => ({ ladderJob: typeof job === 'function' ? job(st.ladderJob) : job })),
   recallScale: ((): 'lean' | 'standard' | 'generous' => { const v = localStorage.getItem('thoughtdag.recallScale'); return v === 'lean' || v === 'generous' ? v : 'standard'; })(),
   setRecallScale: (s) => { localStorage.setItem('thoughtdag.recallScale', s); set({ recallScale: s }); },
+  recallReach: ((): 'light' | 'deep' | 'full' => { const v = localStorage.getItem('thoughtdag.recallReach'); return v === 'deep' || v === 'full' ? v : 'light'; })(),
+  setRecallReach: (r) => { localStorage.setItem('thoughtdag.recallReach', r); set({ recallReach: r }); },
   judge: (() => { try { const raw = localStorage.getItem(JUDGE_KEY); return raw ? { enabled: true, provider: 'none', openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '', ...JSON.parse(raw) } : { enabled: true, provider: 'none' as const, openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' }; } catch { return { enabled: true, provider: 'none' as const, openrouterKey: '', typesafeKey: '', cloudflareAccount: '', cloudflareToken: '', customUrl: '', customKey: '' }; } })(),
   scholarSearchEnabled: localStorage.getItem(SCHOLAR_SEARCH_KEY) !== 'off',
   // MCP is parked until the personalization system is designed (external
@@ -320,6 +328,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   setReleaseNotesOpen: (open) => set({ releaseNotesOpen: open }),
   pluginUpdate: null,
   setPluginUpdate: (u) => set({ pluginUpdate: u }),
+  harnessHost: null,
+  setHarnessHost: (h) => set({ harnessHost: h }),
   apiKeyModalOpen: false,
   apiKeyModalSection: 'providers',
   setApiKeyModalOpen: (open, section) => set({ apiKeyModalOpen: open, apiKeyModalSection: open ? (section ?? 'providers') : 'providers' }),

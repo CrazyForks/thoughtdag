@@ -1102,6 +1102,47 @@ async function findJson(phrase: string, opts: { scope?: 'q' | 'a' | 'm' | 'all';
   };
 }
 
+/** Every turn (and memory entry) the index knows, newest first, with the head of its question and
+ *  answer: what a full-reach recall hands the judge, since find's snippets exist only around a phrase.
+ *  `total` counts them all; `offset`/`limit` page; `head` is the characters kept of each field. */
+interface TurnHeadJson { kind: 'turn' | 'memory'; session: string; runner: FactSession['runner']; title: string; cwd: string; file: string; turn: number; at: string | null; q: string; a: string; open: string }
+async function turnsJson(opts: { offset?: number; limit?: number; head?: number } = {}): Promise<{ total: number; turns: TurnHeadJson[] }> {
+  // the count alone comes from the text manifest, at once (the line file is a hundred megabytes on a big index)
+  if (opts.limit === 0) { const text = await loadText(); return { total: Object.values(text.sessions).reduce((a, b) => a + b, 0), turns: [] }; }
+  const facts = await ensureFresh();
+  const head = Math.max(40, Math.min(1000, opts.head ?? 300));
+  const turnsOf = new Map<string, Map<number, FactTurn>>();
+  const lookup = (k: string, i: number): FactTurn | undefined => {
+    let m = turnsOf.get(k);
+    if (!m) { m = new Map(facts.sessions[k]?.turns.map((t) => [t.i, t]) ?? []); turnsOf.set(k, m); }
+    return m.get(i);
+  };
+  const clipHead = (text: string | undefined): string => (text ?? '').replace(/\s+/g, ' ').trim().slice(0, head);
+  const raw: { session: FactSession; sourceKey: string; turn: FactTurn; q: string; a: string; kind: 'turn' | 'memory' }[] = [];
+  let lines: ReturnType<typeof createInterface> | null = null;
+  try { await fsp.access(TEXT_LINES); lines = createInterface({ input: createReadStream(TEXT_LINES, { encoding: 'utf8', highWaterMark: 1 << 20 }) }); } catch { return { total: 0, turns: [] }; }
+  for await (const line of lines) {
+    let t: TextLine;
+    try { t = JSON.parse(line) as TextLine; } catch { continue; }
+    const session = facts.sessions[t.k]; const turn = lookup(t.k, t.i);
+    if (!session || !turn) continue;
+    const memory = session.kind === 'memory';
+    raw.push({ session, sourceKey: t.k, turn, q: memory ? '' : clipHead(t.q), a: clipHead(memory ? t.m : t.a), kind: memory ? 'memory' : 'turn' });
+  }
+  // a replayed turn counts once, credited to the session that first recorded it
+  const seen = new Set<string>(); const all: typeof raw = [];
+  for (const h of raw.sort((a, b) => a.session.mtime - b.session.mtime)) {
+    if (h.turn.item) { if (seen.has(h.turn.item)) continue; seen.add(h.turn.item); }
+    all.push(h);
+  }
+  all.sort((a, b) => (b.turn.at ?? '').localeCompare(a.turn.at ?? ''));
+  const offset = Math.max(0, opts.offset ?? 0); const limit = Math.max(0, opts.limit ?? all.length);
+  return {
+    total: all.length,
+    turns: all.slice(offset, offset + limit).map((h) => ({ kind: h.kind, session: h.session.id, runner: h.session.runner, title: h.session.title, cwd: h.turn.cwd ?? h.session.cwd, file: h.session.file, turn: turnNumber(facts, h), at: h.turn.at ?? null, q: h.q, a: h.a, open: openLink(h) })),
+  };
+}
+
 /** recall, as data. */
 async function recallJson(session: string, n: number): Promise<RecalledTurn> {
   return recallTurn(await ensureFresh(), session, n);
@@ -1525,6 +1566,7 @@ export {
   renderRecall,
   recallTurn,
   findJson,
+  turnsJson,
   recallJson,
   memoriesJson,
   suggestJson,

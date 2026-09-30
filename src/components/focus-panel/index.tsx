@@ -167,7 +167,7 @@ export default function FocusPanel({ onFocusNode }: { onFocusNode?: (id: string)
           getInheritedAttachments={getInheritedAttachments}
         />
 
-        <RecallSection nodeId={selectedNodeId!} items={data.recallItems} meta={data.recallMeta} recallOn={data.recall ?? recallEnabled} />
+        <RecallSection nodeId={selectedNodeId!} items={data.recallItems} meta={data.recallMeta} recallOn={data.recall ?? recallEnabled} progress={data.recallProgress} />
         <RelatedSection key={`rel-${selectedNodeId}`} question={data.question} answer={data.response ?? ''} />
 
         <HighlightsSection

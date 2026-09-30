@@ -124,12 +124,31 @@ export interface RecallOptions {
   budget?: number;
   /** the answering model: its window sets the budget (a fifth of it, capped) */
   model?: string;
+  /** a wide recall reports the judge's progress here */
+  onProgress?: (done: number, total: number) => void;
 }
 export interface RecallOutcome { items: RecallItem[]; meta: RecallMeta }
 
 /** How many candidates are read in full: with a judge, enough to rank. */
 export const RECALL_POOL = 16;
 export const RECALL_POOL_JUDGED = 40;
+/** How far a judged recall reaches, i.e. the pool the judge sees. Light ranks the 40 best keyword
+ *  hits, each read in full; deep judges the heads of 2,000 hits and reads the ones that pass;
+ *  full judges the head of every turn the index knows, keywords or not (timed and priced by the
+ *  index: eight batches in flight, one judge call per forty). Without a judge only light runs. */
+export type RecallReach = 'light' | 'deep' | 'full';
+export const RECALL_REACH: Record<RecallReach, { pool: number }> = { light: { pool: RECALL_POOL_JUDGED }, deep: { pool: 2000 }, full: { pool: Infinity } };
+const reachOf = (): RecallReach => useUiStore.getState().recallReach ?? 'light';
+const JUDGE_BATCH = 40;
+const JUDGE_PARALLEL = 8;
+const JUDGE_BATCH_TIMEOUT_MS = 30_000;
+/** of a wide pool, how many passing candidates are read in full (the budget then decides what comes in) */
+const WIDE_READ_MAX = 80;
+/** measured 2026-09: ~1.5 s a round of eight batches, ~$0.0007 a batch on the calibrated judge */
+export function reachEstimate(total: number): { seconds: number; dollars: number } {
+  const batches = Math.ceil(total / JUDGE_BATCH);
+  return { seconds: Math.ceil(batches / JUDGE_PARALLEL) * 1.5, dollars: batches * 0.0007 };
+}
 /** With a judge, what comes in is decided by probability, not count: at or
  *  above KEEP it comes in (budget permitting); between HOLD and KEEP it is
  *  listed as held back, one click away; below HOLD it is dropped. */
@@ -189,8 +208,12 @@ export async function fetchRecallItems(question: string, opts: RecallOptions = {
   const judged = judgeAvailable();
   const limit = opts.limit ?? (judged ? Infinity : scale().cap);
   const budget = opts.budget ?? judgedBudget(opts.model);
-  const poolSize = judged ? RECALL_POOL_JUDGED : RECALL_POOL;
+  const reach: RecallReach = judged ? reachOf() : 'light';
+  const poolSize = judged ? RECALL_REACH[reach].pool : RECALL_POOL;
+  // find takes a number: a full reach lists every turn below, the finds only mark matched terms
+  const findLimit = Number.isFinite(poolSize) ? poolSize : 100_000;
   meta.budget = budget;
+  if (judged) meta.reach = reach;
   const terms = recallTerms(question);
   // which topics the question is about: the judge decides; without one, a topic named in the question
   const table = await bridge.topics().catch(() => null);
@@ -233,9 +256,9 @@ export async function fetchRecallItems(question: string, opts: RecallOptions = {
   }
   if (!meta.judgeError && judged && !judgeAvailable()) meta.judgeError = judgeTripped()?.note ?? t('judge.timeout');
   if (!terms.length) return { items, meta };
-  const found = new Map<string, { hit: WhyFindHit; matched: string[]; topics: string[] }>();
+  const found = new Map<string, { hit: WhyFindHit; matched: string[]; topics: string[]; head?: string }>();
   let total = 0;
-  const admit = (h: WhyFindHit): { hit: WhyFindHit; matched: string[]; topics: string[] } | null => {
+  const admit = (h: WhyFindHit): { hit: WhyFindHit; matched: string[]; topics: string[]; head?: string } | null => {
     if (opts.excludeSession && h.runner === 'thoughtdag' && h.session === opts.excludeSession) return null;
     const k = keyOf(h);
     if (opts.excludeKeys?.has(k)) return null;
@@ -249,10 +272,10 @@ export async function fetchRecallItems(question: string, opts: RecallOptions = {
   };
   // with a labelled topic table, the question is also matched by what it is about
   const byTopic = about.length && table?.labeled
-    ? bridge.byTopic(about.map((a) => a.id), { limit: Math.floor(poolSize / 2) }).then((r) => ({ about, hits: r.hits })).catch(() => null)
+    ? bridge.byTopic(about.map((a) => a.id), { limit: Math.floor(findLimit / 2) }).then((r) => ({ about, hits: r.hits })).catch(() => null)
     : Promise.resolve(null);
   for (const term of terms) {
-    const r = await bridge.find(term, { limit: poolSize }).catch(() => null);
+    const r = await bridge.find(term, { limit: findLimit }).catch(() => null);
     if (!r) continue;
     if (r.turns > 0) gather(r, term);
     // no hits, or a rare spelling next to a frequent near word: search what was meant too
@@ -260,7 +283,7 @@ export async function fetchRecallItems(question: string, opts: RecallOptions = {
       const fix = await correctTerm(bridge, term);
       if (!fix) continue;
       meta.corrections.push({ from: term, to: fix.to, ...(fix.p !== undefined ? { p: fix.p } : {}) });
-      const rr = await bridge.find(fix.to, { limit: poolSize }).catch(() => null);
+      const rr = await bridge.find(fix.to, { limit: findLimit }).catch(() => null);
       if (rr) gather(rr, fix.to);
     }
   }
@@ -269,13 +292,60 @@ export async function fetchRecallItems(question: string, opts: RecallOptions = {
     const names = new Map(topical.about.map((a) => [a.id, a.name]));
     for (const h of topical.hits) { const cur = admit(h); if (cur) cur.topics = Object.keys(h.topics).map((id) => names.get(id) ?? id); }
   }
+  // a full reach: every turn the index knows joins the pool, its question and answer heads as its text
+  if (reach === 'full') {
+    const all = await bridge.turns({ head: 300 }).catch(() => null);
+    if (all) {
+      total = Math.max(total, all.total);
+      for (const u of all.turns) {
+        const cur = admit({ kind: u.kind, session: u.session, runner: u.runner, title: u.title, cwd: u.cwd, file: u.file, turn: u.turn, at: u.at, where: 'Q', snippet: `${u.q} ${u.a}`.trim().slice(0, 200), open: u.open });
+        if (cur) cur.head = `${u.q}\n${u.a}`.trim();
+      }
+    }
+  }
   meta.total = total;
   // more matching terms (a topic counts as one) first, then newest; the pool is what gets read in full
   const weight = (c: { matched: string[]; topics: string[] }) => c.matched.length + (c.topics.length ? 1 : 0);
   const ranked = [...found.values()].sort((a, b) => weight(b) - weight(a) || (b.hit.at ?? '').localeCompare(a.hit.at ?? '')).slice(0, poolSize);
   meta.pool = ranked.length;
+  type PoolItem = { hit: WhyFindHit; matched: string[]; topics: string[]; rec: WhyRecalledTurn; text: string; relevance: number | undefined };
+  let pool: PoolItem[] = [];
+  if (reach !== 'light' && judgeAvailable() && ranked.length > RECALL_POOL_JUDGED) {
+    // a wide pool: the judge reads heads in batches, several in flight, and only what passes is read in full
+    opts.onProgress?.(0, ranked.length);
+    const rel = new Map<number, number>();
+    const batches: number[][] = [];
+    for (let i = 0; i < ranked.length; i += JUDGE_BATCH) batches.push(ranked.slice(i, i + JUDGE_BATCH).map((_, k) => i + k));
+    let done = 0; let failed = 0; let judgeMeta: RecallMeta['judge'] | undefined;
+    const runBatch = async (idx: number[]) => {
+      const excerpts: Record<string, string> = {};
+      const questions: Record<string, JudgeQuestion> = {};
+      for (const i of idx) {
+        const c = ranked[i];
+        excerpts[`e${i}`] = `${c.hit.title ? c.hit.title + '\n' : ''}${c.head ?? c.hit.snippet}`.slice(0, 700);
+        questions[`e${i}`] = { type: 'noul', instructions: `Does the past excerpt \`excerpts.e${i}\` bear on the question in \`question\`, so that it would help answer it?` };
+      }
+      try {
+        const r = await judge({ question, excerpts }, questions, { timeoutMs: JUDGE_BATCH_TIMEOUT_MS, force: true });
+        for (const i of idx) { const p = r.answers[`e${i}`]?.noul; if (typeof p === 'number') rel.set(i, p); }
+        judgeMeta ??= { provider: r.provider, model: r.model, calibrated: r.calibrated };
+      } catch { failed++; }
+      done += idx.length; opts.onProgress?.(done, ranked.length);
+    };
+    let next = 0;
+    await Promise.all(Array.from({ length: Math.min(JUDGE_PARALLEL, batches.length) }, async () => { while (next < batches.length) await runBatch(batches[next++]); }));
+    if (judgeMeta) meta.judge = judgeMeta;
+    if (failed) meta.judgeError = `${failed}/${batches.length} judge batches did not answer`;
+    const scored = ranked.map((c, i) => ({ c, p: rel.get(i) })).filter((x): x is { c: typeof ranked[number]; p: number } => x.p !== undefined);
+    const keep = scored.filter((x) => x.p >= RELEVANCE_KEEP).sort((a, b) => b.p - a.p || weight(b.c) - weight(a.c));
+    const held = scored.filter((x) => x.p >= RELEVANCE_HOLD && x.p < RELEVANCE_KEEP).sort((a, b) => b.p - a.p);
+    meta.dropped = scored.length - keep.length - held.length;
+    meta.heldBack = held.map((x) => ({ session: x.c.hit.session, turn: x.c.hit.turn, relevance: x.p, open: x.c.hit.open }));
+    const recs = await Promise.all(keep.slice(0, WIDE_READ_MAX).map(async (x) => ({ hit: x.c.hit, matched: x.c.matched, topics: x.c.topics, relevance: x.p as number | undefined, rec: await bridge.recall(x.c.hit.session, x.c.hit.turn).catch(() => null) })));
+    pool = recs.filter((x): x is typeof x & { rec: WhyRecalledTurn } => !!x.rec).map((x) => ({ ...x, text: clip(recalledMarkdown(x.rec), ITEM_CAP_CHARS) }));
+  } else {
   const recalled = await Promise.all(ranked.map(async ({ hit, matched, topics }) => ({ hit, matched, topics, rec: await bridge.recall(hit.session, hit.turn).catch(() => null) })));
-  let pool = recalled.filter((x): x is typeof x & { rec: WhyRecalledTurn } => !!x.rec).map((x) => ({ ...x, text: clip(recalledMarkdown(x.rec), ITEM_CAP_CHARS), relevance: undefined as number | undefined }));
+  pool = recalled.filter((x): x is typeof x & { rec: WhyRecalledTurn } => !!x.rec).map((x) => ({ ...x, text: clip(recalledMarkdown(x.rec), ITEM_CAP_CHARS), relevance: undefined as number | undefined }));
   if (pool.length && judgeAvailable()) {
     try {
       const excerpts: Record<string, string> = {};
@@ -295,6 +365,7 @@ export async function fetchRecallItems(question: string, opts: RecallOptions = {
     } catch (e) {
       meta.judgeError = e instanceof Error ? e.message : String(e);
     }
+  }
   }
   // a card, when one exists, is what the model reads and what the budget counts
   const cards = await Promise.all(pool.map((c) => cachedCard(c.rec.session, c.rec.turn)));

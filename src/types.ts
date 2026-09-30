@@ -150,6 +150,8 @@ export interface RecallMeta {
   detail?: number;
   /** the dossiers brought in, by topic name */
   dossiers?: string[];
+  /** how far the search reached: the pool the judge saw was the 40 best hits, 2,000 hits, or every turn */
+  reach?: 'light' | 'deep' | 'full';
 }
 
 export interface AgentTraceEntry {
@@ -202,6 +204,8 @@ export interface ThoughtData extends Record<string, unknown> {
   /** what recall brought in for this node: listed, priced, removable; reused as they stand on a rerun */
   recallItems?: RecallItem[];
   recallMeta?: RecallMeta;
+  /** while a wide recall is being judged: how many candidates the judge has seen */
+  recallProgress?: { done: number; total: number } | null;
   autoRerun?: boolean; // regenerate in place whenever an upstream ancestor finishes (generic primitive)
   /** Transient: a regeneration is streaming and data.response still holds
       the OLD text (cleared on the first new chunk) — display shows the live

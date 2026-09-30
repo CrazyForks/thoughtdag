@@ -824,6 +824,7 @@ function setupAgents() {
     catch (e) { return { available: false, error: e instanceof Error ? e.message : String(e) }; }
   });
   ipcMain.handle('why:find', async (_e, phrase, opts) => (await whyLib()).findJson(String(phrase ?? ''), opts && typeof opts === 'object' ? opts : {}));
+  ipcMain.handle('why:turns', async (_e, opts) => (await whyLib()).turnsJson(opts && typeof opts === 'object' ? opts : {}));
   ipcMain.handle('why:recall', async (_e, session, turn) => (await whyLib()).recallJson(String(session ?? ''), Number(turn)));
   ipcMain.handle('why:memories', async () => (await whyLib()).memoriesJson());
   ipcMain.handle('why:suggest', async (_e, term, k) => (await whyLib()).suggestJson(String(term ?? ''), Number(k) || 8));

@@ -1,4 +1,4 @@
-import { Globe, GraduationCap, History } from 'lucide-react';
+import { Globe, GraduationCap } from 'lucide-react';
 import { hasWhy } from '../../lib/why-bridge';
 import { useUiStore } from '../../lib/ui-store';
 import { useModels } from '../../lib/use-models';
@@ -64,16 +64,25 @@ export default function SearchToggles({ size = 16 }: { size?: number }) {
         <GraduationCap size={size} strokeWidth={1.75} />
       </button>
       {recallAvailable && (
-        <button
-          type="button"
-          onClick={() => setRecall(!recall)}
-          title={recall ? t('toolbar.recall') : t('toolbar.recallOff')}
-          className={`transition-colors shrink-0 rounded-full w-8 h-8 flex items-center justify-center ${recall ? 'text-accent bg-accent/15 ring-1 ring-accent/40 hover:bg-accent/25' : 'text-ink-muted opacity-50 hover:opacity-90 hover:bg-line'}`}
-          data-recall-toggle
-          aria-pressed={recall}
-        >
-          <History size={size} strokeWidth={1.75} />
-        </button>
+        // recall is a switch, not a third search icon: a track and a knob, its
+        // name beside it, set apart from the two searches by a hairline
+        <>
+          <span className="w-px h-4 bg-line mx-0.5 shrink-0" aria-hidden />
+          <button
+            type="button"
+            role="switch"
+            aria-checked={recall}
+            onClick={() => setRecall(!recall)}
+            title={recall ? t('toolbar.recall') : t('toolbar.recallOff')}
+            className="shrink-0 h-8 pl-0.5 pr-2 rounded-full flex items-center gap-1.5 hover:bg-wash transition-colors"
+            data-recall-toggle
+          >
+            <span className={`relative w-9 h-5 rounded-full transition-colors ${recall ? 'bg-accent' : 'bg-line-strong'}`}>
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${recall ? 'translate-x-4' : ''}`} />
+            </span>
+            <span className={`text-2xs font-medium ${recall ? 'text-accent' : 'text-ink-muted'}`}>{t('toolbar.recallLabel')}</span>
+          </button>
+        </>
       )}
     </>
   );

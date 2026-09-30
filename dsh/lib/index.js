@@ -1014,6 +1014,7 @@ export async function apply(ctx, config) {
           const cwd = url.searchParams.get('cwd') ?? undefined
           return sendJson(res, 200, await whyLib.findJson(phrase, { scope, limit, ...(cwd ? { cwd } : {}) }))
         }
+        if (path === '/why/turns') return sendJson(res, 200, await whyLib.turnsJson({ offset: Number(url.searchParams.get('offset') ?? 0) || 0, ...(url.searchParams.get('limit') === null ? {} : { limit: Number(url.searchParams.get('limit')) || 0 }), head: Number(url.searchParams.get('head') ?? 300) || 300 }))
         if (path === '/why/recall') {
           try { return sendJson(res, 200, await whyLib.recallJson(url.searchParams.get('session') ?? '', Number(url.searchParams.get('turn') ?? 0))) }
           catch (e) { return sendJson(res, 404, { error: e instanceof Error ? e.message : String(e) }) }
