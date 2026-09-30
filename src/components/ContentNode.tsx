@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Handle, NodeResizeControl, Position, useReactFlow, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import { BookOpen, ExternalLink, FileText, Link2, Link2Off, Loader2, MoveDiagonal2, Paperclip, RefreshCw, StickyNote, Trash2, X } from 'lucide-react';
 import type { ThoughtNode as ThoughtNodeType } from '../types';
@@ -9,6 +9,9 @@ import { triggerParadigmCascade } from '../store/streaming';
 import { extractImage, fetchLinkIntoNode, ingestFiles } from '../lib/content';
 import { FILE_INPUT_ACCEPT } from '../lib/attachments';
 import { Markdown } from './Markdown';
+import ZoomText from './ZoomText';
+import { useLocalLadder } from '../lib/local-ladder-cache';
+import { usePlaqueClip } from '../lib/use-plaque-clip';
 import { countTokens } from '../utils';
 import { useT, fmt } from '../i18n';
 import { isViewerMode } from '../lib/viewer';
@@ -97,6 +100,21 @@ export default function ContentNode({ id, data, selected }: NodeProps<ThoughtNod
       ? <Link2 size={14} strokeWidth={1.75} className="text-accent shrink-0" />
       : <Paperclip size={14} strokeWidth={1.75} className="text-ink-muted shrink-0" />;
 
+  // Map tier: material reads like a turn — its title as the eyebrow, its own text on the zoom
+  // ladder (a note's body, a document's extracted text or digest, a link's snapshot), built
+  // locally like an older turn's. The card keeps its footprint; text past it fades.
+  const noteHead = kind === 'note' ? data.question.match(/^\s*#+\s*([^\n]+)\n?/) : null;
+  const contentTitle = kind === 'file' ? (attachments[0]?.name ?? '') : kind === 'link' ? (data.linkTitle || data.linkUrl || '') : (noteHead?.[1] ?? '').trim();
+  const contentBody = useMemo(() => {
+    if (kind === 'note') return noteHead ? data.question.slice(noteHead[0].length) : data.question;
+    if (kind === 'file') return attachments[0]?.extractedText || attachments[0]?.digest || '';
+    return data.question;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the exact fields read
+  }, [kind, data.question, attachments]);
+  const ladder = useLocalLadder(zoomedOut && !glyphTier && !!contentBody, id, contentTitle || data.question, contentBody, null, null);
+  const plaqueLine = useRef<HTMLDivElement>(null);
+  usePlaqueClip(plaqueLine, zoomedOut && !glyphTier && !!ladder, 0, ladder);
+
   if (glyphTier) {
     // Glyph tier: material collapses to its own icon — a note, a document,
     // a link. The footprint stays (edge anchors must not shift); only the
@@ -120,6 +138,32 @@ export default function ContentNode({ id, data, selected }: NodeProps<ThoughtNod
         {/* reader-grown branches leave through this handle — without it,
             React Flow drops those edges entirely at glyph zoom */}
         <Handle type="source" position={Position.Right} id="branch" isConnectable={false} className="!bg-transparent !w-0 !h-0 !border-0 !pointer-events-none" style={{ top: '50%', left: 'calc(50% + 56px)', right: 'auto' }} />
+      </div>
+    );
+  }
+
+  if (zoomedOut && ladder) {
+    return (
+      <div
+        className={`content-card w-full h-full min-w-[340px] flex flex-col rounded-[26px] shadow-sm border-[3px] overflow-hidden animate-fade-in ${
+          kind === 'note' ? 'bg-amber-50/90 border-amber-200' : 'bg-card border-line'
+        } ${selectedNodeId === id ? 'ring-2 ring-accent selected-glow' : ''}`}
+        onClick={() => setSelectedNodeId(id)}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          if (kind === 'file' || kind === 'link') useUiStore.getState().setReaderNodeId(id);
+          else rf.setCenter((nodePos?.x ?? 0) + 200, (nodePos?.y ?? 0) + 120, { zoom: 1, duration: 300 });
+        }}
+        data-content-plaque={kind}
+      >
+        <div className="drag-handle cursor-grab active:cursor-grabbing px-6 py-5 flex flex-col flex-1 min-h-0">
+          <div className="text-lg text-ink-muted leading-snug line-clamp-2 shrink-0 flex items-center gap-2">
+            {headerIcon}<span className="min-w-0 truncate">{contentTitle || t(kind === 'file' ? 'glyph.file' : kind === 'link' ? 'glyph.link' : 'glyph.note')}</span>
+          </div>
+          <div ref={plaqueLine} className="mt-1.5 min-h-0 shrink overflow-hidden" data-plaque-line><ZoomText ladder={ladder} /></div>
+        </div>
+        <Handle type="source" position={Position.Bottom} id="continue" className="!bg-ink-faint !border-2 !border-white tdag-handle !w-6 !h-6 tdag-handle-lg" />
+        <Handle type="source" position={Position.Right} id="branch" isConnectable={false} className="!bg-transparent !w-0 !h-0 !border-0 !pointer-events-none" style={{ top: '50%' }} />
       </div>
     );
   }

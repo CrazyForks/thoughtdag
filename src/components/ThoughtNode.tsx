@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo, useLayoutEffect, type RefObject } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { describeModel } from '../lib/use-models';
 import { toolFingerprint, turnComposition, footprint, conclusionOf } from '../lib/turn-insight';
 import { Handle, Position, useReactFlow, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
@@ -28,6 +28,7 @@ import { useLocalLadder } from '../lib/local-ladder-cache';
 import { estimateNodeHeight } from '../lib/layout';
 import { COLLAPSED_LAYOUT_HEIGHT, LAYOUT_V_GAP } from '../lib/constants';
 import { levelText } from '../lib/ladder-core';
+import { usePlaqueClip } from '../lib/use-plaque-clip';
 import { ApprovalCard } from './ui/ApprovalCard';
 import { AgentTrace } from './ui/AgentTrace';
 import { SquareTerminal } from 'lucide-react';
@@ -35,23 +36,6 @@ import { useT, fmt } from '../i18n';
 import MentionSurface from './ui/NodeMention';
 import { useMentions } from '../lib/mentions';
 import { isViewerMode } from '../lib/viewer';
-
-// The map plaque never outgrows the footprint the layout reserved for the
-// node (a folded node's 240px slot plus half a gap; an open card its own
-// estimated height): the ladder's abstract at 22px runs far past a folded
-// strip, and that overrun was every map-zoom overlap. Text past the cap is
-// clipped under a fade, and one zoom step in shows the rest.
-function usePlaqueClip(ref: RefObject<HTMLDivElement | null>, live: boolean, cap: number, ladder: unknown): void {
-  useLayoutEffect(() => {
-    const wrap = ref.current; const host = wrap?.firstElementChild as HTMLElement | null;
-    if (!live || !wrap || !host) return;
-    // a DOM mark, not state: the fade is a paint detail the layout never reads
-    const check = () => { if (host.offsetHeight > wrap.clientHeight + 1) wrap.dataset.clipped = ''; else delete wrap.dataset.clipped; };
-    check();
-    const ro = new ResizeObserver(check); ro.observe(host); ro.observe(wrap);
-    return () => { ro.disconnect(); delete wrap.dataset.clipped; };
-  }, [ref, live, cap, ladder]);
-}
 
 export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
   // Actions are stable references: selecting them one by one (instead of a

@@ -18,8 +18,9 @@ export const LEVEL_FONT: Record<LadderLevel, number> = { 0: 72, 1: 48, 2: 30, 3:
 export const HANDOFF_PX = 15;
 export const HANDOFF_HYST = 1.2;
 /** nodes whose ladder is being built right now (a fresh answer, or a backfill); the offer skips them */
-/** a local ladder costs nothing, so any answer with a few sentences gets one (model ladders keep SUMMARY_MIN_CHARS) */
-export const LOCAL_LADDER_MIN_CHARS = 200;
+/** a local ladder costs nothing, so every answer gets one, a one-liner included: its levels coincide and the plaque
+ *  still zooms (model ladders keep SUMMARY_MIN_CHARS); 200 left the short turns of a canvas as static plaques */
+export const LOCAL_LADDER_MIN_CHARS = 1;
 
 export const isCJK = (s: string): boolean => /[぀-ヿ㐀-鿿]/.test(s);
 /** markdown markers off, line structure kept (one pass over the whole answer, not one per sentence) */
@@ -133,7 +134,8 @@ export const words = (text: string, lang: 'zh' | 'en'): string[] => {
 export function buildLocalLadder(question: string, response: string, takeaway?: string | null, topic?: string | null): Ladder | null {
   const lang: 'zh' | 'en' = isCJK(question + response.slice(0, 200)) ? 'zh' : 'en';
   const sents = sentencesOf(response);
-  if (sents.length < 2) return null;
+  // one sentence is a ladder too: its levels coincide, and the plaque still zooms
+  if (!sents.length) return null;
   const key = new Set(words(takeaway ?? question, lang));
   const b = budget(lang);
   const scored = sents.map((text, i) => {
