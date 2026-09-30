@@ -36,21 +36,34 @@ window.__ModuleLoader__.load({
       // The map overlay starts below the window's top strip: the desktop host
       // publishes --dsh-frame-top-clearance on its root (48px under the
       // hiddenInset traffic lights on macOS, the caption height on Windows,
-      // 0 in native fullscreen), so the lights, the drag strip and the
-      // sidebar controls stay where they are while the map is up (#39).
-      // A browser tab has no such variable and the overlay fills the window.
-      style.textContent = '.dsh-td-switch{position:fixed;z-index:120;top:12px;left:50%;display:flex;gap:2px;transform:translateX(-50%);border:1px solid #d1d5db;border-radius:999px;background:rgba(255,255,255,.96);padding:3px;backdrop-filter:blur(10px)}.dsh-td-switch button{height:28px;border:0;border-radius:999px;background:transparent;padding:0 11px;color:#6b7280;font:600 12px Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}.dsh-td-switch button:hover{background:#f3f4f6;color:#111827}.dsh-td-switch button.active{background:#111827;color:#fff}.dsh-td-switch[hidden]{display:none}.dsh-td-overlay{position:fixed;z-index:100;inset:var(--dsh-frame-top-clearance,0px) 0 0 0;background:#faf9f7}.dsh-td-overlay[hidden]{display:none}.dsh-td-overlay iframe{display:block;width:100%;height:100%;border:0}'
+      // 0 in native fullscreen). In that strip the plugin draws a title band
+      // of its own: the ThoughtDAG name, the 对话|思维图 switch and the canvas's
+      // name, draggable like the host's own chrome rows (data-window-drag),
+      // starting past the traffic lights (--dsh-frame-leading-clearance while
+      // the sidebar is collapsed, 84px otherwise, since the overlay covers the
+      // sidebar too) and stopping short of the Windows caption buttons. So
+      // the lights and the window controls are never covered, and nothing of
+      // the host's session header shows through (#39). A browser tab has no
+      // clearance: no band, the overlay fills the window, the canvas keeps its
+      // own switch.
+      style.textContent = '.dsh-td-switch{position:fixed;z-index:120;top:12px;left:50%;display:flex;gap:2px;transform:translateX(-50%);border:1px solid #d1d5db;border-radius:999px;background:rgba(255,255,255,.96);padding:3px;backdrop-filter:blur(10px)}.dsh-td-switch button{height:28px;border:0;border-radius:999px;background:transparent;padding:0 11px;color:#6b7280;font:600 12px Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}.dsh-td-switch button:hover{background:#f3f4f6;color:#111827}.dsh-td-switch button.active{background:#111827;color:#fff}.dsh-td-switch[hidden]{display:none}.dsh-td-bar{position:fixed;z-index:121;top:0;left:0;right:0;height:var(--dsh-frame-top-clearance,0px);display:flex;align-items:center;gap:14px;padding:0 16px;box-sizing:border-box;background:#faf9f7;border-bottom:1px solid #e7e2d9;font:500 12px Inter,system-ui,sans-serif;color:#6b7280;overflow:hidden;-webkit-app-region:drag;user-select:none}.dsh-td-bar[hidden]{display:none}html[data-platform="darwin"] .dsh-td-bar{padding-left:max(var(--dsh-frame-leading-clearance,0px),84px)}html[data-windows-titlebar] .dsh-td-bar{padding-right:calc(100% - env(titlebar-area-width,100%) + 16px)}.dsh-td-bar .dsh-td-brand{display:flex;align-items:center;gap:7px;color:#111827;font-weight:600;font-size:13px;white-space:nowrap}.dsh-td-bar .dsh-td-brand i{display:inline-block;width:8px;height:8px;border-radius:50%;background:#6d5dfc;box-shadow:0 -7px 0 #a99cff,0 7px 0 #f0a35a}.dsh-td-bar .dsh-td-switch{position:static;transform:none;-webkit-app-region:no-drag}.dsh-td-bar .dsh-td-title{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#6b7280}.dsh-td-overlay{position:fixed;z-index:100;inset:var(--dsh-frame-top-clearance,0px) 0 0 0;background:#faf9f7}.dsh-td-overlay[hidden]{display:none}.dsh-td-overlay iframe{display:block;width:100%;height:100%;border:0}'
       document.head.append(style)
 
       const host = document.createElement('div')
-      host.innerHTML = '<div class="dsh-td-switch" role="group" aria-label="view switch"><button type="button" data-view="dialog" class="active" aria-pressed="true">对话</button><button type="button" data-view="map" aria-pressed="false">思维图</button></div><section class="dsh-td-overlay" hidden><iframe title="ThoughtDAG" data-src="/thoughtdag/"></iframe></section>'
+      host.innerHTML = '<div class="dsh-td-switch" role="group" aria-label="view switch"><button type="button" data-view="dialog" class="active" aria-pressed="true">对话</button><button type="button" data-view="map" aria-pressed="false">思维图</button></div><div class="dsh-td-bar" data-window-drag hidden><span class="dsh-td-brand"><i></i>ThoughtDAG</span><div class="dsh-td-switch" role="group" aria-label="view switch"><button type="button" data-view="dialog" aria-pressed="false">对话</button><button type="button" data-view="map" class="active" aria-pressed="true">思维图</button></div><span class="dsh-td-title"></span></div><section class="dsh-td-overlay" hidden><iframe title="ThoughtDAG" data-src="/thoughtdag/"></iframe></section>'
       document.body.append(host)
 
       // the plugin's version, for the canvas's update dialog and release history
       let pluginVersion = null
       fetch('/thoughtdag/api/version').then(r => (r.ok ? r.json() : null)).then(j => { if (j && typeof j.version === 'string') pluginVersion = j.version }).catch(() => {})
 
-      const switchEl = host.querySelector('.dsh-td-switch')
+      const switchEl = host.querySelector(':scope > .dsh-td-switch')
+      const bar = host.querySelector('.dsh-td-bar')
+      const barTitle = bar.querySelector('.dsh-td-title')
+      // the desktop host marks its root; the band exists only there, and only while the strip has height (not in native fullscreen)
+      const desktop = () => document.documentElement.dataset.platform !== undefined || document.documentElement.hasAttribute('data-windows-titlebar')
+      const strip = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-frame-top-clearance')) || 0
+      const barUp = () => desktop() && strip() > 0
       let spaReady = false
       const dialogBtn = host.querySelector('[data-view="dialog"]')
       const mapBtn = host.querySelector('[data-view="map"]')
@@ -63,7 +76,10 @@ window.__ModuleLoader__.load({
         mapBtn.classList.toggle('active', map)
         mapBtn.setAttribute('aria-pressed', String(map))
       }
-      const close = () => { overlay.hidden = true; switchEl.hidden = false; setView(false); send('td:view', { shown: false }) }
+      const close = () => { overlay.hidden = true; bar.hidden = true; switchEl.hidden = false; setView(false); send('td:view', { shown: false, bar: false, desktop: desktop() }) }
+      const showBand = () => { bar.hidden = !barUp(); send('td:view', { shown: true, bar: !bar.hidden, desktop: desktop() }) }
+      window.addEventListener('resize', () => { if (!overlay.hidden) showBand() })
+      bar.querySelector('[data-view="dialog"]').addEventListener('click', () => close())
       const send = (type, payload) => frame.contentWindow?.postMessage({ source: 'dsh-thoughtdag', type, ...payload }, location.origin)
 
       const syncCurrent = () => {
@@ -74,15 +90,16 @@ window.__ModuleLoader__.load({
       mapBtn.addEventListener('click', () => {
         overlay.hidden = false
         setView(true)
-        if (spaReady) switchEl.hidden = true
+        bar.hidden = !barUp()
+        if (spaReady || !bar.hidden) switchEl.hidden = true
         // the SPA boots on first open, never while hidden: a canvas that
         // measures itself inside a display:none frame fits its view to a 0×0
         // box and shows nothing when revealed
         if (!frame.src) frame.src = frame.dataset.src + (pluginVersion ? (frame.dataset.src.includes('?') ? '&' : '?') + 'dv=' + encodeURIComponent(pluginVersion) : '')
         syncCurrent()
-        send('td:view', { shown: true })
+        showBand()
         // let the SPA boot, then re-sync so its listener is ready
-        window.setTimeout(() => { syncCurrent(); send('td:view', { shown: true }) }, 400)
+        window.setTimeout(() => { syncCurrent(); showBand() }, 400)
       })
       dialogBtn.addEventListener('click', close)
 
@@ -107,9 +124,11 @@ window.__ModuleLoader__.load({
         if (event.data.type === 'td:request-current') {
           // the SPA has booted and shows its own switch: the pill steps aside
           spaReady = true
-          if (!overlay.hidden) switchEl.hidden = true
+          if (!overlay.hidden) { switchEl.hidden = true; showBand() }
           return syncCurrent()
         }
+        // the canvas names its project: the band shows it
+        if (event.data.type === 'td:title') { barTitle.textContent = typeof event.data.name === 'string' ? event.data.name : ''; return }
         // the canvas forked or continued a session: stage it and go back to the
         // chat, which now shows exactly the context the canvas produced
         if (event.data.type === 'td:select-session' && typeof event.data.session === 'string') {

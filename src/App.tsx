@@ -856,6 +856,7 @@ function Canvas() {
   // dragged wide.
   const [moreOpen, setMoreOpen] = useState(false);
   const pluginUpdate = useUiStore((s) => s.pluginUpdate);
+  const harnessDesktop = useUiStore((s) => !!s.harnessHost?.desktop);
   const [diagPing, setDiagPing] = useState(0);
   const searching = useUiStore((s2) => s2.searchHitIds !== null);
   const moreRef = useRef<HTMLDivElement>(null);
@@ -1908,9 +1909,9 @@ function Canvas() {
               </button>
               {pluginUpdate && (
                 <button
-                  onClick={() => { setMoreOpen(false); void navigator.clipboard.writeText(pluginUpdateCommand(pluginUpdate.latest)).then(() => toast('success', t('plugin.updateCopied'), 6000)).catch(() => {}); }}
+                  onClick={() => { setMoreOpen(false); const text = harnessDesktop ? `dsh-thoughtdag@${pluginUpdate.latest}` : pluginUpdateCommand(pluginUpdate.latest); void navigator.clipboard.writeText(text).then(() => toast('success', t(harnessDesktop ? 'plugin.updateCopiedDesktop' : 'plugin.updateCopied'))); }}
                   className="w-full text-left px-3 py-2 text-xs text-accent hover:bg-wash transition-colors flex items-center gap-2.5"
-                  title={fmt(t('plugin.updateHint'), { cmd: pluginUpdateCommand(pluginUpdate.latest) })}
+                  title={harnessDesktop ? fmt(t('plugin.updateHintDesktop'), { pkg: `dsh-thoughtdag@${pluginUpdate.latest}` }) : fmt(t('plugin.updateHint'), { cmd: pluginUpdateCommand(pluginUpdate.latest) })}
                   data-plugin-update
                 >
                   <Download size={14} strokeWidth={1.75} className="shrink-0" /> {fmt(t('plugin.updateAvailable'), { v: pluginUpdate.latest })}

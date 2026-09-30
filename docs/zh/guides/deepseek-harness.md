@@ -10,6 +10,8 @@ title: 在 DeepSeek Harness 中使用 ThoughtDAG
 
 前提：已安装并配置 DeepSeek Harness **0.1.2-rc.1 或更新版本**，使用 Node.js **22.19+（22.x）或 24+**。
 
+桌面版 Harness：打开「插件」，点「添加插件」，输入 `dsh-thoughtdag` 即可。网页版用命令行：
+
 ```bash
 dsh plugin --profile web add dsh-thoughtdag
 dsh web

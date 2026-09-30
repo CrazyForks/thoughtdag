@@ -19,6 +19,7 @@
 import type { StoreApi } from 'zustand';
 import type { StoreState } from '../../store/types';
 import { liveTailPlan } from './live-log';
+import { useUiStore } from '../ui-store';
 
 type Bridge = NonNullable<Window['desktopSessions']>;
 type Root = Awaited<ReturnType<Bridge['roots']>>[number];
@@ -287,11 +288,26 @@ export function installDshSessionsBridge(apiBase: string): void {
     }
     if (d.type === 'td:view') {
       const was = shown;
-      shown = (d as { shown?: boolean }).shown !== false;
+      const v = d as { shown?: boolean; bar?: boolean; desktop?: boolean };
+      shown = v.shown !== false;
+      // the host says whether its title band carries the 对话|思维图 switch (then the canvas hides its own) and whether it is the desktop app
+      if (v.bar !== undefined || v.desktop !== undefined) useUiStore.getState().setHarnessHost({ bar: !!v.bar, desktop: !!v.desktop });
       if (shown && !was) wake(); else if (!shown && was) schedule();
     }
   });
   window.parent.postMessage({ source: 'dsh-thoughtdag', type: 'td:request-current' }, window.location.origin);
+  // the host's title band names the canvas: told now and on every switch (a lazy import keeps the store cycle out)
+  void import('../../store/projects').then(({ useProjects }) => {
+    let last: string | null = null;
+    const tell = () => {
+      const st = useProjects.getState();
+      const name = st.projects.find((pr) => pr.id === st.activeId)?.name ?? '';
+      if (name === last) return;
+      last = name;
+      window.parent.postMessage({ source: 'dsh-thoughtdag', type: 'td:title', name }, window.location.origin);
+    };
+    tell(); useProjects.subscribe(tell);
+  });
 }
 
 // ── outbound context for a question asked inside the harness ────────────

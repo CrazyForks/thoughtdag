@@ -10,6 +10,8 @@ The plugin embeds the ThoughtDAG canvas in the Harness web UI. Compose the next 
 
 Prerequisites: a configured DeepSeek Harness installation, **0.1.2-rc.1 or later**, with Node.js **22.19+ (22.x) or 24+**.
 
+In the DeepSeek Harness desktop app, open **Plugins**, choose **Add plugin**, and enter `dsh-thoughtdag`. For the web profile, from the command line:
+
 ```bash
 dsh plugin --profile web add dsh-thoughtdag
 dsh web

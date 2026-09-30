@@ -56,6 +56,8 @@ For regular use: `npm install -g thoughtdag`. Run `thoughtdag setup mcp` to expo
 
 Switch between chat and ThoughtDAG's graph inside the harness. Choose the context on the canvas; the harness runs the next turn.
 
+In the DeepSeek Harness desktop app: open **Plugins**, choose **Add plugin**, and enter `dsh-thoughtdag`. For the web profile, from the command line:
+
 ```bash
 dsh plugin --profile web add dsh-thoughtdag
 dsh web

@@ -1,4 +1,5 @@
 import { toast } from './ui-store';
+import { IN_HARNESS } from './embedded';
 import { t, fmt } from '../i18n';
 
 // New-version nudge for a long-lived SPA tab: deploys land on push, but an
@@ -29,7 +30,9 @@ let notifiedDesktop = false;
 let lastDesktopCheck = 0;
 
 async function checkDesktop(): Promise<void> {
-  if (!desktopVersion || shellSelfUpdates || notifiedDesktop) return;
+  // inside the harness the canvas is the plugin's bundle (dv names the plugin): a newer
+  // desktop app is no news there; the plugin's own check (plugin-update.ts) speaks instead
+  if (IN_HARNESS || !desktopVersion || shellSelfUpdates || notifiedDesktop) return;
   if (Date.now() - lastDesktopCheck < DESKTOP_THROTTLE_MS) return;
   lastDesktopCheck = Date.now();
   try {

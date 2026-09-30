@@ -28,7 +28,8 @@ export async function bootPluginUpdateCheck(apiBase: string): Promise<void> {
     try { notified = localStorage.getItem(NOTIFIED_KEY); } catch { /* ignore */ }
     if (notified !== j.latest) {
       try { localStorage.setItem(NOTIFIED_KEY, j.latest); } catch { /* ignore */ }
-      toast('info', fmt(t('plugin.updateAvailable'), { v: j.latest }), 9000);
+      const desktop = useUiStore.getState().harnessHost?.desktop;
+      toast('info', fmt(t('plugin.updateAvailable'), { v: j.latest }) + (desktop ? ' ' + fmt(t('plugin.updateHintDesktop'), { pkg: `dsh-thoughtdag@${j.latest}` }) : ''), 12000);
     }
   } catch { /* the host did not answer; nothing to say */ }
 }

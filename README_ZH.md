@@ -56,6 +56,8 @@ npx thoughtdag topics                       # 查看本地索引中的主题
 
 在 Harness 内切换对话与思维图：用画布选择上下文，再由 Harness 执行下一轮。
 
+桌面版 Harness：打开「插件」，点「添加插件」，输入 `dsh-thoughtdag` 即可。网页版用命令行：
+
 ```bash
 dsh plugin --profile web add dsh-thoughtdag
 dsh web
