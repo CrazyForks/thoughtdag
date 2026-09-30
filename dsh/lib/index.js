@@ -293,7 +293,11 @@ function decompressZstdToText(raw) {
  *  `session.jsonl.zstd`, while session format V3 (0.1.5-rc.2 and later) uses
  *  `session.v3.jsonl.zstd`. Probe the known names, newest first, so a listing
  *  keeps working across both. */
-const SESSION_LOG_NAMES = ['session.v3.jsonl.zstd', 'session.jsonl.zstd']
+// `session.jsonl.zstd` (≤ 0.1.4), `session.v3.jsonl.zstd` (0.1.5), `session.v4.jsonl.zstd` (the 0.2
+// desktop) …: the session directory is listed and the highest version wins, so the next format
+// version is found before this file learns its name (the 0.2 desktop's own sessions were invisible
+// while only v3 was probed)
+const SESSION_LOG_RE = /^session(?:\.v(\d+))?\.jsonl\.zstd?$/
 async function findSessionFiles(dshHome) {
   const root = join(dshHome, 'sessions')
   const out = []
@@ -305,13 +309,13 @@ async function findSessionFiles(dshHome) {
     try { sessions = await readdir(join(root, ws.name), { withFileTypes: true }) } catch { continue }
     for (const s of sessions) {
       if (!s.isDirectory()) continue
-      let log
+      let names
+      try { names = await readdir(join(root, ws.name, s.name)) } catch { continue }
+      const best = names.map(n => ({ n, m: SESSION_LOG_RE.exec(n) })).filter(x => x.m !== null).sort((a, b) => Number(b.m[1] ?? 0) - Number(a.m[1] ?? 0))[0]
+      if (best === undefined) continue
+      const log = join(root, ws.name, s.name, best.n)
       let st
-      for (const name of SESSION_LOG_NAMES) {
-        const candidate = join(root, ws.name, s.name, name)
-        try { st = await stat(candidate); log = candidate; break } catch { /* try the next format */ }
-      }
-      if (log === undefined || st === undefined) continue
+      try { st = await stat(log) } catch { continue }
       out.push({ dir: ws.name, sessionDir: s.name, log, size: st.size, mtime: st.mtimeMs })
     }
   }
