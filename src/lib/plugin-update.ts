@@ -28,7 +28,8 @@ export async function bootPluginUpdateCheck(apiBase: string): Promise<void> {
     try { notified = localStorage.getItem(NOTIFIED_KEY); } catch { /* ignore */ }
     if (notified !== j.latest) {
       try { localStorage.setItem(NOTIFIED_KEY, j.latest); } catch { /* ignore */ }
-      const desktop = useUiStore.getState().harnessHost?.desktop;
+      // the host's word (td:view) may not have arrived this early: the same-origin parent document carries the mark itself
+      const desktop = useUiStore.getState().harnessHost?.desktop ?? (() => { try { const root = window.parent?.document?.documentElement; return !!root && (root.dataset.platform !== undefined || root.hasAttribute('data-windows-titlebar')); } catch { return false; } })();
       toast('info', fmt(t('plugin.updateAvailable'), { v: j.latest }) + (desktop ? ' ' + fmt(t('plugin.updateHintDesktop'), { pkg: `dsh-thoughtdag@${j.latest}` }) : ''), 12000);
     }
   } catch { /* the host did not answer; nothing to say */ }
