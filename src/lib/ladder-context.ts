@@ -35,6 +35,7 @@ export function ladderContextFor(nodeId: string, nodes: ThoughtNode[], edges: Th
   const lines: string[] = [];
   for (const n of ordered) {
     if (n.id === nodeId) continue;
+    if (n.data.archived) continue; // an archived step is out of the context, so out of the thread the summariser reads
     const line = stepLine(n, n.id === parentId);
     if (line) lines.push(line);
   }

@@ -107,7 +107,8 @@ export const createEvaluatorSlice: StateCreator<StoreState, [], [], EvaluatorSli
   replayStale: async () => {
     replayAborted = false;
     get().recomputeStaleness();
-    const snapshot = [...get().staleIds];
+    // the same set the chip counts and the dialog prices: the fingerprint's stale nodes minus the judge's dismissals
+    const snapshot = shownStaleIds(get());
     if (snapshot.length === 0) return;
     autoRunCounts.clear(); // one user action = one auto-rerun wave
     const structural = () => get().edges.filter((e) => !e.data?.isCrossLink);
